@@ -7,3 +7,5 @@ exports/
 *.log
 .DS_Store
 transcripts/usage.jsonl.bak
+
+.claude/
