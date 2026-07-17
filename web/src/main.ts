@@ -59,7 +59,10 @@ export async function showSelect(): Promise<void> {
       { class: "app-header" },
       h("h1", {}, "Tutor"),
       h("span", { class: "date" }, status.today),
-      h("button", { class: "stats-link", onclick: () => void showStats(root, () => void showSelect()) }, "Stats")
+      // Stats reports on real usage/cost history — nothing to show in a static replay.
+      __DEMO__
+        ? null
+        : h("button", { class: "stats-link", onclick: () => void showStats(root, () => void showSelect()) }, "Stats")
     )
   );
 
@@ -318,7 +321,7 @@ export async function showSelect(): Promise<void> {
   const discussBtn = h("button", { class: "secondary" }, "Discuss it instead") as HTMLButtonElement;
   const refreshStart = () => {
     const topic = selectedTopic ? status.topics.find((t) => t.id === selectedTopic) : undefined;
-    startBtn.textContent = topic ? `Start: ${topic.name}` : "Start lesson";
+    startBtn.textContent = topic ? `Start: ${topic.name}` : __DEMO__ ? "Start replay" : "Start lesson";
   };
   const start = async (discuss: boolean) => {
     startBtn.disabled = discussBtn.disabled = true;
@@ -397,7 +400,9 @@ function showUpdateToast(): void {
 // Boot
 // ---------------------------------------------------------------------------
 
-if ("serviceWorker" in navigator && !location.hostname.includes("localhost")) {
+// Skip entirely in demo mode: no server to keep the shell cache fresh, and the
+// hardcoded "/sw.js" path doesn't respect the Pages base ("/tutor/") anyway.
+if (!__DEMO__ && "serviceWorker" in navigator && !location.hostname.includes("localhost")) {
   void navigator.serviceWorker.register("/sw.js");
 }
 

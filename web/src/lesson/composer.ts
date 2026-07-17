@@ -4,6 +4,10 @@ import type { OutgoingImage } from "../api.js";
 import type { LessonCtx } from "./ctx.js";
 import { showBanner } from "./ctx.js";
 import { addBubble, scrollDown } from "./bubbles.js";
+// Demo-mode-only pre-fill wiring. Referenced only inside `if (__DEMO__)`
+// blocks below, so the live build's dead-code elimination drops both these
+// bindings and the whole replay module they come from.
+import { nextLearnerLine, onDemoIdle } from "../demo/replay.js";
 
 // ---------------------------------------------------------------------------
 // The input row: textarea auto-grow, image attach + client-side downscale,
@@ -48,6 +52,23 @@ export function buildComposer(ctx: LessonCtx): ComposerEls {
     placeholder: "Message…",
     rows: "1",
   }) as HTMLTextAreaElement;
+
+  // Demo mode: the composer is always pre-filled with the next learner line
+  // from the recording. The visitor can edit it, but sending always advances
+  // the script on the canned line underneath (see demo/replay.ts).
+  const growInput = () => {
+    input.style.height = "auto";
+    input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
+  };
+  if (__DEMO__) {
+    const fill = () => {
+      input.value = nextLearnerLine() ?? "";
+      growInput();
+    };
+    fill();
+    onDemoIdle(fill);
+  }
+
   const sendBtn = h("button", { class: "composer-send" }, "↑") as HTMLButtonElement;
   // Photo attachments: picked → downscaled client-side → chip preview → sent
   // as base64 with the next message. `capture` hint keeps phone cameras easy.

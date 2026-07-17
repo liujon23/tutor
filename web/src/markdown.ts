@@ -16,12 +16,14 @@ const marked = new Marked({ gfm: true, breaks: false });
 // standard markdown output plus KaTeX's spans/classes/style attributes and
 // strip script/event handlers/javascript: URLs; forbid embeds on top of that.
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
-  // Images only from https or our own asset proxy.
+  // Images only from https, our own asset proxy, or (demo mode only) the
+  // bundled demo/assets/ recording images, referenced as relative paths so
+  // they resolve under whatever base the app is served from.
   if (node.tagName === "IMG") {
     const src = node.getAttribute("src") ?? "";
-    if (!(src.startsWith("https:") || src.startsWith("/api/assets"))) {
-      node.removeAttribute("src");
-    }
+    const allowed =
+      src.startsWith("https:") || src.startsWith("/api/assets") || (__DEMO__ && src.startsWith("demo/assets/"));
+    if (!allowed) node.removeAttribute("src");
   }
 });
 

@@ -133,13 +133,16 @@ export async function showLesson(id: string): Promise<void> {
         "‹"
       ),
       h("div", { class: "hdr-title" }, h("strong", {}, lesson.title || "Lesson"), h("span", { class: "hdr-sub" }, lesson.params.size)),
-      modelBtn,
+      // Model switch and abandon are meaningless against a fixed recording.
+      __DEMO__ ? null : modelBtn,
       endBtn,
-      moreBtn
+      __DEMO__ ? null : moreBtn
     )
   );
 
   screen.append(banner, messages, thinking, endingHint, wrapup);
+  // Demo mode: a dismissible banner explaining the replay, from the recording's note.
+  if (__DEMO__ && lesson.note) showBanner(ctx, lesson.note);
 
   // Composer
   const { chipRow, composer } = buildComposer(ctx);

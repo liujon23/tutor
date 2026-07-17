@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from "vite";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { rm } from "node:fs/promises";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -18,21 +19,43 @@ function emitBuildId(): Plugin {
   };
 }
 
-export default defineConfig({
-  root: here,
-  base: "/",
-  define: {
-    __BUILD_ID__: JSON.stringify(buildId),
-  },
-  plugins: [emitBuildId()],
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
-  },
-  server: {
-    // dev-only: proxy API calls to the backend
-    proxy: {
-      "/api": "http://127.0.0.1:4321",
+// web/public/demo/ (the recording + its two images) is a static folder Vite's
+// publicDir copy step includes unconditionally — the __DEMO__ compile-time
+// flag only eliminates JS. Delete it from a non-demo build's output so the
+// live artifact really does ship zero demo bytes, JS or otherwise.
+function stripDemoAssets(outDir: string, isDemo: boolean): Plugin {
+  return {
+    name: "strip-demo-assets",
+    apply: "build",
+    async closeBundle() {
+      if (isDemo) return;
+      await rm(join(here, outDir, "demo"), { recursive: true, force: true });
     },
-  },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const isDemo = mode === "demo";
+  // Separate output dirs so `build:web` (live, served by server/index.ts from
+  // web/dist) and `build:demo` (static Pages artifact) never clobber each other.
+  const outDir = isDemo ? "dist-demo" : "dist";
+  return {
+    root: here,
+    base: isDemo ? "/tutor/" : "/",
+    define: {
+      __BUILD_ID__: JSON.stringify(buildId),
+      __DEMO__: JSON.stringify(isDemo),
+    },
+    plugins: [emitBuildId(), stripDemoAssets(outDir, isDemo)],
+    build: {
+      outDir,
+      emptyOutDir: true,
+    },
+    server: {
+      // dev-only: proxy API calls to the backend
+      proxy: {
+        "/api": "http://127.0.0.1:4321",
+      },
+    },
+  };
 });

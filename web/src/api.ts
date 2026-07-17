@@ -1,4 +1,5 @@
 // Typed client for the app server's API.
+import { demoApi } from "./demo/replay.js";
 
 export type SessionSize = "tight" | "standard" | "deep";
 export type LessonModel = "opus" | "sonnet";
@@ -227,6 +228,8 @@ export interface LessonState {
   ending?: boolean;
   lastError?: string;
   feedback?: MessageFeedback[];
+  /** Demo mode only: the recording's blurb, shown as a dismissible banner. */
+  note?: string;
 }
 
 export type LessonEvent =
@@ -257,7 +260,36 @@ async function j<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export const api = {
+// The full surface every screen/module calls through `api.*`. Both the live
+// (fetch-based) and demo (static-replay) implementations satisfy this shape;
+// see the seam at the bottom of this file.
+export interface Api {
+  status(): Promise<Status>;
+  version(): Promise<VersionInfo>;
+  report(): Promise<Report>;
+  createLesson(body: {
+    laneId?: string;
+    topicOverride?: string;
+    discuss?: boolean;
+    recallRequested?: string[];
+    size: SessionSize;
+    model: LessonModel;
+  }): Promise<{ sessionId: string; title: string }>;
+  lesson(id: string): Promise<LessonState>;
+  sendMessage(id: string, text: string, images?: OutgoingImage[]): Promise<{ ok: boolean }>;
+  endLesson(id: string): Promise<{ ok: boolean; alreadyCommitted?: boolean }>;
+  setModel(id: string, model: LessonModel): Promise<{ ok: boolean }>;
+  setFeedback(
+    id: string,
+    body: { messageId: string; level: RatingLevel; note: string }
+  ): Promise<{ ok: boolean; flagged: boolean }>;
+  clearFeedback(id: string, messageId: string): Promise<{ ok: boolean }>;
+  approvePatterns(id: string, approve: string[]): Promise<{ ok: boolean; applied: number }>;
+  abandon(id: string): Promise<{ ok: boolean }>;
+  events(id: string, onEvent: (ev: LessonEvent) => void, onReopen?: () => void): () => void;
+}
+
+const liveApi: Api = {
   status: (): Promise<Status> => fetch("/api/status").then((r) => j<Status>(r)),
 
   version: (): Promise<VersionInfo> => fetch("/api/version").then((r) => j<VersionInfo>(r)),
@@ -352,3 +384,12 @@ export const api = {
     return () => es.close();
   },
 };
+
+// --- demo/live seam -----------------------------------------------------
+// `__DEMO__` is a build-time constant (see vite.config.ts): in a
+// `--mode demo` build it's `true` and this collapses to `demoApi` alone —
+// `liveApi`'s fetch/EventSource calls are unreachable and Rollup tree-shakes
+// them out entirely. In every other build it's `false` and the reverse
+// happens, so demoApi (and the whole recording/replay module it pulls in)
+// never reaches the live bundle.
+export const api: Api = __DEMO__ ? demoApi : liveApi;

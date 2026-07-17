@@ -9,3 +9,4 @@ exports/
 transcripts/usage.jsonl.bak
 
 .claude/
+web/dist-demo/
