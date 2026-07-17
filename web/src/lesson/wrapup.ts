@@ -43,13 +43,19 @@ function renderUsage(u: LessonUsage): HTMLElement {
     )
   );
 
-  // Dollars are a computed equivalent at API rates — Pro isn't metered.
+  // Dollars are a computed equivalent at API rates — subscriptions aren't metered.
   box.append(
     h(
       "div",
       { class: "usage-cost" },
       h("strong", {}, `≈ $${u.costUsd.toFixed(2)}`),
-      h("span", { class: "usage-note" }, " equivalent at API rates — your Pro plan isn't billed per token")
+      h(
+        "span",
+        { class: "usage-note" },
+        __DEMO__
+          ? " equivalent at API rates — the author's subscription isn't billed per token"
+          : " equivalent at API rates — your Pro plan isn't billed per token"
+      )
     )
   );
 

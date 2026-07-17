@@ -5,7 +5,7 @@
     "model": "opus",
     "laneName": "Modern Art History Lane"
   },
-  "note": "A real lesson from the author's art-history lane, replayed verbatim (learner turns pre-filled). Lesson 13 of the course — the tutor already knows the learner here.",
+  "note": "You're replaying a real lesson from the author's art-history course. The learner's actual replies are queued in the box below — press send to continue the conversation. In a real lesson you'd type your own.",
   "turns": [
     {
       "role": "tutor",
@@ -147,6 +147,21 @@
     ],
     "proposedConfirmedPatterns": [],
     "gitMessage": "git: committed 'Lesson 13 — 2026-07-07 — art-imp-movement'",
-    "committedAt": "2026-07-08T03:25:09.868Z"
+    "committedAt": "2026-07-08T03:25:09.868Z",
+    "usage": {
+      "turns": 15,
+      "tokens": { "input": 30, "output": 12998, "cacheRead": 388149, "cacheCreation": 33719 },
+      "costUsd": 0.8569745,
+      "durationMs": 265575,
+      "wallClockMs": 3606631,
+      "byModel": {
+        "claude-opus-4-8": {
+          "turns": 15,
+          "tokens": { "input": 30, "output": 12998, "cacheRead": 388149, "cacheCreation": 33719 },
+          "costUsd": 0.8569745
+        }
+      },
+      "features": { "webSearch": 0, "webFetch": 0, "photos": 0 }
+    }
   }
 }

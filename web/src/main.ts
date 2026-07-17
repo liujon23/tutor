@@ -107,19 +107,26 @@ export async function showSelect(): Promise<void> {
   // ---- Today's pick -------------------------------------------------------
   // One track, drawn at random from the lane weights rather than shown as a
   // menu. The draw is fresh each load, so refreshing re-rolls it while still
-  // following the weight distribution over many visits.
-  const picked = pickLane(status.lanes);
+  // following the weight distribution over many visits. In demo mode the pick
+  // is always the one lane that has a recording.
+  const demoLocked = (lane: StatusLane): boolean =>
+    __DEMO__ && lane.recommendation.kind === "demo-locked";
+  const picked = __DEMO__
+    ? (status.lanes.find((l) => !demoLocked(l)) ?? null)
+    : pickLane(status.lanes);
   if (picked) selectedLane = picked.id;
 
   const laneCards = new Map<string, HTMLElement>();
   let pickCard: HTMLElement | undefined;
 
   const recLineFor = (rec: StatusLane["recommendation"]): string =>
-    rec.topicName
-      ? `Next: ${rec.topicName}`
-      : rec.unitId
-        ? `Next unit: ${rec.unitName ?? rec.unitId}`
-        : "Nothing queued";
+    rec.kind === "demo-locked"
+      ? (rec.note ?? "Not in this demo")
+      : rec.topicName
+        ? `Next: ${rec.topicName}`
+        : rec.unitId
+          ? `Next unit: ${rec.unitName ?? rec.unitId}`
+          : "Nothing queued";
 
   const refreshSelection = () => {
     pickCard?.classList.toggle("selected", !!picked && selectedLane === picked.id && !selectedTopic);
@@ -130,16 +137,22 @@ export async function showSelect(): Promise<void> {
   };
 
   // A selectable lane card (used in the "show every lane" override panel).
+  // Demo-locked lanes (no recording in the demo) render dimmed and inert.
   const laneCard = (lane: StatusLane): HTMLElement => {
+    const locked = demoLocked(lane);
     const card = h(
       "button",
       {
-        class: "card lane-card",
-        onclick: () => {
-          selectedLane = lane.id;
-          selectedTopic = undefined;
-          refreshSelection();
-        },
+        class: locked ? "card lane-card demo-locked" : "card lane-card",
+        ...(locked
+          ? { disabled: "true" }
+          : {
+              onclick: () => {
+                selectedLane = lane.id;
+                selectedTopic = undefined;
+                refreshSelection();
+              },
+            }),
       },
       h("div", { class: "lane-head" }, h("strong", {}, lane.name), h("span", { class: "weight" }, `~${lane.weight}%`)),
       lane.currentUnit ? h("div", { class: "lane-unit" }, `${lane.currentUnit.name} · ${lane.currentUnit.state}`) : null,

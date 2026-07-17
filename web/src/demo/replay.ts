@@ -92,8 +92,10 @@ export function onDemoIdle(cb: (() => void) | null): void {
 const sleep = (ms: number): Promise<void> => new Promise((res) => setTimeout(res, ms));
 
 // ---------------------------------------------------------------------------
-// Streaming a tutor turn: chunk ~2-6 words every 30-60ms, longer pauses at
-// paragraph breaks — mirrors the live server's delta/assistant event pair.
+// Streaming a tutor turn: ~1,000 wpm — 2-4 words every 150-210ms, with longer
+// pauses at paragraph breaks. Deliberately slower than the raw event replay
+// could go: fast enough to feel alive, slow enough to read along with.
+// Mirrors the live server's delta/assistant event pair.
 // ---------------------------------------------------------------------------
 
 async function streamTutorTurn(text: string, myGen: number): Promise<void> {
@@ -103,20 +105,20 @@ async function streamTutorTurn(text: string, myGen: number): Promise<void> {
     if (myGen !== generation) return;
     if (/^\n\n+$/.test(part)) {
       listener?.({ type: "delta", text: part });
-      await sleep(160 + Math.random() * 120);
+      await sleep(350 + Math.random() * 150);
       continue;
     }
     const tokens = part.split(/(\s+)/); // words interleaved with whitespace runs
     let i = 0;
     while (i < tokens.length) {
       if (myGen !== generation) return;
-      const wordsThisChunk = 2 + Math.floor(Math.random() * 5); // 2-6 words
+      const wordsThisChunk = 2 + Math.floor(Math.random() * 3); // 2-4 words
       const slice = tokens.slice(i, i + wordsThisChunk * 2); // *2: each word has a trailing whitespace token
       i += wordsThisChunk * 2;
       const chunk = slice.join("");
       if (!chunk) continue;
       listener?.({ type: "delta", text: chunk });
-      await sleep(30 + Math.random() * 30);
+      await sleep(150 + Math.random() * 60);
     }
   }
   if (myGen !== generation) return;
@@ -150,22 +152,37 @@ async function playForward(): Promise<void> {
 
 async function status(): Promise<Status> {
   const rec = await loadRecording();
+  // The three example lanes, to show the multi-track select screen — but only
+  // the art lane carries a recording. The others are marked "demo-locked"
+  // (a kind the select screen renders dimmed and non-selectable in demo mode).
+  const locked = (id: string, name: string, weight: number) => ({
+    id,
+    name,
+    weight,
+    currentUnit: null,
+    recommendation: {
+      kind: "demo-locked",
+      note: "No recorded lesson in this demo — the art-history replay is the sample.",
+    },
+  });
   return {
     today: new Date().toISOString().slice(0, 10),
     staleDays: 10,
     lanes: [
       {
-        id: "demo-lane",
+        id: "art",
         name: rec.params.laneName,
-        weight: 100,
+        weight: 20,
         currentUnit: null,
         recommendation: {
           kind: "topic",
           topicName: rec.title,
           reason: "A real recorded lesson, replayed for the demo.",
-          note: rec.note,
+          plan: "The recorded sample lesson — a real session from the author's course, replayed.",
         },
       },
+      locked("ai", "AI Lane", 50),
+      locked("sts", "Science and Technology Studies (STS) Lane", 30),
     ],
     recallCandidates: [],
     openSettledItems: [],

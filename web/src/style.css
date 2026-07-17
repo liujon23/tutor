@@ -145,6 +145,12 @@ body {
   box-shadow: 0 0 0 1.5px var(--accent);
 }
 
+/* Demo mode: lanes without a recording are visible but not startable. */
+.lane-card.demo-locked {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .lane-head {
   display: flex;
   justify-content: space-between;

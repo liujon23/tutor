@@ -54,13 +54,15 @@ export function buildComposer(ctx: LessonCtx): ComposerEls {
   }) as HTMLTextAreaElement;
 
   // Demo mode: the composer is always pre-filled with the next learner line
-  // from the recording. The visitor can edit it, but sending always advances
-  // the script on the canned line underneath (see demo/replay.ts).
+  // from the recording, read-only — these are the learner's real replies, and
+  // send advances the script (see demo/replay.ts). The banner explains that in
+  // a real lesson you'd type your own.
   const growInput = () => {
     input.style.height = "auto";
     input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
   };
   if (__DEMO__) {
+    input.readOnly = true;
     const fill = () => {
       input.value = nextLearnerLine() ?? "";
       growInput();
