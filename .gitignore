@@ -1,0 +1,9 @@
+node_modules/
+.env
+.session/
+.app/
+web/dist/
+exports/
+*.log
+.DS_Store
+transcripts/usage.jsonl.bak

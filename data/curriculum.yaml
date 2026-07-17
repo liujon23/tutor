@@ -1,0 +1,1499 @@
+# Curriculum Map — structured store (see skills/references/document-formats.md)
+# States: topic = not-started | touched | comfortable | shaky
+#         unit  = not-started | in-progress | core-complete | complete
+# Edit by hand if you like, but run `npm run validate` afterward.
+
+lanes:
+  - id: ai
+    name: AI Lane
+    weight: 50
+    currentUnit: ai-nn-foundations
+    nextUp:
+      unitId: ai-nn-foundations
+      plan: "First lesson: open with the lane roadmap — where this lane is going and how the units fit
+        together — then start the first topic."
+    direction: Build from a basic ML/neural-network background up through the key ideas that produced
+      modern LLMs — attention, the transformer, pretraining paradigms, scaling laws, and RLHF. Goal
+      is genuine understanding of the ideas, not just familiarity with the names.
+    units:
+      - id: ai-nn-foundations
+        name: Neural Network Foundations Refresher
+        state: not-started
+        currentTopic: null
+        prerequisites: []
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: ai-nn-foundations-activation
+            name: Activation Functions and Non-Linearity
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - ai-nn-foundations-backprop
+            notes: ""
+            assets: []
+          - id: ai-nn-foundations-backprop
+            name: Backpropagation Refresher
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-nn-foundations-activation
+            buildsToward:
+              - ai-nn-foundations-loss
+            notes: ""
+            assets: []
+          - id: ai-nn-foundations-loss
+            name: Loss Functions and Optimization
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-nn-foundations-backprop
+            buildsToward:
+              - ai-nn-foundations-embeddings
+            notes: ""
+            assets: []
+          - id: ai-nn-foundations-embeddings
+            name: Word and Token Embeddings
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-nn-foundations-loss
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/1301.3781
+                title: Mikolov et al., Efficient Estimation of Word Representations in Vector Space (2013)
+                note: The Word2Vec paper — Skip-gram/CBOW and the famous vector arithmetic (king − man + woman ≈
+                  queen). The origin of learned dense embeddings.
+        optionalTopics:
+          - id: ai-nn-foundations-regularization
+            name: Regularization Techniques
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-nn-foundations-activation
+            buildsToward: []
+            notes: ""
+            assets: []
+      - id: ai-sequence-models
+        name: Sequence Modeling
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - ai-nn-foundations
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: ai-sequence-models-problem
+            name: The Sequence Modeling Problem
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - ai-sequence-models-rnn
+            notes: ""
+            assets: []
+          - id: ai-sequence-models-rnn
+            name: Recurrent Neural Networks (RNNs)
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-sequence-models-problem
+            buildsToward:
+              - ai-sequence-models-vanishing
+            notes: ""
+            assets: []
+          - id: ai-sequence-models-vanishing
+            name: Vanishing Gradients and the Limits of RNNs
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-sequence-models-rnn
+            buildsToward:
+              - ai-sequence-models-lstm
+            notes: ""
+            assets: []
+          - id: ai-sequence-models-lstm
+            name: LSTMs and GRUs
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-sequence-models-vanishing
+            buildsToward:
+              - ai-sequence-models-tokenization
+            notes: ""
+            assets:
+              - kind: link
+                url: https://colah.github.io/posts/2015-08-Understanding-LSTMs/
+                title: Christopher Olah, Understanding LSTM Networks (2015)
+                note: The canonical visual explainer — the cell state as a conveyor belt, gates as what's
+                  added/removed. Exactly the intuition-first framing this topic wants.
+          - id: ai-sequence-models-tokenization
+            name: Tokenization
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/1508.07909
+                title: Sennrich et al., Neural Machine Translation of Rare Words with Subword Units (2016)
+                note: The paper that brought Byte-Pair Encoding to NLP — how subword units solve the open-vocabulary
+                  problem. The primary source behind modern tokenizers.
+        optionalTopics:
+          - id: ai-sequence-models-enc-dec
+            name: Encoder-Decoder Architecture (Seq2Seq)
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-sequence-models-lstm
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/1409.3215
+                title: Sutskever et al., Sequence to Sequence Learning with Neural Networks (2014)
+                note: The original encoder–decoder LSTM seq2seq — one fixed vector between the two. Sets up exactly
+                  the bottleneck that attention (next unit) was invented to fix.
+      - id: ai-attention-transformer
+        name: Attention and the Transformer
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - ai-sequence-models
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: ai-attn-motivation
+            name: Why Attention? The Bottleneck Problem
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - ai-attn-mechanism
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/1409.0473
+                title: Bahdanau et al., Neural Machine Translation by Jointly Learning to Align and Translate (2014)
+                note: Where attention was born — the paper that named the fixed-length vector a bottleneck and let
+                  the decoder soft-search the source. The motivation, first-hand.
+          - id: ai-attn-mechanism
+            name: The Attention Mechanism
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-attn-motivation
+            buildsToward:
+              - ai-attn-self-attention
+            notes: ""
+            assets:
+              - kind: link
+                url: https://jalammar.github.io/illustrated-transformer/
+                title: Jay Alammar, The Illustrated Transformer (2018)
+                note: The standard visual walkthrough of Q/K/V and scaled dot-product attention. Pairs well with
+                  teaching the mechanism precisely from the linear algebra.
+          - id: ai-attn-self-attention
+            name: Self-Attention
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-attn-mechanism
+            buildsToward:
+              - ai-attn-multihead
+            notes: ""
+            assets: []
+          - id: ai-attn-multihead
+            name: Multi-Head Attention
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-attn-self-attention
+            buildsToward:
+              - ai-attn-positional
+            notes: ""
+            assets: []
+          - id: ai-attn-positional
+            name: Positional Encoding
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-attn-self-attention
+            buildsToward:
+              - ai-attn-architecture
+            notes: ""
+            assets: []
+          - id: ai-attn-architecture
+            name: Full Transformer Architecture
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-attn-multihead
+              - ai-attn-positional
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/1706.03762
+                title: Vaswani et al., Attention Is All You Need (2017)
+                note: The Transformer paper — the whole architecture in one place. The anchor for this entire unit;
+                  the diagram in §3 is worth reconstructing together.
+        optionalTopics:
+          - id: ai-attn-paper
+            name: Walking Through "Attention is All You Need"
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-attn-architecture
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/1706.03762
+                title: Vaswani et al., Attention Is All You Need (2017)
+                note: The primary source itself, for the close read — section by section once the ideas are in
+                  place.
+      - id: ai-lm-pretraining
+        name: Language Models and Pretraining
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - ai-attention-transformer
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: ai-lm-word2vec
+            name: Word2Vec and Learned Representations
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - ai-lm-bert
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/1301.3781
+                title: Mikolov et al., Efficient Estimation of Word Representations in Vector Space (2013)
+                note: The Word2Vec paper — this topic's direct subject. The idea that meaning can be learned from
+                  co-occurrence at scale, before transformers made it industrial.
+          - id: ai-lm-bert
+            name: "BERT: Masked Language Modeling"
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-lm-word2vec
+            buildsToward:
+              - ai-lm-gpt
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/1810.04805
+                title: "Devlin et al., BERT: Pre-training of Deep Bidirectional Transformers (2018)"
+                note: The encoder paradigm's founding paper — masked LM and next-sentence prediction. Read against
+                  GPT as the bidirectional-vs-causal contrast.
+          - id: ai-lm-gpt
+            name: "GPT: Autoregressive Language Modeling"
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-lm-word2vec
+            buildsToward:
+              - ai-lm-transfer
+            notes: ""
+            assets:
+              - kind: text
+                url: https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf
+                title: Radford et al., Language Models are Unsupervised Multitask Learners (GPT-2, 2019)
+                note: The decoder paradigm — causal LM at scale, and the claim that next-token prediction alone
+                  yields multitask ability zero-shot. OpenAI-hosted PDF.
+          - id: ai-lm-transfer
+            name: Transfer Learning and Fine-Tuning
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-lm-bert
+              - ai-lm-gpt
+            buildsToward: []
+            notes: ""
+            assets: []
+        optionalTopics:
+          - id: ai-lm-t5
+            name: T5 and the Text-to-Text Framing
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-lm-transfer
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/1910.10683
+                title: Raffel et al., Exploring the Limits of Transfer Learning with a Unified Text-to-Text
+                  Transformer (T5, 2019)
+                note: Every task recast as text-in/text-out — the design philosophy in full, plus a systematic
+                  ablation of what actually matters in pretraining.
+      - id: ai-scaling-modern
+        name: Scaling, RLHF, and Modern LLMs
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - ai-lm-pretraining
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: ai-scale-laws
+            name: Scaling Laws
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - ai-scale-emergence
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/2001.08361
+                title: Kaplan et al., Scaling Laws for Neural Language Models (2020)
+                note: The original power-law scaling paper — loss as a smooth function of size, data, and compute
+                  across orders of magnitude.
+              - kind: text
+                url: https://arxiv.org/abs/2203.15556
+                title: Hoffmann et al., Training Compute-Optimal Large Language Models (Chinchilla, 2022)
+                note: The correction — most large models were badly undertrained; scale data and parameters
+                  together. Read as the direct rebuttal to Kaplan's allocation.
+          - id: ai-scale-emergence
+            name: Emergent Capabilities
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-scale-laws
+            buildsToward:
+              - ai-scale-instruction
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/2206.07682
+                title: Wei et al., Emergent Abilities of Large Language Models (2022)
+                note: The paper that popularized "emergence." Worth pairing with the skeptical reply (Schaeffer's "a
+                  mirage?" — emergence as a metric artifact) to run the debate.
+          - id: ai-scale-instruction
+            name: Instruction Tuning
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-scale-emergence
+            buildsToward:
+              - ai-scale-rlhf
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/2109.01652
+                title: Wei et al., Finetuned Language Models Are Zero-Shot Learners (FLAN, 2021)
+                note: Instruction tuning stated cleanly — finetune on many tasks phrased as instructions, generalize
+                  to unseen ones. The setup for the RLHF topic next.
+          - id: ai-scale-rlhf
+            name: RLHF — Reinforcement Learning from Human Feedback
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-scale-instruction
+            buildsToward:
+              - ai-scale-modern
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/2203.02155
+                title: Ouyang et al., Training Language Models to Follow Instructions with Human Feedback
+                  (InstructGPT, 2022)
+                note: The full RLHF pipeline that produced ChatGPT — SFT, reward model, PPO. The central paper for
+                  this topic.
+              - kind: text
+                url: https://arxiv.org/abs/1706.03741
+                title: Christiano et al., Deep Reinforcement Learning from Human Preferences (2017)
+                note: Where preference-based RL began — the reward-model-from-comparisons idea, years before it was
+                  pointed at language. Good origin story.
+          - id: ai-scale-modern
+            name: Modern LLMs — Architecture and Training Overview
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-scale-rlhf
+            buildsToward: []
+            notes: ""
+            assets: []
+        optionalTopics:
+          - id: ai-scale-constitutional
+            name: Constitutional AI and RLAIF
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-scale-rlhf
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/2212.08073
+                title: "Bai et al., Constitutional AI: Harmlessness from AI Feedback (2022)"
+                note: "Anthropic's RLAIF method — a written constitution plus AI-generated critiques replacing much
+                  of the human labeling. Directly relevant: it is how Claude-class assistants are
+                  trained."
+          - id: ai-scale-moe
+            name: Mixture of Experts
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - ai-scale-modern
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: text
+                url: https://arxiv.org/abs/2401.04088
+                title: Jiang et al., Mixtral of Experts (2024)
+                note: A clear, open sparse-MoE report — 8 experts per layer, a router picking 2, 47B params but 13B
+                  active. Concrete grounding for the MoE scaling idea.
+  - id: sts
+    name: Science and Technology Studies (STS) Lane
+    weight: 30
+    currentUnit: sts-philosophy-science
+    nextUp:
+      unitId: sts-philosophy-science
+      plan: "First lesson: open with the lane roadmap — where this lane is going and how the units fit
+        together — then start the first topic."
+    direction: A foundational survey of Science and Technology Studies — the canon of ideas and figures
+      that shaped the field. Goal is the theoretical vocabulary (names, concepts, key texts) to
+      reason about how science and technology shape society, with education as a recurring site of
+      analysis.
+    units:
+      - id: sts-philosophy-science
+        name: Philosophy and Sociology of Science
+        state: not-started
+        currentTopic: null
+        prerequisites: []
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: sts-phil-kuhn
+            name: Thomas Kuhn — Paradigm Shifts
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - sts-phil-merton
+            notes: ""
+            assets:
+              - kind: link
+                url: https://plato.stanford.edu/entries/thomas-kuhn/
+                title: Thomas Kuhn — Stanford Encyclopedia of Philosophy
+                note: Authoritative reference on paradigms, normal science, and incommensurability. Structure itself
+                  is in copyright, so SEP is the navigational entry point.
+          - id: sts-phil-popper
+            name: Popper — Falsificationism and Demarcation
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - sts-phil-kuhn
+            notes: ""
+            assets:
+              - kind: link
+                url: https://plato.stanford.edu/entries/popper/
+                title: Karl Popper — Stanford Encyclopedia of Philosophy
+                note: Falsificationism, demarcation, and the critical-rationalist program, with the standard
+                  objections. Good scaffold for a fuller standalone pass.
+              - kind: link
+                url: https://cup.columbia.edu/book/kuhn-vs-popper/9780231134286/
+                title: "Steve Fuller, Kuhn vs. Popper: The Struggle for the Soul of Science (2003)"
+                note: Fuller reframes the 1965 Popper–Kuhn encounter as a struggle over science's soul — a rich,
+                  contrarian source of quotes and framings for the whole Popper/Kuhn thread (Fuller
+                  sides with Popper against Kuhn's triumph). Good provocation, not a neutral primer.
+          - id: sts-phil-lakatos
+            name: Lakatos — Methodology of Scientific Research Programmes
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-phil-kuhn
+            buildsToward:
+              - sts-phil-feyerabend
+            notes: ""
+            assets:
+              - kind: link
+                url: https://plato.stanford.edu/entries/lakatos/
+                title: Imre Lakatos — Stanford Encyclopedia of Philosophy
+                note: Covers the Methodology of Scientific Research Programmes and has a dedicated section on the
+                  Feyerabend/Lakatos debate — a natural hook. The anchor for this topic.
+          - id: sts-phil-merton
+            name: Merton — Norms of Science
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-phil-kuhn
+            buildsToward:
+              - sts-phil-ssk
+            notes: ""
+            assets: []
+          - id: sts-phil-ssk
+            name: Sociology of Scientific Knowledge (SSK)
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-phil-merton
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://plato.stanford.edu/entries/scientific-knowledge-social/
+                title: The Social Dimensions of Scientific Knowledge — Stanford Encyclopedia of Philosophy
+                note: Directly covers Bloor's Strong Programme and the symmetry tenet, situated among the
+                  macro-analytic SSK figures (Barnes, Collins, MacKenzie). The anchor for the next
+                  lesson.
+        optionalTopics:
+          - id: sts-phil-feyerabend
+            name: Feyerabend — Against Method
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-phil-popper
+              - sts-phil-lakatos
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://plato.stanford.edu/entries/feyerabend/
+                title: Paul Feyerabend — Stanford Encyclopedia of Philosophy
+                note: Against Method, epistemological anarchism, and "anything goes" — the provocation at the far
+                  end of the incommensurability debate.
+          - id: sts-phil-fleck
+            name: Fleck — Thought Styles and Thought Collectives
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - sts-phil-kuhn
+            notes: ""
+            assets: []
+      - id: sts-scot-ant
+        name: Social Construction and Actor-Network Theory
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - sts-philosophy-science
+        bridgeTopics:
+          - sts-phil-ssk
+          - sts-edu-technology
+        notes: ""
+        coreTopics:
+          - id: sts-scot-overview
+            name: SCOT — Social Construction of Technology
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - sts-scot-bicycle
+            notes: ""
+            assets:
+              - kind: link
+                url: https://plato.stanford.edu/entries/technology/
+                title: Philosophy of Technology — Stanford Encyclopedia of Philosophy
+                note: Frames the constructivist "empirical turn" — SCOT and actor-network theory in context. The
+                  Pinch & Bijker paper itself is in copyright; this is the free anchor.
+          - id: sts-scot-bicycle
+            name: The Bicycle Case Study
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-scot-overview
+            buildsToward: []
+            notes: ""
+            assets: []
+          - id: sts-ant-latour-woolgar
+            name: Latour and Woolgar — Laboratory Life
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - sts-ant-overview
+            notes: ""
+            assets: []
+          - id: sts-ant-overview
+            name: Actor-Network Theory (ANT)
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-ant-latour-woolgar
+            buildsToward:
+              - sts-ant-inscriptions
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.degruyter.com/document/doi/10.1525/9780520928251-005/html
+                title: Timothy Mitchell, Can the Mosquito Speak? (Rule of Experts, ch. 1, 2002)
+                note: The best concrete case for nonhuman agency — the Aswan Dam, malarial mosquitoes, war, and
+                  fertilizer in 1940s Egypt, where no clean line separates the natural, the
+                  technical, and the social. Extends ANT's symmetry beyond Latour's lab. Publisher
+                  page (in copyright).
+          - id: sts-ant-inscriptions
+            name: Inscriptions, Black Boxes, and Stabilization
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-ant-overview
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.jstor.org/stable/370279
+                title: "Trevor Pinch, Opening Black Boxes: Science, Technology and Society (1992)"
+                note: Pinch's programmatic essay on the black-box metaphor — and the STS obligation to reopen boxes
+                  rather than just watch them close. Cases where scientific heroes became villains
+                  (Crosse's electric life, Pons–Fleischmann cold fusion). On JSTOR.
+        optionalTopics:
+          - id: sts-ant-callon
+            name: Callon — Translation and Enrollment
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-ant-overview
+            buildsToward: []
+            notes: ""
+            assets: []
+      - id: sts-power-politics
+        name: Technology, Power, and Politics
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - sts-philosophy-science
+        bridgeTopics:
+          - sts-phil-ssk
+        notes: ""
+        coreTopics:
+          - id: sts-power-winner
+            name: Langdon Winner — Do Artifacts Have Politics?
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - sts-power-systems
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.jstor.org/stable/20024652
+                title: Langdon Winner, Do Artifacts Have Politics? (Daedalus, 1980)
+                note: The source itself, on JSTOR — Moses's low bridges, the two ways artifacts carry politics. The
+                  origin of the idea, worth reading directly.
+          - id: sts-power-systems
+            name: Large Technical Systems and Momentum
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-power-winner
+            buildsToward: []
+            notes: ""
+            assets: []
+          - id: sts-power-leviathan
+            name: Shapin & Schaffer — Leviathan and the Air-Pump
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://press.princeton.edu/books/paperback/9780691178165/leviathan-and-the-air-pump
+                title: Steven Shapin & Simon Schaffer, Leviathan and the Air-Pump (1985; 2011 ed.)
+                note: Princeton UP page for the classic (2011 edition has a new author introduction). In copyright;
+                  the navigational anchor for the Boyle–Hobbes case and its thesis.
+          - id: sts-power-feminist
+            name: Feminist STS
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://plato.stanford.edu/entries/feminism-epistemology/
+                title: Feminist Epistemology and Philosophy of Science — Stanford Encyclopedia of Philosophy
+                note: Covers Haraway's situated knowledges and the standpoint/postmodern debates. The primary
+                  Haraway texts are in copyright; this is the authoritative free map.
+          - id: sts-power-race
+            name: Race and Technology
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward: []
+            notes: ""
+            assets: []
+        optionalTopics:
+          - id: sts-power-suchman
+            name: Lucy Suchman — Plans and Situated Actions
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward: []
+            notes: ""
+            assets: []
+      - id: sts-education
+        name: STS and Education
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - sts-scot-ant
+          - sts-power-politics
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: sts-edu-knowledge
+            name: Knowledge Production in Schools
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - sts-edu-freire
+            notes: ""
+            assets: []
+          - id: sts-edu-freire
+            name: Freire — Critical Pedagogy
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-edu-knowledge
+            buildsToward:
+              - sts-edu-science
+            notes: ""
+            assets: []
+          - id: sts-edu-science
+            name: STS in Science Education
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-edu-freire
+            buildsToward:
+              - sts-edu-technology
+            notes: ""
+            assets:
+              - kind: text
+                url: https://education.usask.ca/documents/profiles/aikenhead/stsed.pdf
+                title: "Glen Aikenhead, STS Education: A Rose by Any Other Name (2003)"
+                note: Aikenhead's own map of the STS-science-education field and its many variants — readable full
+                  text on his university page. The primary voice in the debate.
+          - id: sts-edu-technology
+            name: Technology in Educational Institutions
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-edu-science
+            buildsToward:
+              - sts-edu-digital
+            notes: ""
+            assets: []
+          - id: sts-edu-digital
+            name: Digital Education, Algorithms, and Learning Analytics
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-edu-technology
+            buildsToward: []
+            notes: ""
+            assets: []
+        optionalTopics:
+          - id: sts-edu-dewey
+            name: Dewey — Democracy and Education
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - sts-edu-freire
+            notes: ""
+            assets:
+              - kind: text
+                url: https://www.gutenberg.org/files/852/852-h/852-h.htm
+                title: John Dewey, Democracy and Education (1916)
+                note: Full public-domain text (Project Gutenberg) — quote real passages directly. Chapter I
+                  ("Education as a Necessity of Life") and Ch. VII (democracy) are the entry points.
+          - id: sts-edu-illich
+            name: Illich — Deschooling Society
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-edu-knowledge
+            buildsToward: []
+            notes: ""
+            assets: []
+      - id: sts-histepi
+        name: Historical Epistemology and Ontology
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - sts-philosophy-science
+        bridgeTopics:
+          - sts-power-feminist
+        notes: ""
+        coreTopics:
+          - id: sts-histepi-canguilhem
+            name: Canguilhem — The Normal and the Pathological
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - sts-histepi-foucault
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.zonebooks.org/books/81-the-normal-and-the-pathological
+                title: Georges Canguilhem, The Normal and the Pathological (Zone Books, 1991 ed.)
+                note: Publisher page for the standard English translation (with Foucault's introduction). The text
+                  is in copyright; this is the navigational anchor.
+          - id: sts-histepi-foucault
+            name: Foucault — Episteme, the Historical A Priori, and Power/Knowledge
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-histepi-canguilhem
+            buildsToward:
+              - sts-histepi-hacking
+            notes: ""
+            assets:
+              - kind: link
+                url: https://plato.stanford.edu/entries/foucault/
+                title: Michel Foucault — Stanford Encyclopedia of Philosophy
+                note: Authoritative map of archaeology, genealogy, episteme, and power/knowledge. The primary works
+                  are in copyright; SEP is the entry point for the concepts.
+          - id: sts-histepi-hacking
+            name: Ian Hacking — Historical Ontology and Making Up People
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-histepi-foucault
+            buildsToward:
+              - sts-histepi-objectivity
+            notes: ""
+            assets:
+              - kind: text
+                url: https://www.lrb.co.uk/the-paper/v28/n16/ian-hacking/making-up-people
+                title: Ian Hacking, Making Up People (London Review of Books, 2006)
+                note: Hacking's own short, readable statement of dynamic nominalism and the looping effect — a clean
+                  primary text to quote directly (freely readable on the LRB site).
+          - id: sts-histepi-objectivity
+            name: Daston & Galison — Objectivity as a Historical Epistemic Virtue
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-histepi-hacking
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.zonebooks.org/books/5-objectivity
+                title: Lorraine Daston & Peter Galison, Objectivity (Zone Books, 2007)
+                note: Publisher page for the landmark study of objectivity's history via atlas images. In copyright;
+                  the anchor for the concept and its periodization.
+        optionalTopics:
+          - id: sts-histepi-clinic
+            name: Foucault — The Birth of the Clinic and the Medical Gaze
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-histepi-foucault
+            buildsToward: []
+            notes: ""
+            assets: []
+      - id: sts-contemporary
+        name: Contemporary STS — Data, Algorithms, and Society
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - sts-power-politics
+          - sts-education
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: sts-cont-noble
+            name: Safiya Noble — Algorithms of Oppression
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - sts-cont-eubanks
+            notes: ""
+            assets: []
+          - id: sts-cont-eubanks
+            name: Virginia Eubanks — Automating Inequality
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-cont-noble
+            buildsToward:
+              - sts-cont-benjamin
+            notes: ""
+            assets: []
+          - id: sts-cont-benjamin
+            name: Ruha Benjamin — Race After Technology
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-cont-eubanks
+            buildsToward:
+              - sts-cont-ai-society
+            notes: ""
+            assets: []
+          - id: sts-cont-ai-society
+            name: AI in Society — STS Perspectives
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - sts-cont-benjamin
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://plato.stanford.edu/entries/ethics-ai/
+                title: Ethics of Artificial Intelligence and Robotics — Stanford Encyclopedia of Philosophy
+                note: A rigorous survey (opacity, bias, autonomy, machine agency) to hang the capstone on — and the
+                  natural hinge back to the AI lane.
+        optionalTopics:
+          - id: sts-cont-data-feminism
+            name: D'Ignazio & Klein — Data Feminism
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward: []
+            notes: ""
+            assets: []
+          - id: sts-cont-zuboff
+            name: Zuboff — Surveillance Capitalism
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward: []
+            notes: ""
+            assets: []
+          - id: sts-cont-chandler
+            name: Katherine Chandler — Unmanning (Drone Warfare)
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://doi.org/10.36019/9781978809789
+                title: Katherine Chandler, Unmanning (Rutgers University Press, 2020)
+                note: Publisher DOI page for the book. In copyright; the anchor for the drone genealogy and its
+                  critique of technological inevitability.
+          - id: sts-cont-mckittrick
+            name: Katherine McKittrick — Dear Science and Other Stories
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.dukeupress.edu/dear-science-and-other-stories
+                title: Katherine McKittrick, Dear Science and Other Stories (Duke UP, 2021)
+                note: Duke University Press page. In copyright; the anchor for McKittrick's method and its challenge
+                  to how scientific knowledge is authorized.
+  - id: art
+    name: Modern Art History Lane
+    weight: 20
+    currentUnit: art-impressionism
+    nextUp:
+      unitId: art-impressionism
+      plan: "First lesson: open with the lane roadmap — where this lane is going and how the units fit
+        together — then start the first topic."
+    direction: A survey of major movements and figures from the last ~150 years, focused on building the
+      ability to appreciate and interpret work in modern and contemporary museums. The emphasis is
+      on what movements were arguing — the discourse — not just visual style. Pre-Impressionism is
+      context only.
+    units:
+      - id: art-impressionism
+        name: Impressionism and Post-Impressionism
+        state: not-started
+        currentTopic: null
+        prerequisites: []
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: art-imp-context
+            name: The Academic Tradition and What Impressionism Broke From
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - art-imp-movement
+            notes: ""
+            assets:
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/1863%20Alexandre%20Cabanel%20-%20The%20Birth%20of%20Venus.jpg
+                title: Alexandre Cabanel, The Birth of Venus (1863)
+                note: The Salon ideal Impressionism broke from — smooth finish, mythological subject, idealized
+                  nude. Bought by Napoleon III; the establishment taste incarnate.
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/William-Adolphe%20Bouguereau%20%281825-1905%29%20-%20Nymphs%20and%20Satyr%20%281873%29%20HQ.jpg
+                title: William-Adolphe Bouguereau, Nymphs and Satyr (1873)
+                note: Academic technique at its most polished — invisible brushwork, classical subject. The exact
+                  surface the Impressionists refused. Good side-by-side foil.
+          - id: art-imp-movement
+            name: Impressionism — Key Figures, Techniques, and Arguments
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-imp-context
+            buildsToward:
+              - art-imp-post
+            notes: ""
+            assets:
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Monet%20-%20Impression%2C%20Sunrise.jpg
+                title: Claude Monet, Impression, Sunrise (1872)
+                note: The painting that gave the movement its name (mockingly, from a critic). Light and atmosphere
+                  over described objects — the whole argument in one canvas.
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Auguste%20Renoir%20-%20Dance%20at%20Le%20Moulin%20de%20la%20Galette%20-%20Google%20Art%20Project.jpg
+                title: Pierre-Auguste Renoir, Bal du moulin de la Galette (1876)
+                note: Dappled sunlight through leaves on a Montmartre crowd — modern Parisian leisure as subject,
+                  sensation rendered over line.
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Edgar%20Degas%20-%20The%20Ballet%20Class%20-%20Google%20Art%20Project.jpg
+                title: Edgar Degas, The Ballet Class (c. 1873–76)
+                note: Degas as the movement's odd one out — draftsman, indoor scenes, cropped photographic framing.
+                  Useful for showing Impressionism wasn't monolithic.
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Berthe%20Morisot%20-%20The%20Cradle%20-%20Google%20Art%20Project.jpg
+                title: Berthe Morisot, The Cradle (1872)
+                note: A founding Impressionist too often left off the list. Domestic intimacy as a serious subject;
+                  loose, feathery handling. Worth foregrounding, not footnoting.
+          - id: art-imp-post
+            name: Post-Impressionism — Four Diverging Responses
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-imp-movement
+            buildsToward:
+              - art-imp-reading
+            notes: ""
+            assets:
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Paul%20Cezanne%20-%20Mont%20Sainte-Victoire%20and%20Ch%C3%A2teau%20Noir%20-%20Google%20Art%20Project.jpg
+                title: Paul Cézanne, Mont Sainte-Victoire and Château Noir (c. 1904–06)
+                note: Cézanne's argument — structure under sensation, nature reduced to planes and facets. The
+                  direct bridge to Cubism.
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Van%20Gogh%20-%20Starry%20Night%20-%20Google%20Art%20Project.jpg
+                title: Vincent van Gogh, The Starry Night (1889)
+                note: Van Gogh's argument — paint as carrier of emotional and spiritual charge. The swirling impasto
+                  is expression, not description.
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Paul%20Gauguin%20-%20D%27ou%20venons-nous.jpg
+                title: Paul Gauguin, Where Do We Come From? What Are We? Where Are We Going? (1897–98)
+                note: Gauguin's argument — flat symbolic color, primitivist myth-making, meaning over optical truth.
+                  Read right-to-left as a life cycle.
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Georges%20Seurat%20-%20A%20Sunday%20on%20La%20Grande%20Jatte%20--%201884%20-%20Google%20Art%20Project.jpg
+                title: Georges Seurat, A Sunday on La Grande Jatte (1884)
+                note: Seurat's argument — Impressionism systematized into science. Pointillist optical mixing,
+                  rigidly composed. Sensation turned into method.
+          - id: art-imp-reading
+            name: How to Look — Reading a Painting in a Museum
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-imp-movement
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Manet%2C%20Edouard%20-%20Olympia%2C%201863.jpg
+                title: Édouard Manet, Olympia (1863)
+                note: The ideal close-looking case — a nude that quotes Titian but stares back, flat lighting, a
+                  scandalized public. Reads richly for what a painting is *doing* rhetorically.
+                  Manet as the hinge between academy and Impressionism.
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/%C3%89douard%20Manet%20-%20Le%20D%C3%A9jeuner%20sur%20l%27herbe.jpg
+                title: Édouard Manet, Le Déjeuner sur l'herbe (1863)
+                note: Salon des Refusés flashpoint. Great for practicing composition and the gap between what's
+                  depicted and how — the clothed men, the frank nude, the collapsed depth. Pairs
+                  with Olympia to teach reading the break.
+        optionalTopics:
+          - id: art-imp-symbolism
+            name: Symbolism and Other Late 19th-Century Movements
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-imp-movement
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/The%20Kiss%20-%20Gustav%20Klimt%20-%20Google%20Cultural%20Institute.jpg
+                title: Gustav Klimt, The Kiss (1907–08)
+                note: Vienna Secession Symbolism — gold-leaf ornament, myth and interiority over optical reality.
+                  The parallel track running alongside Post-Impressionism.
+      - id: art-avant-gardes
+        name: Early 20th-Century Avant-Gardes
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - art-impressionism
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: art-ag-fauvism
+            name: Fauvism — Color as Pure Expression
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - art-ag-expressionism
+            notes: ""
+            assets:
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Matisse-Woman-with-a-Hat.jpg
+                title: Henri Matisse, Woman with a Hat (1905)
+                note: The Salon d'Automne scandal that named the movement. Color torn free of description — a green
+                  stripe down a face because the picture, not the face, needs it.
+          - id: art-ag-expressionism
+            name: German Expressionism
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-ag-fauvism
+            buildsToward:
+              - art-ag-cubism
+            notes: ""
+            assets:
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Kirchner%20-%20Street%2C%20Dresden%2C%201908%2C%2012.1951.jpg
+                title: Ernst Ludwig Kirchner, Street, Dresden (1908, reworked 1919)
+                note: Die Brücke wing — jarring color, tilted crowd, alienation of the modern city. Anxiety made
+                  visible rather than described.
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Large%20Blue%20Horses.jpg
+                title: Franz Marc, The Large Blue Horses (1911)
+                note: Der Blaue Reiter wing — color as spiritual language (blue = the animal, serene, opposed to
+                  human corruption). The other pole of Expressionism.
+          - id: art-ag-cubism
+            name: Cubism — Shattering Perspective
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-ag-expressionism
+            buildsToward:
+              - art-ag-futurism
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.moma.org/collection/works/79766
+                title: Pablo Picasso, Les Demoiselles d'Avignon (1907) — MoMA
+                note: The break-open work — flattened space, African-mask faces, the shattered single viewpoint.
+                  Still in copyright, so museum page rather than embedded image.
+          - id: art-ag-futurism
+            name: Futurism and the Machine Age
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-ag-cubism
+            buildsToward:
+              - art-ag-dada
+            notes: ""
+            assets:
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Unique%20Forms%20of%20Continuity%20in%20Space%20MET%20DT6411.jpg
+                title: Umberto Boccioni, Unique Forms of Continuity in Space (1913)
+                note: Futurism's icon — a striding figure dissolved into speed and force lines. Motion and
+                  machine-age dynamism as the whole subject.
+              - kind: text
+                url: https://en.wikipedia.org/wiki/Manifesto_of_Futurism
+                title: F. T. Marinetti, The Manifesto of Futurism (1909)
+                note: The primary document — Futurism launched as words before paint. Read the eleven points for the
+                  movement's argument (and its glorification of violence).
+          - id: art-ag-dada
+            name: Dada — Anti-Art
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-ag-futurism
+            buildsToward:
+              - art-ag-surrealism
+            notes: ""
+            assets:
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Marcel%20Duchamp%2C%201917%2C%20Fountain%2C%20photograph%20by%20Alfred%20Stieglitz.jpg
+                title: Marcel Duchamp, Fountain (1917), photographed by Alfred Stieglitz
+                note: The readymade that detonated the definition of art — a signed urinal. The original is lost;
+                  Stieglitz's public-domain 1917 photo is the record.
+          - id: art-ag-surrealism
+            name: Surrealism — The Unconscious Made Visible
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-ag-dada
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.moma.org/collection/works/79018
+                title: Salvador Dalí, The Persistence of Memory (1931) — MoMA
+                note: The hyper-real-illusionism strand — melting watches painted with academic precision to
+                  "systematize confusion." In copyright, so museum page.
+        optionalTopics:
+          - id: art-ag-constructivism
+            name: Russian Constructivism and De Stijl
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-ag-cubism
+            buildsToward: []
+            notes: ""
+            assets: []
+      - id: art-mid-century
+        name: Mid-Century Modernism
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - art-avant-gardes
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: art-mc-bauhaus
+            name: Bauhaus — Art, Craft, and the Industrial World
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - art-mc-abstract-expr
+            notes: ""
+            assets:
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Bauhaus%20dessau.jpg
+                title: The Bauhaus Building, Dessau (Walter Gropius, 1925–26)
+                note: The school as its own manifesto — glass curtain wall, asymmetric functional plan, ornament
+                  abolished. Design as social reform made concrete.
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Kandinsky%20-%20Jaune%20Rouge%20Bleu.jpg
+                title: Wassily Kandinsky, Yellow-Red-Blue (1925)
+                note: A Bauhaus master's abstraction — form and color pursued as an almost musical system. Bridges
+                  the Blaue Reiter Expressionism of the last unit into pure design.
+          - id: art-mc-mondrian
+            name: Mondrian and Abstraction to Essence
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - art-mc-abstract-expr
+            notes: ""
+            assets:
+              - kind: image
+                url: https://commons.wikimedia.org/wiki/Special:FilePath/Piet%20Mondriaan%2C%201930%20-%20Mondrian%20Composition%20II%20in%20Red%2C%20Blue%2C%20and%20Yellow.jpg
+                title: Piet Mondrian, Composition II in Red, Blue, and Yellow (1930)
+                note: Neoplasticism at its purest — only primaries, black grid, white ground. Reduction to essence
+                  as a spiritual, near-utopian project.
+          - id: art-mc-abstract-expr
+            name: Abstract Expressionism
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-mc-bauhaus
+              - art-mc-mondrian
+            buildsToward:
+              - art-mc-color-field
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.moma.org/collection/works/78386
+                title: "Jackson Pollock, One: Number 31, 1950 — MoMA"
+                note: Action painting at wall scale — the canvas as arena, the drip as a record of the body's
+                  movement. Postwar copyright, so museum page.
+          - id: art-mc-color-field
+            name: Color Field Painting
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-mc-abstract-expr
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.tate.org.uk/visit/tate-modern/display/in-the-studio/mark-rothko-seagram-murals
+                title: Mark Rothko, the Seagram Murals — Tate Modern
+                note: Color Field's contemplative pole — vast maroon-and-black fields meant to envelop the viewer.
+                  Rothko refused the restaurant commission and gave them to Tate.
+        optionalTopics:
+          - id: art-mc-new-york
+            name: The New York Art Scene and the Shift from Paris
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-mc-abstract-expr
+            buildsToward: []
+            notes: ""
+            assets: []
+      - id: art-pop-conceptual
+        name: Pop Art, Minimalism, and Conceptual Art
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - art-mid-century
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: art-pop-movement
+            name: Pop Art — Mass Culture as Subject
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - art-pop-minimalism
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.moma.org/collection/works/79809
+                title: Andy Warhol, Campbell's Soup Cans (1962) — MoMA
+                note: Thirty-two canvases shelved like a grocery aisle — mass culture as subject, the hand disguised
+                  as the machine. Hold the critique-or-celebration question open.
+          - id: art-pop-minimalism
+            name: Minimalism — The Object as Object
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-pop-movement
+            buildsToward:
+              - art-pop-concept-art
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.moma.org/collection/works/81324
+                title: Donald Judd, Untitled (Stack) (1967) — MoMA
+                note: Identical iron boxes cantilevered floor-to-ceiling at equal intervals — no illusion, no
+                  composition, no expression. Just the object and the room.
+          - id: art-pop-concept-art
+            name: Conceptual Art — The Idea as the Work
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-pop-minimalism
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.moma.org/collection/works/81435
+                title: Joseph Kosuth, One and Three Chairs (1965) — MoMA
+                note: A chair, a photo of the chair, and the dictionary definition — the idea as the work. The
+                  cleanest single entry point to Conceptual Art.
+              - kind: text
+                url: https://monoskop.org/images/3/3d/LeWitt_Sol_1969_1999_Sentences_on_Conceptual_Art.pdf
+                title: Sol LeWitt, Sentences on Conceptual Art (1969)
+                note: The primary statement — 35 aphorisms ("the idea becomes a machine that makes the art"). Short;
+                  read it directly as the movement's own argument.
+          - id: art-pop-photography
+            name: Photography as Art
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.moma.org/collection/works/56618
+                title: "Cindy Sherman, Untitled Film Still #21 (1978) — MoMA"
+                note: From the 70-part series that made staged photography major art — Sherman as every generic film
+                  heroine, exposing the image-of-woman as construction. Bridges to the contemporary
+                  identity unit.
+        optionalTopics:
+          - id: art-pop-fluxus
+            name: Fluxus and Performance Art
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-pop-concept-art
+            buildsToward: []
+            notes: ""
+            assets: []
+      - id: art-contemporary
+        name: Contemporary Art and Museum Practice
+        state: not-started
+        currentTopic: null
+        prerequisites:
+          - art-pop-conceptual
+        bridgeTopics: []
+        notes: ""
+        coreTopics:
+          - id: art-cont-postmodern
+            name: Postmodernism — After Grand Narratives
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward:
+              - art-cont-identity
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.metmuseum.org/art/collection/search/267214
+                title: "Sherrie Levine, After Walker Evans: 4 (1981) — The Met"
+                note: Rephotographs of Walker Evans's Depression photos, presented as her own — the landmark test
+                  case for originality, authorship, and appropriation.
+          - id: art-cont-identity
+            name: Identity Politics in Contemporary Art
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-cont-postmodern
+            buildsToward:
+              - art-cont-global
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.moma.org/collection/works/110565
+                title: "Kara Walker, Gone: An Historical Romance… (1994) — MoMA"
+                note: The 18th-century silhouette turned against itself — a room-wrapping cut-paper tableau on
+                  slavery, stereotype, and violence. Identity as contested history.
+          - id: art-cont-global
+            name: The Global Contemporary Scene
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-cont-identity
+            buildsToward:
+              - art-cont-museum
+            notes: ""
+            assets:
+              - kind: link
+                url: https://www.tate.org.uk/art/artists/ai-weiwei-8208/ai-weiwei-sunflower-seeds
+                title: Ai Weiwei, Sunflower Seeds (2010) — Tate Modern
+                note: 100 million hand-painted porcelain seeds filling the Turbine Hall — mass and individual, labor
+                  and the Chinese state. A global-contemporary anchor beyond the West.
+          - id: art-cont-museum
+            name: How to Read Contemporary Art in a Museum
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-cont-global
+            buildsToward: []
+            notes: ""
+            assets:
+              - kind: text
+                url: https://www.tate.org.uk/documents/93/charman_looking.pdf
+                title: Tate, 'Ways of Looking' — a framework for reading art
+                note: A concrete method matching this capstone's goal — four lenses (Personal response, Subject,
+                  Object, Context), each a set of questions to ask an unfamiliar work. The practical
+                  toolkit for when you're baffled in the gallery.
+        optionalTopics:
+          - id: art-cont-digital
+            name: Digital and New Media Art
+            state: not-started
+            lastTouched: null
+            prerequisites:
+              - art-cont-postmodern
+            buildsToward: []
+            notes: ""
+            assets: []
+          - id: art-cont-street
+            name: Street Art and Its Museum Crossover
+            state: not-started
+            lastTouched: null
+            prerequisites: []
+            buildsToward: []
+            notes: ""
+            assets: []

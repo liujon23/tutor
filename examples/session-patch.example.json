@@ -1,0 +1,57 @@
+{
+  "$comment": "Example session patch — the structured diff the tutor emits at wrap-up. See skills/references/document-formats.md for full semantics. Validate with: npm run commit-session -- --patch examples/session-patch.example.json --dry-run",
+  "lesson": {
+    "date": "2026-07-01",
+    "laneId": "ai",
+    "unitId": "ai-nn-foundations",
+    "topicIds": ["ai-nn-foundations-loss"],
+    "whatHappened": "2–4 sentences: what was actually taught, how it went.",
+    "performanceSketch": "Coarse, fair read of where the learner landed — what clicked, what didn't.",
+    "sourcesUsed": "Named sources drawn on, or 'None named.'",
+    "feedbackCaptured": "What the learner said in the wrap-up, or 'skipped'.",
+    "askedAbout": "Which feedback topics were probed, so future sessions don't re-ask."
+  },
+  "curriculum": {
+    "topicUpdates": [
+      {
+        "id": "ai-nn-foundations-loss",
+        "state": "comfortable",
+        "notes": "Replaces the topic's notes. Omit to keep. 'touched' defaults true (sets lastTouched)."
+      }
+    ],
+    "unitUpdates": [
+      {
+        "id": "ai-nn-foundations",
+        "currentTopic": "ai-nn-foundations-embeddings"
+      }
+    ],
+    "laneUpdates": [
+      {
+        "id": "ai",
+        "nextUp": {
+          "topicId": "ai-nn-foundations-embeddings",
+          "plan": "One line: what's queued and how to open it. This is what makes next session's selection instant."
+        }
+      }
+    ],
+    "newTopics": [],
+    "newUnits": []
+  },
+  "profile": {
+    "workingNotes": {
+      "add": ["New hunch about how the learner learns (freely writable)."],
+      "removeContaining": []
+    },
+    "broaderPrerequisites": { "add": [], "removeContaining": [] },
+    "settledQuestions": {
+      "add": ["Newly settled feedback question — settled (Lesson N): don't re-ask."]
+    },
+    "proposedConfirmedPatterns": [
+      "A candidate confirmed pattern. Printed for the learner, NEVER applied by the patcher."
+    ],
+    "approvedConfirmedPatterns": {
+      "$comment": "Only populate after the learner's explicit yes in-conversation.",
+      "add": []
+    }
+  }
+}

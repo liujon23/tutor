@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#14121f"/>
+  <!-- open book -->
+  <path d="M256 168 C 216 140, 152 136, 112 148 L 112 356 C 152 344, 216 348, 256 376 Z"
+        fill="#8b83e8"/>
+  <path d="M256 168 C 296 140, 360 136, 400 148 L 400 356 C 360 344, 296 348, 256 376 Z"
+        fill="#5a51c9"/>
+  <!-- spark -->
+  <circle cx="256" cy="118" r="14" fill="#f0d894"/>
+</svg>
