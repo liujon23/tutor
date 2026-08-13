@@ -9,14 +9,15 @@ author's art-history course, replayed in the actual app.
 
 <!-- demo GIF goes here once captured from the live Pages deploy -->
 
-## The one idea: rigid scaffolding, fluid teaching
+## The core idea: teachers should adapt and improvise, but their memories shouldn't.
 
-Most AI-tutor setups drift: the model half-remembers what you know, re-asks
+Most AI tutor setups drift: the model half-remembers what you know, re-asks
 settled questions, and loses the thread between sessions. Here the model never
-keeps the books. Before each lesson, code assembles a *session packet*:
-everything the tutor needs to know, computed deterministically. After each lesson,
-the tutor hands back one structured *session patch*, which code validates,
-applies, and commits. The lesson in between is freeform teaching.
+keeps the books. Before each lesson, *code* assembles a session packet with
+everything the tutor needs to know: lesson topic/goals and student information. 
+After each lesson, the tutor hands back a structured session patch/debrief, 
+which *code* validates, applies, and commits. Course recordkeeping is stable and 
+deterministic, so the tutor's "memory" is too. 
 
 **Every lesson is one git commit.** Your entire learning history is a readable git log. 
 The tutor's only write path is the validated post-lesson patch — it can never quietly 
