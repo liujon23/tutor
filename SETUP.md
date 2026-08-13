@@ -25,25 +25,21 @@ time.
 
 ## Step 2 — Auth
 
-Two paths, pick one:
+Mint a subscription token and put it in `.env`:
 
-- **Claude Code lessons only** (terminal): nothing to do — Claude Code's own login
-  is enough. Skip to Step 4.
-- **The app**: mint a subscription token and put it in `.env`:
+```bash
+claude setup-token          # prints a CLAUDE_CODE_OAUTH_TOKEN value
+cp .env.example .env        # then paste the token into .env
+```
 
-  ```bash
-  claude setup-token          # prints a CLAUDE_CODE_OAUTH_TOKEN value
-  cp .env.example .env        # then paste the token into .env
-  ```
+The token is a key to your whole subscription: it lives only on this machine —
+never in the frontend, never committed (`.env` is gitignored). No subscription?
+Set `ANTHROPIC_API_KEY` instead (metered billing). Verify before the first
+lesson:
 
-  The token is a key to your whole subscription: it lives only on this machine —
-  never in the frontend, never committed (`.env` is gitignored). No subscription?
-  Set `ANTHROPIC_API_KEY` instead (metered billing). Verify before the first
-  lesson:
-
-  ```bash
-  npm run echo-test
-  ```
+```bash
+npm run echo-test
+```
 
 ## Step 3 — Try the app on the PC
 
@@ -55,12 +51,10 @@ Open **http://127.0.0.1:4321**. You should see the select screen with the bundle
 example course (three lanes: AI, Science & Technology Studies, modern art
 history). Start a tight lesson and say hello.
 
-## Step 4 — Or run a lesson in Claude Code
+> **Prefer the terminal?** Lessons can also run inside Claude Code with no
+> server and no token — see **CLI.md**.
 
-Open Claude Code in this folder and say *"let's do a lesson"*. The `daily-lesson`
-skill runs the same flow in the terminal — no server, no token setup.
-
-## Step 5 — Make the course yours
+## Step 4 — Make the course yours
 
 The example course is a real, working curriculum — feel free to just start it.
 When you want your own subjects, open Claude Code here and say *"I want to start
@@ -85,7 +79,7 @@ mkdir ../tutor-data && cp -r data ../tutor-data/data && cd ../tutor-data && git 
 Everything (app, CLI, skills) honors `TUTOR_DATA_DIR`. Set `TUTOR_GIT_PUSH=1` to
 also push your data repo after each lesson (off-site backup).
 
-## Step 6 — Reach it from your phone (optional)
+## Step 5 — Reach it from your phone (optional)
 
 With Tailscale on both devices, expose the app over HTTPS **once**:
 

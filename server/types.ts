@@ -1,4 +1,4 @@
-// Shared types for the Phase 2 app server.
+// Shared types for the app server.
 import type { SessionSize } from "../core/types.js";
 
 export type LessonModel = "opus" | "sonnet";

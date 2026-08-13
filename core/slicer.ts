@@ -9,7 +9,7 @@ import { recallCandidates, recommendNext, type Recommendation } from "./selector
 
 /**
  * Build the session packet: everything the tutor needs for one lesson,
- * and nothing else. This is the whole point of Phase 1 — no more loading
+ * and nothing else. This is the whole point of the deterministic core — no more loading
  * three full documents to teach one topic.
  */
 export function buildSessionPacket(paths: DataPaths, opts: PacketOptions): string {

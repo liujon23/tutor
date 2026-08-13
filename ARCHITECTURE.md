@@ -36,6 +36,18 @@ then git-committed. **One lesson = one commit**; `git revert` undoes a bad one.
 | `web/` | the PWA; `web/src/demo/` replays a recording instead of calling the server | everything server-side |
 | `skills/` | the Claude Code flows + the teaching contract (shared with the app) | implementation |
 
+On disk, that's:
+
+```
+data/        the state: profile.md · curriculum.yaml · lesson-history.md
+core/        deterministic TS library — slicer, selector, validator, patcher
+scripts/     CLIs: start-lesson · commit-session · validate · export-lane
+server/      Fastify + Claude Agent SDK backend; serves the PWA
+web/         the PWA (vanilla TS + Vite); web/src/demo/ is the static replay
+skills/      Claude Code skills + the teaching contract (how lessons are taught)
+tests/       node:test suite (npm test)
+```
+
 Two invariants make the design hold:
 
 1. **Everything writes through the same patcher.** The CLI (`commit-session`) and

@@ -1,4 +1,4 @@
-// The Phase 2 app server: serves the PWA and the lesson API on one origin.
+// The app server: serves the PWA and the lesson API on one origin.
 // Runs on the host PC, reached over the tailnet (Tailscale serve terminates TLS).
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";

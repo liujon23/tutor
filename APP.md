@@ -1,4 +1,4 @@
-# The app (Phase 2) — setup & operations
+# The app — setup & operations
 
 Lessons from any device (PC, phone, tablet) in a proper UI — rendered markdown and
 LaTeX, tap-to-select topics, streaming chat — on your own Claude subscription, with
@@ -27,7 +27,7 @@ web/       Vite PWA: select / lesson / wrap-up screens (vanilla TS + marked + Ka
    The token is a key to the whole subscription: it lives only on this PC — never in
    the frontend, never in this repo. Fallback order if policy changes: set
    `ANTHROPIC_API_KEY` instead (metered), or fall back to Claude Code interactive
-   lessons (Phase 1 still works unchanged).
+   lessons (CLI lessons still work unchanged — see CLI.md).
 
 2. **Verify the SDK path** before the first lesson:
 
@@ -66,7 +66,7 @@ preselects Sonnet, still freely switchable) — or "Discuss it instead" to move
 selection into the chat. Recall warm-up chips appear once comfortable topics
 go stale (14 days; `TUTOR_STALE_DAYS` to tune).
 
-The lesson is a streaming chat with rendered math and code — plus, since Phase 3,
+The lesson is a streaming chat with rendered math and code — plus
 embedded images (fetched through the server's validating proxy and cached under
 `.app/assets/`), mermaid diagrams (rendered when a message finalizes), and photo
 attachments: the + button sends a downscaled photo (handwritten work, textbook
@@ -106,7 +106,7 @@ as the per-message signal does the work.
 
 "End lesson" asks the
 tutor to recap and wrap up; it then validates and applies the session patch through
-the same core patcher as Phase 1 and git-commits it. Proposed confirmed-pattern
+the same core patcher as the CLI and git-commits it. Proposed confirmed-pattern
 changes show up in the wrap-up panel with Approve/Reject buttons — nothing touches
 "How I learn best" without your explicit yes.
 
@@ -199,5 +199,5 @@ scripts funnel through the same commit helper, so both get pushed.
 - Rate limits: lessons share your subscription's rate window with your other Claude use. The
   app shows a gentle banner if a lesson hits the limit, with a one-tap switch to
   Sonnet.
-- Phase 1 scripts remain the offline/manual escape hatch — the app and the CLI write
-  through the identical core.
+- The CLI scripts (CLI.md) remain the offline/manual escape hatch — the app and the
+  CLI write through the identical core.
