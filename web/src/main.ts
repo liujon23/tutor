@@ -334,7 +334,7 @@ export async function showSelect(): Promise<void> {
   const discussBtn = h("button", { class: "secondary" }, "Discuss it instead") as HTMLButtonElement;
   const refreshStart = () => {
     const topic = selectedTopic ? status.topics.find((t) => t.id === selectedTopic) : undefined;
-    startBtn.textContent = topic ? `Start: ${topic.name}` : __DEMO__ ? "Start replay" : "Start lesson";
+    startBtn.textContent = topic ? `Start: ${topic.name}` : "Start lesson";
   };
   const start = async (discuss: boolean) => {
     startBtn.disabled = discussBtn.disabled = true;
@@ -357,7 +357,10 @@ export async function showSelect(): Promise<void> {
   };
   startBtn.addEventListener("click", () => start(false));
   discussBtn.addEventListener("click", () => start(true));
-  screen.append(h("div", { class: "start-row" }, startBtn, discussBtn));
+  // Demo mode: no "discuss it instead" — selection-in-chat needs a live model.
+  // The element still exists (start() toggles its disabled state); it just
+  // never enters the DOM.
+  screen.append(h("div", { class: "start-row" }, startBtn, __DEMO__ ? null : discussBtn));
 
   refreshSelection();
   root.append(screen);
