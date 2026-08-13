@@ -59,8 +59,8 @@ history). Start a tight lesson and say hello.
 The example course is a real, working curriculum — feel free to just start it.
 When you want your own subjects, open Claude Code here and say *"I want to start
 learning X"* — the `course-setup` skill designs a lane with you: goals, a sweep of
-what you already know, then a unit/topic skeleton with curated sources. Add your
-name to the top of `data/profile.md` and the tutor will use it.
+what you already know, then a unit/topic skeleton with curated sources. Replace "Learner"
+at the top of `data/profile.md` with your name and the tutor will use it.
 
 ## Where your data lives (worth deciding early)
 
