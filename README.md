@@ -7,7 +7,9 @@ write-back — so **the AI only does what the AI is needed for: personalized and
 **[▶ Try the demo](https://liujon23.github.io/tutor/)** — a real lesson from the
 author's art-history course, replayed in the actual app. 
 
-<!-- demo GIF goes here once captured from the live Pages deploy -->
+<p align="center">
+  <img src="docs/demo.gif" width="440" alt="Demo: a replayed art-history lesson streaming in the app, ending on Degas's The Ballet Class">
+</p>
 
 ## The core idea: teachers should adapt and improvise, but their memories shouldn't.
 
