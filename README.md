@@ -65,6 +65,28 @@ it, then you'll co-design a unit/topic skeleton with curated information sources
 to start learning X"*) — course authoring is a structural conversation, so it
 lives next to the code rather than in the app. 
 
+## Limitations
+- **AI CAN MAKE MISTAKES**. The tutor has web-search capabilities, so you can
+always tell it to verify any of its claims online, but since you are likely not
+an expert in the subject (or else you wouldn't need to learn it from a silly
+vibecoded tutor), it's good to be extra vigilant.
+- This app is totally vibe-coded. I have read most of the prose (e.g. directives
+for how the LLM should teach) but almost none of the code itself. It is written
+mostly by Fable 5, with some upkeep by Opus 4.8+. It is a relatively straightforward
+and self-contained app which should have little surface for cybersecurity issues,
+but no promises.
+- On that note, it is also not designed with efficiency in mind. It is not slow,
+but there are some delays, as there would be if you were chatting with an LLM tutor
+in its native app.
+- The tutor speaks Claude-ese. Sorry. It just is what it is. It doesn't bug me enough
+to try to nudge it away from that, and I'm not sure there's an easy way to do so, but
+some wording in your learner profile (or telling it through feedback when it says
+something that's particularly Claude-like) might help. There's also definitely some
+sycophancy that I have tried to nudge it away from.
+- This app makes no attempt to motivate you to learn. There are no streaks, or achievements,
+or reminder notifications, or guilt-tripping, or anything like that. If you need extrinsic
+motivation to learn, maybe find a buddy to learn something together. Or sign up for a class.
+
 ## Quickstart
 
 ```bash
