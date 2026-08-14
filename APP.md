@@ -68,7 +68,11 @@ scheduled by mastery: a comfortable topic comes due 14 days after it was last to
 (`TUTOR_STALE_DAYS`), and each cleanly-recalled warm-up multiplies that interval by
 2.5 (`TUTOR_RECALL_GROWTH`, capped at a year) — so a topic you keep nailing goes
 quiet for months. Past its interval a topic is *sampled* (seeded per day, so refresh
-doesn't reshuffle), which keeps the same few chips from dominating every session.
+doesn't reshuffle) rather than offered outright, which adds variety near the due date.
+Note the sampling has little effect once a lane has a large overdue backlog: candidates
+are ranked by how overdue they are and cut to three, and everything deep in a backlog
+draws a near-certain probability, so the same most-overdue few keep surfacing until
+they're actually recalled.
 
 The lesson is a streaming chat with rendered math and code — plus
 embedded images (fetched through the server's validating proxy and cached under
@@ -233,3 +237,21 @@ scripts funnel through the same commit helper, so both get pushed.
   Sonnet.
 - The CLI scripts (CLI.md) remain the offline/manual escape hatch — the app and the
   CLI write through the identical core.
+
+## Known limitations (not by design — worth revisiting)
+
+- **Recall sampling is close to inert on a backlog.** `recallCandidates`
+  (`core/selector.ts`) ranks eligible topics by how overdue they are and cuts to
+  three, and anything deep in a backlog draws an offer probability above 0.9 — so
+  the sampling almost never changes the outcome and the same most-overdue few keep
+  surfacing until they're actually recalled. Measured on the real curriculum: 14
+  eligible topics in the AI lane, only 5 distinct ones offered across 14 days. The
+  probabilistic variety works as intended near a topic's due date, where the
+  probability is ~0.63; it just doesn't survive a backlog. The likely fix is to
+  sample *weighted* by overdue-ness instead of hard-sorting, so a less-overdue topic
+  can occasionally beat a more-overdue one.
+- **A topic can be mentioned indefinitely without ever being recalled.**
+  `TopicUpdate.touched` defaults true, so any `topicUpdates` entry re-stamps
+  `lastTouched` and pushes the next warm-up out by a full interval — even with no
+  `recall` grade attached. A topic that keeps coming up in passing therefore keeps
+  resetting its own recall clock while its streak never moves.
