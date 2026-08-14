@@ -2,8 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join, resolve, sep } from "node:path";
 
-import { DEFAULT_DATA_DIR, resolveTutorPaths } from "../scripts/lib.js";
-import { upsertEnv } from "../scripts/init-data.js";
+import { DEFAULT_DATA_DIR, resolveTutorPaths, upsertEnv } from "../scripts/lib.js";
 
 // A resolved absolute stand-in for the code repo — platform-appropriate.
 const CODE_ROOT = resolve(sep, "srv", "tutor-code");

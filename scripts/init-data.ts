@@ -18,6 +18,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   copyDir,
@@ -27,6 +28,7 @@ import {
   PATHS,
   ROOT,
   STARTER_TEMPLATE,
+  upsertEnv,
 } from "./lib.js";
 
 const args = parseArgs(process.argv.slice(2), {
@@ -76,23 +78,6 @@ function run(label: string, cmd: string, cmdArgs: string[], cwd: string): void {
   }
   execFileSync(cmd, cmdArgs, { cwd, stdio: "pipe" });
   console.log(`  ${label}`);
-}
-
-/**
- * Set KEY=value in .env, preserving every other line (including the commented
- * guidance in .env.example, which seeds the file when it doesn't exist yet).
- * Exported for tests.
- */
-export function upsertEnv(contents: string, key: string, value: string): string {
-  const line = `${key}=${value}`;
-  const lines = contents.split(/\r?\n/);
-  const at = lines.findIndex((l) => new RegExp(`^\\s*#?\\s*${key}\\s*=`).test(l));
-  if (at === -1) {
-    const body = contents.trimEnd();
-    return `${body ? `${body}\n` : ""}${line}\n`;
-  }
-  lines[at] = line;
-  return lines.join("\n");
 }
 
 function writeEnv(dataRoot: string): void {
@@ -171,4 +156,8 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+// Only when run as a command. Importing this file must never execute it: the
+// prompt below would block a test run forever on a machine with no stdin.
+if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+  await main();
+}

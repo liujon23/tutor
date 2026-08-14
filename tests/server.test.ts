@@ -1,6 +1,10 @@
 // Tests for the app server's deterministic pieces — status building and
 // lesson-prompt construction. The AI path itself is exercised by
 // `npm run echo-test` on a machine with credentials.
+//
+// Unlike core.test.ts (frozen fixtures), these run against the configured data
+// root, so their assertions are structural: they must hold for the starter
+// courses on a fresh checkout and for a long-running personal curriculum alike.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -41,6 +45,11 @@ import { createCommitSessionTool } from "../server/tutor-tool.js";
 import type { FeedbackLogEntry, StoredSession, UsageRecord } from "../server/types.js";
 import type { SessionPatch } from "../core/types.js";
 import { DEFAULT_SPACING } from "../core/spacing.js";
+import { ensureDataRoot } from "../scripts/lib.js";
+
+// On a fresh checkout the data root doesn't exist yet — seed the starter
+// courses, exactly as the first real command would. A no-op once it's there.
+ensureDataRoot();
 
 function fakeSession(over: Partial<StoredSession> = {}): StoredSession {
   return {

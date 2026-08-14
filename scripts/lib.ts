@@ -125,6 +125,24 @@ export function isOwnGitRepo(dir: string): boolean {
   }
 }
 
+/**
+ * Set KEY=value in .env contents, preserving every other line — including the
+ * commented guidance in .env.example, which seeds the file when there's no .env
+ * yet. Lives here rather than in init-data.ts so tests can import it without
+ * running that script.
+ */
+export function upsertEnv(contents: string, key: string, value: string): string {
+  const line = `${key}=${value}`;
+  const lines = contents.split(/\r?\n/);
+  const at = lines.findIndex((l) => new RegExp(`^\\s*#?\\s*${key}\\s*=`).test(l));
+  if (at === -1) {
+    const body = contents.trimEnd();
+    return `${body ? `${body}\n` : ""}${line}\n`;
+  }
+  lines[at] = line;
+  return lines.join("\n");
+}
+
 /** Path equality across git's forward slashes and Windows' case-insensitivity. */
 function samePath(a: string, b: string): boolean {
   const norm = (p: string) => {
