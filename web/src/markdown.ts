@@ -22,7 +22,12 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   if (node.tagName === "IMG") {
     const src = node.getAttribute("src") ?? "";
     const allowed =
-      src.startsWith("https:") || src.startsWith("/api/assets") || (__DEMO__ && src.startsWith("demo/assets/"));
+      src.startsWith("https:") ||
+      src.startsWith("/api/assets") ||
+      // Archived lesson images, served read-only from the transcripts dir —
+      // this is what makes images show up in the transcript reader.
+      src.startsWith("/transcripts/") ||
+      (__DEMO__ && (src.startsWith("demo/assets/") || src.startsWith("demo/transcripts/")));
     if (!allowed) node.removeAttribute("src");
   }
 });

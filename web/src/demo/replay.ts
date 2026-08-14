@@ -4,9 +4,11 @@
 // every screen/module works unmodified against whichever one the build
 // picked. Only reachable when built with `--mode demo` (__DEMO__ === true);
 // otherwise this whole module is unreferenced and Rollup drops it.
+import { transcriptName } from "../api.js";
 import type {
   Api,
   CommitResult,
+  CurriculumView,
   LessonEvent,
   LessonModel,
   LessonState,
@@ -288,10 +290,37 @@ function events(_id: string, onEvent: (ev: LessonEvent) => void): () => void {
   };
 }
 
+// --- Curriculum viewer -------------------------------------------------------
+// Unlike the rest of the demo these read committed static files rather than the
+// recording: web/public/demo/curriculum.json is a snapshot of the art lane
+// (written by `npm run demo:snapshot`), and only the lesson this demo replays
+// has its transcript bundled alongside it. Every other lesson row arrives with
+// hasTranscript:false and renders inert.
+
+let curriculumPromise: Promise<CurriculumView> | null = null;
+
+async function curriculum(): Promise<CurriculumView> {
+  curriculumPromise ??= fetch(`${import.meta.env.BASE_URL}demo/curriculum.json`).then(
+    (r) => r.json() as Promise<CurriculumView>
+  );
+  return curriculumPromise;
+}
+
+// Named *Text to avoid colliding with the replay's own `transcript` state.
+async function transcriptText(lessonNumber: number): Promise<string> {
+  const res = await fetch(
+    `${import.meta.env.BASE_URL}demo/transcripts/${transcriptName(lessonNumber)}`
+  );
+  if (!res.ok) throw new Error(`Lesson ${lessonNumber}'s transcript isn't part of this demo.`);
+  return res.text();
+}
+
 export const demoApi: Api = {
   status,
   version,
   report,
+  curriculum,
+  transcript: transcriptText,
   createLesson,
   lesson,
   sendMessage,

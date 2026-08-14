@@ -5,6 +5,8 @@ import type {
   SessionPatch,
   Topic,
   TopicUpdate,
+  Unit,
+  UnitState,
 } from "./types.js";
 import { TOPIC_STATES, UNIT_STATES } from "./types.js";
 import { laneById, loadCurriculum, saveCurriculum, topicById, unitById } from "./curriculum.js";
@@ -144,7 +146,7 @@ function applyCurriculumChanges(
     const lane = laneById(c, spec.laneId);
     if (!lane) throw new Error(`newUnits: lane '${spec.laneId}' does not exist`);
     if (unitById(c, spec.unit.id)) throw new Error(`newUnits: unit id '${spec.unit.id}' already exists`);
-    lane.units.push({
+    const unit: Unit = {
       id: spec.unit.id,
       name: spec.unit.name,
       state: spec.unit.state ?? "not-started",
@@ -154,7 +156,11 @@ function applyCurriculumChanges(
       notes: spec.unit.notes ?? "",
       coreTopics: [],
       optionalTopics: [],
-    });
+      completedAt: null,
+    };
+    // A unit created straight into a completed state still gets its date.
+    stampCompletedAt(unit, L.date);
+    lane.units.push(unit);
     summary?.push(`added unit ${spec.unit.id} to lane ${spec.laneId}`);
   }
 
@@ -187,7 +193,10 @@ function applyCurriculumChanges(
   for (const u of cur.unitUpdates ?? []) {
     const hit = unitById(c, u.id);
     if (!hit) throw new Error(`unitUpdates: unit '${u.id}' does not exist`);
-    if (u.state) hit.unit.state = u.state;
+    if (u.state) {
+      hit.unit.state = u.state;
+      stampCompletedAt(hit.unit, L.date);
+    }
     if (u.currentTopic !== undefined) hit.unit.currentTopic = u.currentTopic;
     if (u.notes !== undefined) hit.unit.notes = u.notes;
     summary?.push(`unit ${u.id} updated`);
@@ -203,6 +212,22 @@ function applyCurriculumChanges(
       `lane ${u.id} updated${u.nextUp ? ` (next up: ${u.nextUp.topicId ?? u.nextUp.unitId})` : ""}`
     );
   }
+}
+
+const COMPLETED_STATES: UnitState[] = ["core-complete", "complete"];
+
+/**
+ * Keep `completedAt` in step with the unit's state. Called after every state
+ * write, never from a patch field — the model has no say in this date.
+ *
+ * First arrival at core-complete/complete stamps the lesson's date; a later
+ * core-complete → complete keeps the original (first completion is the
+ * meaningful one); reopening the unit clears it, so a re-completion re-stamps.
+ */
+function stampCompletedAt(unit: Unit, lessonDate: string): void {
+  const done = COMPLETED_STATES.includes(unit.state);
+  if (done) unit.completedAt ??= lessonDate;
+  else unit.completedAt = null;
 }
 
 function describeTopicUpdate(u: TopicUpdate): string {
