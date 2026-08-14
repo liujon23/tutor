@@ -14,6 +14,7 @@ test("no override: every path lives under the code root", () => {
   assert.equal(p.profile, join(CODE_ROOT, "data", "profile.md"));
   assert.equal(p.history, join(CODE_ROOT, "data", "lesson-history.md"));
   assert.equal(p.projectsDir, join(CODE_ROOT, "data", "projects"));
+  assert.equal(p.unitSummaries, join(CODE_ROOT, "data", "unit-summaries.json"));
   assert.equal(p.transcriptsDir, join(CODE_ROOT, "transcripts"));
   assert.equal(p.usageLedger, join(CODE_ROOT, "transcripts", "usage.jsonl"));
   assert.equal(p.feedbackLedger, join(CODE_ROOT, "transcripts", "feedback.jsonl"));

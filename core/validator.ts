@@ -30,6 +30,9 @@ export function validateCurriculum(c: Curriculum): string[] {
       if (!UNIT_STATES.includes(unit.state)) {
         errors.push(`unit ${unit.id}: invalid state '${unit.state}'`);
       }
+      if (unit.completedAt && !/^\d{4}-\d{2}-\d{2}$/.test(unit.completedAt)) {
+        errors.push(`unit ${unit.id}: completedAt '${unit.completedAt}' is not YYYY-MM-DD`);
+      }
       for (const t of [...unit.coreTopics, ...unit.optionalTopics]) {
         if (!t.id) errors.push(`unit ${unit.id}: a topic is missing an id`);
         else if (topicIds.has(t.id)) errors.push(`duplicate topic id: ${t.id}`);

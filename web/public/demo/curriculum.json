@@ -1,0 +1,409 @@
+{
+  "today": "2026-08-14",
+  "lanes": [
+    {
+      "id": "art",
+      "name": "Modern Art History Lane",
+      "weight": 15,
+      "direction": "A survey of major movements and figures from the last ~150 years, with a focus on building J's ability to appreciate and interpret work in modern and contemporary museums. The emphasis is on what movements were *arguing* — the discourse — not just visual style. Pre-Impressionism is context only.",
+      "currentUnitId": "art-impressionism",
+      "layers": [
+        [
+          "art-impressionism"
+        ],
+        [
+          "art-avant-gardes"
+        ],
+        [
+          "art-mid-century"
+        ],
+        [
+          "art-pop-conceptual"
+        ],
+        [
+          "art-contemporary"
+        ]
+      ],
+      "units": [
+        {
+          "id": "art-impressionism",
+          "name": "Impressionism and Post-Impressionism",
+          "state": "core-complete",
+          "completedAt": "2026-07-20",
+          "prerequisites": [],
+          "summary": "Impressionism broke from the academic tradition by prioritizing fleeting light, everyday subjects, and visible brushwork over polished historical and mythological scenes, arguing that direct perception was a valid basis for art. Post-Impressionism gathered four divergent responses to that legacy, ranging from structured form to expressive color and symbolic meaning, and the unit closes by translating these arguments into practical methods for reading a painting on a museum wall.",
+          "summaryStale": false,
+          "progress": {
+            "coreComfortable": 4,
+            "coreTotal": 4
+          },
+          "optionalRemaining": 0,
+          "lastLessonDate": "2026-07-20",
+          "coreTopics": [
+            {
+              "id": "art-imp-context",
+              "name": "The Academic Tradition and What Impressionism Broke From",
+              "state": "comfortable",
+              "lastTouchedDate": "2026-07-07",
+              "lastLesson": 11,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-imp-movement",
+              "name": "Impressionism — Key Figures, Techniques, and Arguments",
+              "state": "comfortable",
+              "lastTouchedDate": "2026-07-07",
+              "lastLesson": 13,
+              "lastLessonHasTranscript": true
+            },
+            {
+              "id": "art-imp-post",
+              "name": "Post-Impressionism — Four Diverging Responses",
+              "state": "comfortable",
+              "lastTouchedDate": "2026-07-20",
+              "lastLesson": 25,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-imp-reading",
+              "name": "How to Look — Reading a Painting in a Museum",
+              "state": "comfortable",
+              "lastTouchedDate": "2026-07-20",
+              "lastLesson": 25,
+              "lastLessonHasTranscript": false
+            }
+          ],
+          "optionalTopics": [
+            {
+              "id": "art-imp-symbolism",
+              "name": "Symbolism and Other Late 19th-Century Movements",
+              "state": "comfortable",
+              "lastTouchedDate": "2026-07-20",
+              "lastLesson": 25,
+              "lastLessonHasTranscript": false
+            }
+          ],
+          "bridgesInLane": [],
+          "bridgesCrossLane": [],
+          "lessons": [
+            {
+              "lessonNumber": 11,
+              "date": "2026-07-07",
+              "topicsLabel": "The Academic Tradition and What Impressionism Broke From",
+              "topicsFull": "The Academic Tradition and What Impressionism Broke From",
+              "hasTranscript": false
+            },
+            {
+              "lessonNumber": 13,
+              "date": "2026-07-07",
+              "topicsLabel": "Impressionism — Key Figures, Techniques, and Arguments",
+              "topicsFull": "Impressionism — Key Figures, Techniques, and Arguments",
+              "hasTranscript": true
+            },
+            {
+              "lessonNumber": 15,
+              "date": "2026-07-09",
+              "topicsLabel": "Post-Impressionism — Four Diverging Responses",
+              "topicsFull": "Post-Impressionism — Four Diverging Responses",
+              "hasTranscript": false
+            },
+            {
+              "lessonNumber": 18,
+              "date": "2026-07-10",
+              "topicsLabel": "How to Look — Reading a Painting in a Museum, Activation Functions and Non-Linearity",
+              "topicsFull": "How to Look — Reading a Painting in a Museum, Activation Functions and Non-Linearity",
+              "hasTranscript": false
+            },
+            {
+              "lessonNumber": 25,
+              "date": "2026-07-20",
+              "topicsLabel": "Symbolism and Other Late 19th-Century Movements",
+              "topicsFull": "Symbolism and Other Late 19th-Century Movements",
+              "hasTranscript": false
+            }
+          ]
+        },
+        {
+          "id": "art-avant-gardes",
+          "name": "Early 20th-Century Avant-Gardes",
+          "state": "not-started",
+          "completedAt": null,
+          "prerequisites": [
+            "art-impressionism"
+          ],
+          "summary": "Between roughly 1905 and 1930, a rapid succession of European avant-gardes broke with inherited ideas about representation, each advancing a distinct argument: that color could carry emotion directly, that painting should register psychological and social anguish, that a single fixed viewpoint falsified how objects exist in space and time, and that art should embrace the speed and violence of the machine. The movements build from expressive reinventions of color and form through Cubism's fracturing of perspective toward increasingly radical challenges to the very purpose of art, culminating in Dada's rejection of aesthetic value and Surrealism's turn to dreams and the unconscious as the true subject of modern work.",
+          "summaryStale": false,
+          "progress": {
+            "coreComfortable": 0,
+            "coreTotal": 6
+          },
+          "optionalRemaining": 1,
+          "lastLessonDate": null,
+          "coreTopics": [
+            {
+              "id": "art-ag-fauvism",
+              "name": "Fauvism — Color as Pure Expression",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-ag-expressionism",
+              "name": "German Expressionism",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-ag-cubism",
+              "name": "Cubism — Shattering Perspective",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-ag-futurism",
+              "name": "Futurism and the Machine Age",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-ag-dada",
+              "name": "Dada — Anti-Art",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-ag-surrealism",
+              "name": "Surrealism — The Unconscious Made Visible",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            }
+          ],
+          "optionalTopics": [
+            {
+              "id": "art-ag-constructivism",
+              "name": "Russian Constructivism and De Stijl",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            }
+          ],
+          "bridgesInLane": [],
+          "bridgesCrossLane": [],
+          "lessons": []
+        },
+        {
+          "id": "art-mid-century",
+          "name": "Mid-Century Modernism",
+          "state": "not-started",
+          "completedAt": null,
+          "prerequisites": [
+            "art-avant-gardes"
+          ],
+          "summary": "Mid-Century Modernism traces how abstraction became a vehicle for ideas rather than depiction, beginning with the Bauhaus argument that art, craft, and industrial production belong together and moving through Mondrian's reduction of painting to essential lines, planes, and primary colors. From there it turns to Abstract Expressionism's claim that gesture and scale could register raw emotion and individual presence, then to Color Field painting's distillation of that impulse into vast, contemplative expanses of pure color.",
+          "summaryStale": false,
+          "progress": {
+            "coreComfortable": 0,
+            "coreTotal": 4
+          },
+          "optionalRemaining": 1,
+          "lastLessonDate": null,
+          "coreTopics": [
+            {
+              "id": "art-mc-bauhaus",
+              "name": "Bauhaus — Art, Craft, and the Industrial World",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-mc-mondrian",
+              "name": "Mondrian and Abstraction to Essence",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-mc-abstract-expr",
+              "name": "Abstract Expressionism",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-mc-color-field",
+              "name": "Color Field Painting",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            }
+          ],
+          "optionalTopics": [
+            {
+              "id": "art-mc-new-york",
+              "name": "The New York Art Scene and the Shift from Paris",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            }
+          ],
+          "bridgesInLane": [],
+          "bridgesCrossLane": [],
+          "lessons": []
+        },
+        {
+          "id": "art-pop-conceptual",
+          "name": "Pop Art, Minimalism, and Conceptual Art",
+          "state": "not-started",
+          "completedAt": null,
+          "prerequisites": [
+            "art-mid-century"
+          ],
+          "summary": "Beginning with Pop Art's embrace of mass culture and consumer imagery as legitimate subject matter, the sequence moves to Minimalism's insistence that an artwork be nothing more than its literal physical presence, then to Conceptual Art's radical claim that the idea itself, rather than any crafted object, constitutes the work. A closing turn to photography examines how a reproducible, mechanical medium came to be argued for as fine art, extending the unit's central question about what qualifies as art and where its meaning resides.",
+          "summaryStale": false,
+          "progress": {
+            "coreComfortable": 0,
+            "coreTotal": 4
+          },
+          "optionalRemaining": 1,
+          "lastLessonDate": null,
+          "coreTopics": [
+            {
+              "id": "art-pop-movement",
+              "name": "Pop Art — Mass Culture as Subject",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-pop-minimalism",
+              "name": "Minimalism — The Object as Object",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-pop-concept-art",
+              "name": "Conceptual Art — The Idea as the Work",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-pop-photography",
+              "name": "Photography as Art",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            }
+          ],
+          "optionalTopics": [
+            {
+              "id": "art-pop-fluxus",
+              "name": "Fluxus and Performance Art",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            }
+          ],
+          "bridgesInLane": [],
+          "bridgesCrossLane": [],
+          "lessons": []
+        },
+        {
+          "id": "art-contemporary",
+          "name": "Contemporary Art and Museum Practice",
+          "state": "not-started",
+          "completedAt": null,
+          "prerequisites": [
+            "art-pop-conceptual"
+          ],
+          "summary": "Postmodernism dismantles the grand narratives of earlier art, opening onto debates over identity, representation, and voice that reshaped what contemporary work argues about. From there the focus widens to a global art scene and to the interpretive habits and institutional frameworks through which such work is encountered in the museum.",
+          "summaryStale": false,
+          "progress": {
+            "coreComfortable": 0,
+            "coreTotal": 4
+          },
+          "optionalRemaining": 2,
+          "lastLessonDate": null,
+          "coreTopics": [
+            {
+              "id": "art-cont-postmodern",
+              "name": "Postmodernism — After Grand Narratives",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-cont-identity",
+              "name": "Identity Politics in Contemporary Art",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-cont-global",
+              "name": "The Global Contemporary Scene",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-cont-museum",
+              "name": "How to Read Contemporary Art in a Museum",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            }
+          ],
+          "optionalTopics": [
+            {
+              "id": "art-cont-digital",
+              "name": "Digital and New Media Art",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            },
+            {
+              "id": "art-cont-street",
+              "name": "Street Art and Its Museum Crossover",
+              "state": "not-started",
+              "lastTouchedDate": null,
+              "lastLesson": null,
+              "lastLessonHasTranscript": false
+            }
+          ],
+          "bridgesInLane": [],
+          "bridgesCrossLane": [],
+          "lessons": []
+        }
+      ]
+    }
+  ]
+}
