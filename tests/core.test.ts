@@ -19,15 +19,16 @@ import type { DataPaths, Lane, ProfilePatch, SessionPatch } from "../core/types.
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-// The real, mutable data files — only used to assert the *shipped* curriculum
-// stays valid. Everything else runs against the frozen fixture below, so a real
-// committed lesson (which mutates data/) can't shift these tests' expectations.
-const REAL: DataPaths = {
-  curriculum: join(ROOT, "data", "curriculum.yaml"),
-  profile: join(ROOT, "data", "profile.md"),
-  history: join(ROOT, "data", "lesson-history.md"),
-  projectsDir: join(ROOT, "data", "projects"),
-  unitSummaries: join(ROOT, "data", "unit-summaries.json"),
+// The starter courses every new data root is seeded from — only used to assert
+// that what we ship parses and validates. Everything else runs against the
+// frozen fixture below.
+const STARTER_DATA = join(ROOT, "examples", "starter-data", "data");
+const STARTER: DataPaths = {
+  curriculum: join(STARTER_DATA, "curriculum.yaml"),
+  profile: join(STARTER_DATA, "profile.md"),
+  history: join(STARTER_DATA, "lesson-history.md"),
+  projectsDir: join(STARTER_DATA, "projects"),
+  unitSummaries: join(STARTER_DATA, "unit-summaries.json"),
 };
 
 // A frozen snapshot of the data — see tests/fixtures/README.md. All behavioural
@@ -55,11 +56,10 @@ function scratchCopy(): DataPaths {
   };
 }
 
-test("shipped curriculum is valid", () => {
-  const c = loadCurriculum(REAL.curriculum);
+test("shipped starter curriculum is valid", () => {
+  const c = loadCurriculum(STARTER.curriculum);
   assert.deepEqual(validateCurriculum(c), []);
-  // Structural only — the lane count differs across checkouts of this repo
-  // (this private repo currently has 4; a future public checkout has 3).
+  // Structural, so adding or retiring an example course stays a one-file change.
   assert.ok(c.lanes.length >= 1, "at least one lane");
 });
 

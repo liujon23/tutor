@@ -207,7 +207,7 @@ and feedback totals on top of the same `analyzeUsage()` used by the CLI.
 | Variable | Default | Meaning |
 |---|---|---|
 | `CLAUDE_CODE_OAUTH_TOKEN` | — | subscription auth (preferred) |
-| `TUTOR_DATA_DIR` | repo root | where data/, transcripts/, .app/ live (see SETUP.md) |
+| `TUTOR_DATA_DIR` | `my-data/` | where data/, transcripts/, .app/ live; move it with `npm run init-data` (see SETUP.md) |
 | `ANTHROPIC_API_KEY` | — | metered fallback |
 | `TUTOR_PORT` / `TUTOR_HOST` | `4321` / `127.0.0.1` | bind address |
 | `TUTOR_STALE_DAYS` | `14` | recall interval at streak 0 (base of the spacing curve) |

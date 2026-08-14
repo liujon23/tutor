@@ -1,0 +1,10 @@
+# Ignores for YOUR data repo — copied verbatim when this template is seeded.
+# Session state, downloaded lesson images, and secrets stay out of your history;
+# data/ and transcripts/ are the parts worth versioning.
+.app/
+.session/
+.env
+exports/
+*.log
+.DS_Store
+transcripts/usage.jsonl.bak

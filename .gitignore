@@ -1,6 +1,12 @@
 node_modules/
 .env*
 !.env.example
+
+# Your learning data (the default data root). Never tracked here, so pulling
+# code updates can never collide with your lesson history — and a PR branch
+# can never carry it. Relocate it with `npm run init-data --dir <path>`.
+/my-data/
+
 .session/
 .app/
 web/dist/

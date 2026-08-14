@@ -98,9 +98,10 @@ npm run serve          # open http://127.0.0.1:4321
 
 The repo ships with three example courses — how modern LLMs work,
 Science & Technology Studies, and modern art history — so your first lesson
-works out of the box in your web browser. For keeping your data in its own
-repo, setting up your own courses, and accessing the tutor from your phone:
-**[SETUP.md](SETUP.md)**. 
+works out of the box in your web browser. Setup copies them into `my-data/`,
+which is *yours*: gitignored by this repo and versioned on its own, so pulling
+code updates never collides with your learning history. For your own courses
+and reaching the tutor from your phone: **[SETUP.md](SETUP.md)**. 
 
 
 ## Docs

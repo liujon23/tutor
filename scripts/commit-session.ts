@@ -14,7 +14,9 @@
 import { readFileSync } from "node:fs";
 import type { SessionPatch } from "../core/types.js";
 import { applySessionPatch, checkPatch } from "../core/patcher.js";
-import { DATA_PATHS, gitCommit, parseArgs } from "./lib.js";
+import { DATA_PATHS, ensureDataRoot, gitCommit, parseArgs } from "./lib.js";
+
+ensureDataRoot();
 
 const args = parseArgs(process.argv.slice(2), {
   patch: undefined as string | undefined,

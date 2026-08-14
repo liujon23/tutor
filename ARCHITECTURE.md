@@ -39,15 +39,21 @@ then git-committed. **One lesson = one commit**; `git revert` undoes a bad one.
 On disk, that's:
 
 ```
-data/        the state: profile.md · curriculum.yaml · lesson-history.md
-             (+ unit-summaries.json — derived, viewer-only, regenerable)
+my-data/     YOUR state — gitignored here, and its own git repo:
+               data/  profile.md · curriculum.yaml · lesson-history.md
+                      (+ unit-summaries.json — derived, viewer-only, regenerable)
+               transcripts/ · .app/
 core/        deterministic TS library — slicer, selector, validator, patcher
 scripts/     CLIs: start-lesson · commit-session · validate · export-lane
 server/      Fastify + Claude Agent SDK backend; serves the PWA
 web/         the PWA (vanilla TS + Vite); web/src/demo/ is the static replay
 skills/      Claude Code skills + the teaching contract (how lessons are taught)
+examples/    starter-data/ — what a fresh data root is seeded from
 tests/       node:test suite (npm test)
 ```
+
+The checkout tracks **no** learning data, which is what makes `git pull` safe:
+the code you pull and the history you accumulate can never touch the same files.
 
 ### Reading, as its own path
 
@@ -70,8 +76,13 @@ Two invariants make the design hold:
    the app (`server/tutor-tool.ts`) both call `checkPatch` → `applySessionPatch`.
    There is no second write path to corrupt state.
 2. **Paths flow from one place.** `scripts/lib.ts` resolves a data root
-   (`TUTOR_DATA_DIR`, default: this repo) into a `TutorPaths` object; core takes
+   (`TUTOR_DATA_DIR`, default: `my-data/`) into a `TutorPaths` object; core takes
    its `DataPaths` subset as an argument. Nothing else touches path logic.
+3. **The tutor runs git only when asked.** `git init` happens in
+   `npm run setup` and `npm run init-data`, nowhere else — serving the app can't
+   create a repo or a commit behind your back. `gitCommit` requires the data root
+   to be its *own* repo, not merely inside one, and degrades to a plain "saved
+   but not versioned" note otherwise.
 
 ## Suggested reading order
 

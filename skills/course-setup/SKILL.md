@@ -10,6 +10,11 @@ that edits `data/curriculum.yaml` **directly** (structural work doesn't fit the
 session-patch shape). The safety net is the validator and git, not caution about
 touching the file.
 
+> **Paths here are relative to the learner's data root**, which is `my-data/`
+> inside this checkout unless `TUTOR_DATA_DIR` says otherwise — so
+> `data/curriculum.yaml` is normally `my-data/data/curriculum.yaml`. Check which
+> applies before editing.
+
 Read `skills/references/document-formats.md` first — it defines the YAML schema, ID
 conventions, graph rules, and update gates.
 

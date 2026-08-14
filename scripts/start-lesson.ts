@@ -14,7 +14,9 @@
  */
 import { buildSessionPacket } from "../core/slicer.js";
 import { DEFAULT_SPACING } from "../core/spacing.js";
-import { DATA_PATHS, parseArgs, todayLocal } from "./lib.js";
+import { DATA_PATHS, ensureDataRoot, parseArgs, todayLocal } from "./lib.js";
+
+ensureDataRoot();
 
 const args = parseArgs(process.argv.slice(2), {
   lane: undefined as string | undefined,

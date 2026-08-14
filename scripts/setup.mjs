@@ -4,10 +4,10 @@
 // Zero dependencies on purpose — this runs BEFORE `npm install`, so it may only
 // use Node built-ins. ASCII-only output so it reads cleanly on any Windows/macOS
 // console. Run it with `npm run setup`.
-import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -39,7 +39,63 @@ if (major < 20) {
 run(["install"], "Installing dependencies");
 run(["run", "build:web"], "Building the web app");
 
-// 3. Auth heads-up (a Claude Code login can't be verified from a plain script).
+// 3. Your learning data: seed it, and turn on lesson history.
+//
+// This mirrors ensureDataRoot() in scripts/lib.ts, re-implemented on built-ins
+// because this file runs before `npm install` and so can't import TypeScript.
+// `git init` happens here and in `npm run init-data` and nowhere else — running
+// the app never touches git. No commit is made: the first lesson is commit #1.
+function copyDir(from, to) {
+  mkdirSync(to, { recursive: true });
+  for (const entry of readdirSync(from, { withFileTypes: true })) {
+    const src = join(from, entry.name);
+    const dst = join(to, entry.name);
+    if (entry.isDirectory()) copyDir(src, dst);
+    else copyFileSync(src, dst);
+  }
+}
+
+try {
+  process.loadEnvFile(join(ROOT, ".env"));
+} catch {
+  /* no .env, or a Node without loadEnvFile — the default path still applies */
+}
+const dataRoot = process.env.TUTOR_DATA_DIR
+  ? resolve(process.env.TUTOR_DATA_DIR)
+  : join(ROOT, "my-data");
+
+if (!existsSync(join(dataRoot, "data", "curriculum.yaml"))) {
+  if (process.env.TUTOR_DATA_DIR) {
+    console.log(`\n[!] TUTOR_DATA_DIR points at ${dataRoot}, which has no data/curriculum.yaml.`);
+    console.log(`    Check the path, or set it up: npm run init-data -- --dir "${dataRoot}"`);
+  } else {
+    copyDir(join(ROOT, "examples", "starter-data"), dataRoot);
+    console.log(`\n> Created ${dataRoot} from the starter courses — your learning data lives there.`);
+  }
+}
+
+let versioned = false;
+try {
+  const top = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd: dataRoot,
+    stdio: "pipe",
+    encoding: "utf8",
+  }).trim();
+  const norm = (p) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
+  versioned = norm(top) === norm(dataRoot);
+} catch {
+  /* not a repo, or git isn't installed */
+}
+if (!versioned && existsSync(dataRoot)) {
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: dataRoot, stdio: "pipe" });
+    console.log("> Lesson history is on: each lesson becomes one commit there (nothing committed yet).");
+  } catch {
+    console.log("[!] Couldn't run git, so lessons won't be versioned. Install git, then: npm run init-data");
+  }
+}
+
+// 4. Auth heads-up (a Claude Code login can't be verified from a plain script).
 const hasToken = Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN || process.env.ANTHROPIC_API_KEY);
 
 console.log("\n------------------------------------------------------------");
@@ -53,6 +109,9 @@ console.log(
         "      run `claude setup-token` and set CLAUDE_CODE_OAUTH_TOKEN to its output.",
       ].join("\n")
 );
+console.log(`\nYour data: ${dataRoot}`);
+console.log("      (gitignored by this checkout, so `git pull` never touches your lessons.");
+console.log("       To keep it somewhere else: npm run init-data -- --dir <path>)");
 console.log("\nNext steps:");
 console.log("  1. Test it on this PC:   npm run serve   then open http://127.0.0.1:4321");
 console.log("  2. Reach it from phone:  open https://<pc-tailscale-name>.<tailnet>.ts.net/");

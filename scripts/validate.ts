@@ -8,7 +8,9 @@ import { loadCurriculum } from "../core/curriculum.js";
 import { validateCurriculum } from "../core/validator.js";
 import { loadHistory } from "../core/history.js";
 import { readProfile, SECTIONS } from "../core/profile.js";
-import { DATA_PATHS } from "./lib.js";
+import { DATA_PATHS, ensureDataRoot } from "./lib.js";
+
+ensureDataRoot();
 
 let failed = false;
 

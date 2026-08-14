@@ -2,8 +2,14 @@
 
 The shared contract for the tutoring system's data. Both skills depend on it. The v1
 contract's storage-mode dance (Project knowledge vs. folder) is gone: the data lives
-in this repo, scripts do the bookkeeping, and git provides rollback. What remains
+in one folder, scripts do the bookkeeping, and git provides rollback. What remains
 rigid: schemas, ID conventions, state vocabularies, and the update gates below.
+
+**Where that folder is:** the *data root* — `my-data/` inside the code checkout by
+default, or wherever `TUTOR_DATA_DIR` points. Every `data/…` and `transcripts/…`
+path below is relative to it, so `data/curriculum.yaml` normally means
+`my-data/data/curriculum.yaml`. The scripts resolve this for you; only hand-editing
+needs the full path.
 
 ## The three documents (`data/`)
 

@@ -9,6 +9,7 @@
     "start-lesson": "tsx scripts/start-lesson.ts",
     "commit-session": "tsx scripts/commit-session.ts",
     "validate": "tsx scripts/validate.ts",
+    "init-data": "tsx scripts/init-data.ts",
     "usage-report": "tsx scripts/usage-report.ts",
     "export-lane": "tsx scripts/export-lane.ts",
     "test": "tsx --test tests/*.test.ts",

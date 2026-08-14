@@ -74,5 +74,7 @@ npm run echo-test
 - **`echo-test`** verifies the Agent SDK and your token before the first app
   lesson.
 
-All of these honor `TUTOR_DATA_DIR` (see SETUP.md), so they work unchanged if
-your data lives in its own repo.
+Paths these commands print or mention (`data/curriculum.yaml` and friends) are
+relative to your **data root** — `my-data/` by default, or wherever
+`TUTOR_DATA_DIR` points (see SETUP.md). The scripts resolve it for you, so they
+work unchanged wherever you keep your data.

@@ -20,8 +20,9 @@ git clone https://github.com/liujon23/tutor && cd tutor
 npm run setup
 ```
 
-Installs dependencies and builds the web app, with sanity checks. Re-runnable any
-time.
+Installs dependencies, builds the web app, and creates your `my-data/` folder
+from the starter courses (see [Where your data lives](#where-your-data-lives)).
+Re-runnable any time.
 
 ## Step 2 — Auth
 
@@ -59,25 +60,36 @@ history). Start a tight lesson and say hello.
 The example course is a real, working curriculum — feel free to just start it.
 When you want your own subjects, open Claude Code here and say *"I want to start
 learning X"* — the `course-setup` skill designs a lane with you: goals, a sweep of
-what you already know, then a unit/topic skeleton with curated sources. Replace "Learner"
-at the top of `data/profile.md` with your name and the tutor will use it.
+what you already know, then a unit/topic skeleton with curated sources. Add your
+name to the title of `my-data/data/profile.md` and the tutor will use it.
 
-## Where your data lives (worth deciding early)
+## Where your data lives
 
-Your learning state is three files under `data/` plus archived transcripts —
-and **every lesson is a git commit** of them. By default that's this repo, which
-works fine: your clone quietly becomes your learning journal.
+Everything the tutor remembers about you — three files under `data/` plus
+archived transcripts — lives in **`my-data/`**, created for you on first setup
+from the starter courses. It is *not* part of this code repo: `my-data/` is
+gitignored here, so pulling code updates can never collide with your learning
+history, and nothing personal can ride along if you ever send a pull request.
 
-If you'd rather keep the code checkout clean (so `git pull` never mingles with
-your history), point the tutor at a separate folder:
+**Every lesson is one commit** in that folder, which `npm run setup` initializes
+as its own little git repository. Your history becomes a readable log, and a bad
+lesson's write-back can be undone with `git revert`. Nothing is committed on
+your behalf — your first lesson is the first commit.
+
+Two things you might want:
 
 ```bash
-mkdir ../tutor-data && cp -r data ../tutor-data/data && cd ../tutor-data && git init && cd ../tutor
-# in .env:  TUTOR_DATA_DIR=../tutor-data
+npm run init-data -- --dir ../my-study   # keep it somewhere else entirely
+npm run init-data                        # turn on lesson history if you skipped it
 ```
 
-Everything (app, CLI, skills) honors `TUTOR_DATA_DIR`. Set `TUTOR_GIT_PUSH=1` to
-also push your data repo after each lesson (off-site backup).
+Moving it takes your existing history with it and records the new path in
+`.env`. For an off-site backup, add a **private** remote yourself and set
+`TUTOR_GIT_PUSH=1` in `.env`; each lesson commit then pushes in the background.
+Everything (app, CLI, skills) honors `TUTOR_DATA_DIR`.
+
+> Prefer no version control at all? Skip the git step — lessons still save
+> normally, you just lose rollback and the readable log.
 
 ## Step 5 — Reach it from your phone (optional)
 

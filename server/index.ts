@@ -7,7 +7,7 @@ import fastifyStatic from "@fastify/static";
 import { applyProfilePatch } from "../core/profile.js";
 import { DEFAULT_SPACING } from "../core/spacing.js";
 import type { SpacingConfig } from "../core/types.js";
-import { DATA_PATHS, PATHS, ROOT, gitCommit, todayLocal } from "../scripts/lib.js";
+import { DATA_PATHS, PATHS, ROOT, ensureDataRoot, gitCommit, todayLocal } from "../scripts/lib.js";
 import { registerAssetRoutes } from "./assets.js";
 import { buildCurriculumView } from "./curriculum-view.js";
 import {
@@ -46,6 +46,11 @@ const SPACING: SpacingConfig = {
   growth: Number(process.env.TUTOR_RECALL_GROWTH ?? DEFAULT_SPACING.growth),
 };
 const WEB_DIST = join(ROOT, "web", "dist");
+
+// Seed the starter courses if this is a first run. Copies files only — serving
+// the app never runs git; `npm run init-data` is where version history is
+// offered. Must precede LessonManager, which reads the curriculum.
+ensureDataRoot();
 
 const manager = new LessonManager();
 const app = Fastify({ logger: { level: process.env.TUTOR_LOG_LEVEL ?? "info" } });
