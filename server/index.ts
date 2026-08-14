@@ -10,6 +10,13 @@ import type { SpacingConfig } from "../core/types.js";
 import { DATA_PATHS, PATHS, ROOT, gitCommit, todayLocal } from "../scripts/lib.js";
 import { registerAssetRoutes } from "./assets.js";
 import { buildCurriculumView } from "./curriculum-view.js";
+import {
+  buildAllowedHosts,
+  checkExposure,
+  formatVerdict,
+  isHostAllowed,
+  tailnetHostname,
+} from "./exposure.js";
 import { composeFeedbackHandoff, messageSnippet, validateFeedbackInput } from "./feedback.js";
 import { buildLessonSystemPrompt, kickoffMessage } from "./prompt.js";
 import { defaultModel, readBuildId } from "./params.js";
@@ -43,6 +50,56 @@ const WEB_DIST = join(ROOT, "web", "dist");
 const manager = new LessonManager();
 const app = Fastify({ logger: { level: process.env.TUTOR_LOG_LEVEL ?? "info" } });
 
+// --- Exposure guard ---------------------------------------------------------
+// There is no login here, so "who can reach the port" IS the security model.
+// Refuse to start if a Tailscale funnel has made that the public internet.
+const verdict = await checkExposure({
+  port: PORT,
+  host: HOST,
+  allowPublic: process.env.TUTOR_ALLOW_PUBLIC === "1",
+});
+if (verdict.fatal.length > 0 || verdict.warnings.length > 0) {
+  console.error(formatVerdict(verdict));
+}
+if (verdict.fatal.length > 0) process.exit(1);
+
+// --- Request guard ----------------------------------------------------------
+// Must be registered before any route or static plugin — Fastify only applies
+// hooks to routes declared after them.
+const ALLOWED_HOSTS = buildAllowedHosts({
+  tailnetHost: await tailnetHostname(),
+  extra: process.env.TUTOR_ALLOWED_HOSTS,
+});
+app.log.info(`hosts: ${[...ALLOWED_HOSTS].join(", ")}`);
+
+// KaTeX, highlight.js, and mermaid all set inline styles, so style-src needs
+// 'unsafe-inline'; scripts are bundled by Vite with no inline <script>, so
+// script-src stays strict. DOMPurify is still the first line of defense on
+// model output — this is the net under it.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' https: data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'none'",
+  "object-src 'none'",
+  "form-action 'none'",
+].join("; ");
+
+app.addHook("onRequest", async (req, reply) => {
+  if (!isHostAllowed(req.headers.host, ALLOWED_HOSTS)) {
+    req.log.warn({ host: req.headers.host }, "rejected request with unrecognized Host header");
+    return reply.code(421).send({ error: "unrecognized Host — set TUTOR_ALLOWED_HOSTS if this is expected" });
+  }
+  reply.header("content-security-policy", CSP);
+  reply.header("x-content-type-options", "nosniff");
+  reply.header("referrer-policy", "no-referrer");
+  reply.header("x-frame-options", "DENY");
+});
+
 // --- Static PWA -------------------------------------------------------------
 
 if (existsSync(WEB_DIST)) {
@@ -57,10 +114,16 @@ if (existsSync(WEB_DIST)) {
 // and lets recall prompts re-show them after .app/ is gone.
 const TRANSCRIPTS_DIR = PATHS.transcriptsDir;
 mkdirSync(TRANSCRIPTS_DIR, { recursive: true });
+// Lesson markdown and archived images only. The same directory also holds
+// usage.jsonl and feedback.jsonl — the cost ledger and distilled notes about the
+// learner — which nothing in the UI fetches and which have no business being
+// served.
+const SERVABLE_TRANSCRIPT_FILE = /\.(md|jpg|jpeg|png|gif|webp|avif)$/i;
 await app.register(fastifyStatic, {
   root: TRANSCRIPTS_DIR,
   prefix: "/transcripts/",
   decorateReply: false,
+  allowedPath: (pathName) => SERVABLE_TRANSCRIPT_FILE.test(pathName),
 });
 
 // --- Asset proxy --------------------------------------------------------------

@@ -12,20 +12,36 @@ import { allTopics, allUnits } from "./curriculum.js";
  *  - lane currentUnit / unit currentTopic / lane nextUp pointers resolve
  * Returns a list of human-readable errors; empty means valid.
  */
+/**
+ * Ids are interpolated into filenames — `data/projects/<laneId>.md` in
+ * core/project.ts — so "well-formed" has to mean something enforceable, not
+ * just unique. Lowercase slug only: no dots, no slashes, nothing that can climb
+ * out of the directory it names.
+ */
+const ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+
 export function validateCurriculum(c: Curriculum): string[] {
   const errors: string[] = [];
   const laneIds = new Set<string>();
   const unitIds = new Set<string>();
   const topicIds = new Set<string>();
 
+  const checkIdShape = (kind: string, id: string): void => {
+    if (id && !ID_RE.test(id)) {
+      errors.push(`${kind} id '${id}' must be lowercase letters, digits, and hyphens only`);
+    }
+  };
+
   // Pass 1: uniqueness + vocab
   for (const lane of c.lanes) {
     if (!lane.id) errors.push(`a lane is missing an id`);
     else if (laneIds.has(lane.id)) errors.push(`duplicate lane id: ${lane.id}`);
+    checkIdShape("lane", lane.id);
     laneIds.add(lane.id);
     for (const unit of lane.units) {
       if (!unit.id) errors.push(`lane ${lane.id}: a unit is missing an id`);
       else if (unitIds.has(unit.id)) errors.push(`duplicate unit id: ${unit.id}`);
+      checkIdShape("unit", unit.id);
       unitIds.add(unit.id);
       if (!UNIT_STATES.includes(unit.state)) {
         errors.push(`unit ${unit.id}: invalid state '${unit.state}'`);
@@ -36,6 +52,7 @@ export function validateCurriculum(c: Curriculum): string[] {
       for (const t of [...unit.coreTopics, ...unit.optionalTopics]) {
         if (!t.id) errors.push(`unit ${unit.id}: a topic is missing an id`);
         else if (topicIds.has(t.id)) errors.push(`duplicate topic id: ${t.id}`);
+        checkIdShape("topic", t.id);
         topicIds.add(t.id);
         if (!TOPIC_STATES.includes(t.state)) {
           errors.push(`topic ${t.id}: invalid state '${t.state}'`);
