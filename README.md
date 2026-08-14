@@ -25,9 +25,9 @@ deterministic, so the tutor's "memory" is too.
 The tutor's only write path is the validated post-lesson patch — it can never quietly 
 corrupt your curriculum. 
 
-The system also *learns how you learn*: lessons accumulate observations about
-what works for you, and a gated flow (the tutor proposes, you approve) promotes
-them into confirmed patterns that shape future lessons.
+The system also *learns how you learn*: lessons accumulate (and reliably remember)
+observations about what works for you, and a gated flow (the tutor proposes, you approve) 
+promotes them into confirmed patterns that shape future lessons.
 
 ## The app
 
