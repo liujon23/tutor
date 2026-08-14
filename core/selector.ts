@@ -1,5 +1,6 @@
-import type { Curriculum, Lane, Topic, Unit } from "./types.js";
+import type { Curriculum, Lane, SpacingConfig, Topic, Unit } from "./types.js";
 import { allTopics, topicById, unitById } from "./curriculum.js";
+import { DEFAULT_SPACING, getRecall, offerProbability, seededUnit, stabilityDays } from "./spacing.js";
 
 export interface Recommendation {
   laneId: string;
@@ -138,36 +139,92 @@ export interface RecallCandidate {
   unitId: string;
   lastTouched: string;
   daysStale: number;
+  streak: number; // consecutive clean recalls so far
+  stabilityDays: number; // the interval that streak earns
+  overdueDays: number; // daysStale - stabilityDays (>= 0 for anything returned)
+  offerProbability: number;
+  /** Other candidates in this same result set that this one is genuinely linked
+   *  to — the tutor folds a bundle into ONE question rather than asking each
+   *  topic in isolation. */
+  bundleWith: string[];
+}
+
+export interface RecallOptions {
+  today: string; // YYYY-MM-DD
+  /** Pair recall to the session's track: only this lane's topics are eligible.
+   *  Omit only for cross-lane aggregates (the Stats screen). */
+  laneId?: string;
+  max?: number; // default 3
+  spacing?: SpacingConfig;
+  /** Default true. False returns every topic past its interval, unsampled —
+   *  what a "how many topics are stale?" count wants. */
+  probabilistic?: boolean;
 }
 
 /**
- * Cold-recall warm-up candidates: `comfortable` topics untouched for >= staleDays,
- * oldest first, capped at `max`. Spaced retrieval is the point — these are offered,
- * never forced, and never override the learner's plan for the session.
+ * Cold-recall warm-up candidates. A topic is eligible once it is `comfortable`
+ * and past the interval its recall streak has earned; past that floor it is
+ * *sampled*, so a due topic surfaces soon but not necessarily today. Most-overdue
+ * first, capped at `max`. Offered, never forced — these never override the
+ * learner's plan for the session.
  */
-export function recallCandidates(
-  c: Curriculum,
-  today: string,
-  staleDays: number,
-  max = 3
-): RecallCandidate[] {
+export function recallCandidates(c: Curriculum, opts: RecallOptions): RecallCandidate[] {
+  const { today, laneId, max = 3, spacing = DEFAULT_SPACING, probabilistic = true } = opts;
   const t0 = new Date(today + "T00:00:00Z").getTime();
   const out: RecallCandidate[] = [];
+
   for (const { lane, unit, topic } of allTopics(c)) {
+    if (laneId && lane.id !== laneId) continue;
     if (topic.state !== "comfortable" || !topic.lastTouched) continue;
     const t1 = new Date(topic.lastTouched.date + "T00:00:00Z").getTime();
     const daysStale = Math.floor((t0 - t1) / 86_400_000);
-    if (daysStale >= staleDays) {
-      out.push({
-        topicId: topic.id,
-        name: topic.name,
-        laneId: lane.id,
-        unitId: unit.id,
-        lastTouched: topic.lastTouched.date,
-        daysStale,
-      });
+    const { streak } = getRecall(topic);
+    const stability = stabilityDays(streak, spacing);
+    const p = offerProbability(daysStale, stability);
+    if (p <= 0) continue; // still inside the interval this topic earned
+    if (probabilistic && seededUnit(`${today}|${topic.id}`) >= p) continue;
+    out.push({
+      topicId: topic.id,
+      name: topic.name,
+      laneId: lane.id,
+      unitId: unit.id,
+      lastTouched: topic.lastTouched.date,
+      daysStale,
+      streak,
+      stabilityDays: stability,
+      overdueDays: daysStale - stability,
+      offerProbability: p,
+      bundleWith: [],
+    });
+  }
+
+  out.sort((a, b) => b.overdueDays - a.overdueDays);
+  const picked = out.slice(0, max);
+  fillBundles(c, picked);
+  return picked;
+}
+
+/**
+ * Mark which of the picked candidates hang together, so the warm-up can bridge
+ * them in a single question. "Related" reuses the graph that already exists:
+ * same unit, a direct prerequisite/buildsToward edge, or a bridge topic pointing
+ * across units.
+ */
+function fillBundles(c: Curriculum, picked: RecallCandidate[]): void {
+  for (const a of picked) {
+    for (const b of picked) {
+      if (a.topicId === b.topicId) continue;
+      if (areRelated(c, a, b)) a.bundleWith.push(b.topicId);
     }
   }
-  out.sort((a, b) => b.daysStale - a.daysStale);
-  return out.slice(0, max);
+}
+
+function areRelated(c: Curriculum, a: RecallCandidate, b: RecallCandidate): boolean {
+  if (a.unitId === b.unitId) return true;
+  const ta = topicById(c, a.topicId);
+  const tb = topicById(c, b.topicId);
+  if (!ta || !tb) return false;
+  const edges = (t: typeof ta) => [...t.topic.prerequisites, ...t.topic.buildsToward];
+  if (edges(ta).includes(b.topicId) || edges(tb).includes(a.topicId)) return true;
+  return ta.unit.bridgeTopics.includes(b.topicId) || tb.unit.bridgeTopics.includes(a.topicId);
 }

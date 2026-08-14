@@ -5,7 +5,12 @@ import { condenseEntry, lastN } from "./history.js";
 import { readProfile } from "./profile.js";
 import { readProjectDoc } from "./project.js";
 import { renderLaneOneLiner, renderUnitFull, renderUnitOneLiner } from "./render.js";
-import { recallCandidates, recommendNext, type Recommendation } from "./selector.js";
+import {
+  recallCandidates,
+  recommendNext,
+  type RecallCandidate,
+  type Recommendation,
+} from "./selector.js";
 
 /**
  * Build the session packet: everything the tutor needs for one lesson,
@@ -21,7 +26,8 @@ export function buildSessionPacket(paths: DataPaths, opts: PacketOptions): strin
   if (!lane) throw new Error(`lane '${opts.laneId}' not found`);
 
   const rec = recommendNext(c, lane);
-  const recall = recallCandidates(c, opts.today, opts.staleDays);
+  // Recall is paired to the track: an AI lesson never warms up on art topics.
+  const recall = recallCandidates(c, { today: opts.today, laneId: lane.id, spacing: opts.spacing });
 
   const sections: string[] = [];
 
@@ -38,17 +44,7 @@ export function buildSessionPacket(paths: DataPaths, opts: PacketOptions): strin
 
   sections.push(renderRecommendation(c, rec));
 
-  sections.push(
-    `## Recall warm-up candidates (cold retrieval — offer, don't force)\n` +
-      (recall.length
-        ? recall
-            .map(
-              (r) =>
-                `- ${r.name} (${r.topicId}) — ${r.laneId}/${r.unitId}, last touched ${r.lastTouched} (${r.daysStale} days ago)`
-            )
-            .join("\n")
-        : `(none — nothing comfortable is stale enough yet; threshold is ${opts.staleDays} days)`)
-  );
+  sections.push(renderRecall(recall));
 
   sections.push(`## Learner profile (verbatim — honor confirmed patterns and preferences)\n\n${profile.trim()}`);
 
@@ -89,6 +85,55 @@ export function buildSessionPacket(paths: DataPaths, opts: PacketOptions): strin
   );
 
   return sections.join("\n\n---\n\n") + "\n";
+}
+
+function renderRecall(recall: RecallCandidate[]): string {
+  const head = `## Recall warm-up candidates (cold retrieval — offer, don't force)`;
+  if (!recall.length) {
+    return (
+      head +
+      `\n(none due in this lane today — recall is paired to the track, and each clean ` +
+      `recall pushes the next one further out)`
+    );
+  }
+  const lines = recall.map((r) => {
+    const mastery = r.streak
+      ? `recalled cleanly ${r.streak}×`
+      : `not yet recalled since it was learned`;
+    return (
+      `- ${r.name} (${r.topicId}) — ${r.laneId}/${r.unitId}, last touched ${r.lastTouched} ` +
+      `(${r.daysStale} days ago) · ${mastery} · interval ${Math.round(r.stabilityDays)}d, ` +
+      `${r.overdueDays}d overdue`
+    );
+  });
+  for (const group of bundleGroups(recall)) {
+    lines.push(
+      `**Bundle:** ${group.join(" + ")} — these are linked, so ask ONE question that can't be ` +
+        `answered without all of them, rather than one question each.`
+    );
+  }
+  return head + "\n" + lines.join("\n");
+}
+
+/** Connected components of the bundle graph, as topic-id groups of 2+. */
+function bundleGroups(recall: RecallCandidate[]): string[][] {
+  const byId = new Map(recall.map((r) => [r.topicId, r]));
+  const seen = new Set<string>();
+  const groups: string[][] = [];
+  for (const r of recall) {
+    if (seen.has(r.topicId)) continue;
+    const group: string[] = [];
+    const stack = [r.topicId];
+    while (stack.length) {
+      const id = stack.pop()!;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      group.push(id);
+      for (const n of byId.get(id)?.bundleWith ?? []) if (!seen.has(n)) stack.push(n);
+    }
+    if (group.length > 1) groups.push(group);
+  }
+  return groups;
 }
 
 function pickDefaultLane(c: Curriculum): Lane | undefined {

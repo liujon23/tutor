@@ -17,6 +17,11 @@
         "id": "ai-nn-foundations-loss",
         "state": "comfortable",
         "notes": "Replaces the topic's notes. Omit to keep. 'touched' defaults true (sets lastTouched)."
+      },
+      {
+        "id": "ai-nn-foundations-activation",
+        "recall": "clean",
+        "$comment": "A graded recall warm-up: clean|rusty|miss. Drives the spacing streak; 'miss' also demotes to shaky unless 'state' is set explicitly."
       }
     ],
     "unitUpdates": [

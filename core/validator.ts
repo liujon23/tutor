@@ -1,5 +1,5 @@
 import type { Curriculum, Topic, Unit } from "./types.js";
-import { TOPIC_ASSET_KINDS, TOPIC_STATES, UNIT_STATES } from "./types.js";
+import { RECALL_RESULTS, TOPIC_ASSET_KINDS, TOPIC_STATES, UNIT_STATES } from "./types.js";
 import { allTopics, allUnits } from "./curriculum.js";
 
 /**
@@ -39,6 +39,22 @@ export function validateCurriculum(c: Curriculum): string[] {
         }
         if (t.lastTouched && !/^\d{4}-\d{2}-\d{2}$/.test(t.lastTouched.date)) {
           errors.push(`topic ${t.id}: lastTouched.date '${t.lastTouched.date}' is not YYYY-MM-DD`);
+        }
+        if (t.recall) {
+          for (const k of ["streak", "reviews"] as const) {
+            const v = t.recall[k];
+            if (!Number.isInteger(v) || v < 0) {
+              errors.push(`topic ${t.id}: recall.${k} '${v}' must be a non-negative integer`);
+            }
+          }
+          if (t.recall.last) {
+            if (!RECALL_RESULTS.includes(t.recall.last.result)) {
+              errors.push(`topic ${t.id}: recall.last.result '${t.recall.last.result}' is not clean|rusty|miss`);
+            }
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(t.recall.last.date)) {
+              errors.push(`topic ${t.id}: recall.last.date '${t.recall.last.date}' is not YYYY-MM-DD`);
+            }
+          }
         }
         for (const a of t.assets ?? []) {
           if (!TOPIC_ASSET_KINDS.includes(a.kind)) {

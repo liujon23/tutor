@@ -63,8 +63,12 @@ Open the app → the select screen shows each lane's queued topic and carried pl
 (zero tokens spent until you commit). Pick lane or a specific topic, size
 (tight/standard/deep), model (Opus default; Sonnet toggle — picking "tight"
 preselects Sonnet, still freely switchable) — or "Discuss it instead" to move
-selection into the chat. Recall warm-up chips appear once comfortable topics
-go stale (14 days; `TUTOR_STALE_DAYS` to tune).
+selection into the chat. Recall warm-up chips are paired to the selected track and
+scheduled by mastery: a comfortable topic comes due 14 days after it was last touched
+(`TUTOR_STALE_DAYS`), and each cleanly-recalled warm-up multiplies that interval by
+2.5 (`TUTOR_RECALL_GROWTH`, capped at a year) — so a topic you keep nailing goes
+quiet for months. Past its interval a topic is *sampled* (seeded per day, so refresh
+doesn't reshuffle), which keeps the same few chips from dominating every session.
 
 The lesson is a streaming chat with rendered math and code — plus
 embedded images (fetched through the server's validating proxy and cached under
@@ -175,7 +179,8 @@ and feedback totals on top of the same `analyzeUsage()` used by the CLI.
 | `TUTOR_DATA_DIR` | repo root | where data/, transcripts/, .app/ live (see SETUP.md) |
 | `ANTHROPIC_API_KEY` | — | metered fallback |
 | `TUTOR_PORT` / `TUTOR_HOST` | `4321` / `127.0.0.1` | bind address |
-| `TUTOR_STALE_DAYS` | `14` | recall-candidate threshold |
+| `TUTOR_STALE_DAYS` | `14` | recall interval at streak 0 (base of the spacing curve) |
+| `TUTOR_RECALL_GROWTH` | `2.5` | recall interval multiplier per clean recall |
 | `TUTOR_WEB_TOOLS` | on | `0` disables the WebSearch/WebFetch tools (kill switch) |
 | `TUTOR_GIT_PUSH` | off | `1` pushes after every lesson commit (non-blocking, best-effort) |
 | `TUTOR_LOG_LEVEL` | `info` | Fastify log level |

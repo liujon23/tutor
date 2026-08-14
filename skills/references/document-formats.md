@@ -34,7 +34,13 @@ Key fields (see the shipped file for a live example):
   lessons, not dependencies), `notes`, `coreTopics`, `optionalTopics`.
 - **Topic:** `id`, `name`, `state`, `lastTouched` (`{date, lesson}` or `null`),
   `prerequisites` / `buildsToward` (topic ids, **same unit only**), `notes`,
-  optional `assets`.
+  optional `assets`, optional `recall`.
+- **Topic.recall** (optional): spaced-recall history —
+  `{streak, reviews, last?: {date, result}}` with `result` = `clean|rusty|miss`.
+  Written only by the patcher when a recall warm-up is graded; absent until then
+  (code reads it via `getRecall()` in `core/spacing.ts`). `streak` counts consecutive
+  clean recalls and drives the review interval: base 14 days, ×2.5 per clean recall,
+  capped at a year. A `rusty`/`miss` resets it.
 - **Topic.assets** (optional): curated materials for future lessons —
   `{kind: image|text|link, url, title, note?}`. `image` URLs must be public-domain
   sources (embedded and cached by the app); `text`/`link` are navigational and may
@@ -44,7 +50,8 @@ Key fields (see the shipped file for a live example):
 **State vocabularies** — graded *fairly*, never generously:
 
 - Topic: `not-started` · `touched` (seen it, shaky-to-partial) · `comfortable`
-  (solid, but fair game for recall when stale) · `shaky` (didn't stick; revisit).
+  (solid, but fair game for recall on a schedule that widens with each clean
+  recall) · `shaky` (didn't stick; revisit).
 - Unit: `not-started` · `in-progress` · `core-complete` (core done, exploring
   optional/bridges) · `complete` (wrapped, ready to move on).
 
@@ -134,7 +141,10 @@ truth: `core/types.ts` (`SessionPatch`); worked example:
   lesson:      { date, laneId, unitId, topicIds[], topicsFreeform?, whatHappened,
                  performanceSketch, sourcesUsed, feedbackCaptured, askedAbout },
   curriculum?: { topicUpdates[]   — {id, state?, notes?, touched? (default true →
-                                     lastTouched stamped with this lesson)},
+                                     lastTouched stamped with this lesson),
+                                     recall? (clean|rusty|miss — grade for a recall
+                                     warm-up; drives the spacing streak, miss also
+                                     demotes to shaky unless state is set)},
                  unitUpdates[]    — {id, state?, currentTopic?, notes?},
                  laneUpdates[]    — {id, currentUnit?, direction?, nextUp?},
                  newTopics[], newUnits[] },

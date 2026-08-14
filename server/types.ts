@@ -1,5 +1,5 @@
 // Shared types for the app server.
-import type { SessionSize } from "../core/types.js";
+import type { SessionSize, SpacingConfig } from "../core/types.js";
 
 export type LessonModel = "opus" | "sonnet";
 export type LessonStatus = "active" | "committed" | "abandoned";
@@ -12,7 +12,7 @@ export interface LessonParams {
   size: SessionSize;
   model: LessonModel;
   historyN: number;
-  staleDays: number;
+  spacing: SpacingConfig; // recall interval growth (from env, see server/index.ts)
 }
 
 export interface TranscriptEntry {

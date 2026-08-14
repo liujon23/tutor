@@ -2,7 +2,8 @@
 // Zero AI tokens are spent here; that's the point of Option B selection.
 import { readFileSync } from "node:fs";
 import { allTopics, laneById, loadCurriculum, topicById, unitById } from "../core/curriculum.js";
-import { recallCandidates, recommendNext } from "../core/selector.js";
+import { recallCandidates, recommendNext, type RecallCandidate } from "../core/selector.js";
+import type { SpacingConfig } from "../core/types.js";
 import { SECTIONS } from "../core/profile.js";
 import { DATA_PATHS, todayLocal } from "../scripts/lib.js";
 import { listSessions } from "./store.js";
@@ -25,7 +26,7 @@ export interface StatusLane {
   };
 }
 
-export function buildStatus(staleDays: number) {
+export function buildStatus(spacing: SpacingConfig) {
   const c = loadCurriculum(DATA_PATHS.curriculum);
   const today = todayLocal();
 
@@ -73,11 +74,20 @@ export function buildStatus(staleDays: number) {
       lastActivityAt: s.lastActivityAt,
     }));
 
+  // Recall chips are lane-paired: the client shows only the selected lane's set,
+  // computed per lane here so a lane switch is a lookup, not a refetch. The seeded
+  // draw keeps each day's sets stable across renders and consistent with the packet.
+  const recallCandidatesByLane: Record<string, RecallCandidate[]> = {};
+  for (const lane of c.lanes) {
+    const cands = recallCandidates(c, { today, laneId: lane.id, spacing });
+    if (cands.length) recallCandidatesByLane[lane.id] = cands;
+  }
+
   return {
     today,
-    staleDays,
+    spacing,
     lanes,
-    recallCandidates: recallCandidates(c, today, staleDays),
+    recallCandidatesByLane,
     openSettledItems: openSettledItems(),
     topics,
     activeSessions: active,

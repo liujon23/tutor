@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { loadCurriculum, saveCurriculum } from "../core/curriculum.js";
 import { validateCurriculum } from "../core/validator.js";
 import { recommendNext, recallCandidates } from "../core/selector.js";
+import { DEFAULT_SPACING, offerProbability, seededUnit, stabilityDays } from "../core/spacing.js";
 import { parseHistory, nextLessonNumber, condenseEntry } from "../core/history.js";
 import { applyProfilePatch, checkProfilePatch } from "../core/profile.js";
 import { applySessionPatch, checkPatch } from "../core/patcher.js";
@@ -125,19 +126,147 @@ test("validator rejects a nextUp with no target or a bad unit", () => {
 
 test("recall candidates respect staleness threshold and ordering", () => {
   const c = loadCurriculum(FIXTURE.curriculum);
-  // As of 2026-07-16: activation was touched 2026-06-01 (45 days old — stale at
-  // 14d); backprop was touched 2026-07-10 (6 days old — not stale at 14d). Loss
-  // is `shaky`, not `comfortable`, so it's never a recall candidate regardless
-  // of its lastTouched. Nothing outside the ai lane is touched at all.
-  const cands14 = recallCandidates(c, "2026-07-16", 14);
+  // As of 2026-07-16: activation was touched 2026-06-01 (45 days old — past its
+  // streak-0 interval of 14d); backprop was touched 2026-07-10 (6 days old — not
+  // due at any interval). Loss is `shaky`, not `comfortable`, so it's never a
+  // recall candidate regardless of its lastTouched. Nothing outside the ai lane
+  // is touched at all. probabilistic:false makes this a pure threshold check.
+  const cands14 = recallCandidates(c, { today: "2026-07-16", probabilistic: false });
   assert.equal(cands14.length, 1);
   assert.equal(cands14[0].topicId, "ai-nn-foundations-activation");
-  // At a 2-day threshold both comfortable topics qualify, oldest (most stale) first.
-  const cands2 = recallCandidates(c, "2026-07-16", 2, 5);
+  assert.equal(cands14[0].streak, 0);
+  assert.equal(cands14[0].stabilityDays, 14);
+  assert.equal(cands14[0].overdueDays, 45 - 14);
+  // At a 2-day base both comfortable topics come due, most-overdue first —
+  // backprop's streak of 1 widens its interval to 5d (2 · 2.5), and its 6 stale
+  // days still clear that.
+  const cands2 = recallCandidates(c, {
+    today: "2026-07-16",
+    probabilistic: false,
+    max: 5,
+    spacing: { ...DEFAULT_SPACING, baseDays: 2 },
+  });
   assert.deepEqual(
     cands2.map((r) => r.topicId),
     ["ai-nn-foundations-activation", "ai-nn-foundations-backprop"]
   );
+  assert.equal(cands2[1].streak, 1);
+  assert.equal(cands2[1].stabilityDays, 5);
+});
+
+test("recall: a grown streak keeps a topic quiet until its widened interval passes", () => {
+  const c = loadCurriculum(FIXTURE.curriculum);
+  // Give activation a 2-streak: interval 14 · 2.5² = 87.5d. At 45 days stale it
+  // is no longer due, even unsampled — a clean recall buys real silence.
+  const activation = c.lanes[0].units[0].coreTopics[0];
+  activation.recall = { streak: 2, reviews: 2, last: { date: "2026-06-01", result: "clean" } };
+  assert.deepEqual(validateCurriculum(c), [], "recall history is valid");
+  const cands = recallCandidates(c, { today: "2026-07-16", probabilistic: false });
+  assert.ok(!cands.some((r) => r.topicId === activation.id), "inside its widened interval");
+  // ...but 90 days out it has cleared the floor again.
+  const later = recallCandidates(c, { today: "2026-08-30", probabilistic: false });
+  assert.ok(later.some((r) => r.topicId === activation.id), "due again past the widened interval");
+});
+
+test("spacing math: exponential growth, capped; probability 0 below floor, ramping above", () => {
+  assert.equal(stabilityDays(0), 14);
+  assert.equal(stabilityDays(1), 35);
+  assert.equal(stabilityDays(2), 87.5);
+  assert.equal(stabilityDays(10), 365, "capped at maxDays");
+  assert.equal(offerProbability(13, 14), 0, "hard floor");
+  const atDue = offerProbability(14, 14);
+  assert.ok(Math.abs(atDue - (1 - Math.exp(-1))) < 1e-9, "~63% the day it comes due");
+  assert.ok(offerProbability(28, 14) > atDue, "monotonic past the floor");
+});
+
+test("recall sampling is seeded — identical within a day, and never offers an undue topic", () => {
+  const c = loadCurriculum(FIXTURE.curriculum);
+  const draw1 = recallCandidates(c, { today: "2026-07-16" });
+  const draw2 = recallCandidates(c, { today: "2026-07-16" });
+  assert.deepEqual(draw1, draw2, "same day → same candidates on every call");
+  // Whatever the draw includes must be a subset of the unsampled due set.
+  const due = new Set(
+    recallCandidates(c, { today: "2026-07-16", probabilistic: false }).map((r) => r.topicId)
+  );
+  for (const r of draw1) assert.ok(due.has(r.topicId), `${r.topicId} offered while not due`);
+  // The seed varies by day and by topic.
+  assert.notEqual(seededUnit("2026-07-16|a"), seededUnit("2026-07-17|a"));
+  assert.notEqual(seededUnit("2026-07-16|a"), seededUnit("2026-07-16|b"));
+});
+
+test("recall is lane-paired: a lane filter excludes every other lane", () => {
+  const c = loadCurriculum(FIXTURE.curriculum);
+  const spacing = { ...DEFAULT_SPACING, baseDays: 2 };
+  const ai = recallCandidates(c, { today: "2026-07-16", laneId: "ai", probabilistic: false, spacing });
+  assert.ok(ai.length >= 2);
+  assert.ok(ai.every((r) => r.laneId === "ai"));
+  // No other lane has anything touched, so their recall is empty — not borrowed.
+  const sts = recallCandidates(c, { today: "2026-07-16", laneId: "sts", probabilistic: false, spacing });
+  assert.deepEqual(sts, []);
+});
+
+test("recall bundling: same-unit candidates are linked; the packet names the bundle", () => {
+  const c = loadCurriculum(FIXTURE.curriculum);
+  const spacing = { ...DEFAULT_SPACING, baseDays: 2 };
+  const cands = recallCandidates(c, { today: "2026-07-16", probabilistic: false, spacing });
+  const act = cands.find((r) => r.topicId === "ai-nn-foundations-activation")!;
+  const bp = cands.find((r) => r.topicId === "ai-nn-foundations-backprop")!;
+  assert.deepEqual(act.bundleWith, [bp.topicId]);
+  assert.deepEqual(bp.bundleWith, [act.topicId]);
+});
+
+test("patcher: recall grades drive the streak; miss demotes unless state overrides", () => {
+  // clean → streak grows (backprop starts at 1 in the fixture).
+  let paths = scratchCopy();
+  const recallPatch = (recall: "clean" | "rusty" | "miss", state?: "comfortable"): SessionPatch => ({
+    ...structuredClone(goodPatch),
+    curriculum: { topicUpdates: [{ id: "ai-nn-foundations-backprop", recall, ...(state ? { state } : {}) }] },
+  });
+  applySessionPatch(paths, recallPatch("clean"));
+  let bp = loadCurriculum(paths.curriculum).lanes[0].units[0].coreTopics[1];
+  assert.deepEqual(bp.recall, {
+    streak: 2,
+    reviews: 3,
+    last: { date: "2026-07-01", result: "clean" },
+  });
+  assert.equal(bp.state, "comfortable");
+
+  // rusty → streak resets, state stays comfortable.
+  paths = scratchCopy();
+  applySessionPatch(paths, recallPatch("rusty"));
+  bp = loadCurriculum(paths.curriculum).lanes[0].units[0].coreTopics[1];
+  assert.equal(bp.recall!.streak, 0);
+  assert.equal(bp.state, "comfortable");
+
+  // miss → streak resets AND the topic is demoted to shaky by default...
+  paths = scratchCopy();
+  applySessionPatch(paths, recallPatch("miss"));
+  bp = loadCurriculum(paths.curriculum).lanes[0].units[0].coreTopics[1];
+  assert.equal(bp.recall!.streak, 0);
+  assert.equal(bp.state, "shaky");
+
+  // ...but an explicit state in the patch wins over the demotion.
+  paths = scratchCopy();
+  applySessionPatch(paths, recallPatch("miss", "comfortable"));
+  bp = loadCurriculum(paths.curriculum).lanes[0].units[0].coreTopics[1];
+  assert.equal(bp.state, "comfortable");
+});
+
+test("checkPatch rejects a bad recall grade; validator flags malformed recall history", () => {
+  const paths = scratchCopy();
+  const bad = structuredClone(goodPatch);
+  // @ts-expect-error deliberate bad grade
+  bad.curriculum!.topicUpdates![0].recall = "perfect";
+  assert.ok(checkPatch(paths, bad).some((e) => e.includes("bad recall")));
+
+  const c = loadCurriculum(FIXTURE.curriculum);
+  const t = c.lanes[0].units[0].coreTopics[0];
+  t.recall = { streak: -1, reviews: 1.5, last: { date: "bad-date", result: "great" as never } };
+  const errs = validateCurriculum(c);
+  assert.ok(errs.some((e) => e.includes("recall.streak")), errs.join("; "));
+  assert.ok(errs.some((e) => e.includes("recall.reviews")), errs.join("; "));
+  assert.ok(errs.some((e) => e.includes("recall.last.result")), errs.join("; "));
+  assert.ok(errs.some((e) => e.includes("recall.last.date")), errs.join("; "));
 });
 
 test("history parses and numbers correctly", () => {
@@ -294,7 +423,7 @@ test("project arm: applied whole-file, then injected verbatim into the packet", 
       size: "tight",
       model: "opus",
       historyN: 1,
-      staleDays: 14,
+      spacing: DEFAULT_SPACING,
       today: "2026-07-01",
     }).includes("## Project"),
     "absent project file → no section"
@@ -313,7 +442,7 @@ test("project arm: applied whole-file, then injected verbatim into the packet", 
     size: "tight",
     model: "opus",
     historyN: 1,
-    staleDays: 14,
+    spacing: DEFAULT_SPACING,
     today: "2026-07-01",
   });
   assert.ok(packet.includes("## Project (design artifact"), "packet has the Project section");
@@ -327,7 +456,7 @@ test("session packet builds and contains the essentials", () => {
     size: "standard",
     model: "opus",
     historyN: 2,
-    staleDays: 14,
+    spacing: DEFAULT_SPACING,
     today: "2026-07-16",
   });
   for (const needle of [
@@ -350,7 +479,7 @@ test("session packet ships the newest history entry in full but condenses older 
     size: "standard",
     model: "opus",
     historyN: 2,
-    staleDays: 14,
+    spacing: DEFAULT_SPACING,
     today: "2026-07-16",
   });
   // Newest entry (Lesson 3) is in full — its "What happened" body text is present.
@@ -394,7 +523,7 @@ test("curated topic assets: normalized, validated, and rendered into the packet"
     size: "standard",
     model: "opus",
     historyN: 1,
-    staleDays: 14,
+    spacing: DEFAULT_SPACING,
     today: "2026-07-01",
   });
   assert.ok(packet.includes("asset [image]: Impression, Sunrise"));

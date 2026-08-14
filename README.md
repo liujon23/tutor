@@ -42,8 +42,9 @@ install it on your phone and study from anywhere on your
 - **Per-message feedback**: long-press any tutor message to rate it. Strong negative ratings
 course-correct the tutor mid-lesson; everything else is distilled at wrap-up into durable
 observations about how you learn. The tutor is learning your habits directly from your participation as well.
-- **Spaced recall**: previously-covered topics are occasionally quizzed lightly (if you want) to help
-train your recall muscle.
+- **Spaced recall**: previously-covered topics from the day's track are occasionally quizzed
+lightly (if you want) — each clean recall pushes a topic's next quiz exponentially further out,
+and related stale topics get bundled into a single bridging question.
 - **Session sizes** (tight / standard / deep) and per-lesson model choice, with
   a live switch if you hit your subscription's rate window.
 - **Stats screen**: token/cost trends, per-lane progress, feedback history.

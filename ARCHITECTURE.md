@@ -62,7 +62,9 @@ Two invariants make the design hold:
 1. **`core/types.ts`** — the data model and the `SessionPatch` contract. Ten
    minutes here explains everything else.
 2. **`core/slicer.ts`** — how a packet is assembled (what the model gets to see).
-3. **`core/selector.ts`** — deterministic "what to learn next" + spaced recall.
+3. **`core/selector.ts`** — deterministic "what to learn next" + spaced recall
+   (lane-paired, sampled above mastery-widened intervals; the curve and its
+   constants live in `core/spacing.ts`).
 4. **`core/patcher.ts`** — validate-then-apply; note the compute-then-write shape
    so a late failure can't leave a partial write.
 5. **`skills/references/teaching-contract.md`** — how lessons are taught; shared
