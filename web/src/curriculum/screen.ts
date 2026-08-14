@@ -57,7 +57,10 @@ export async function showCurriculum(
     byWeight[0].id;
 
   const screen = h("div", { class: "screen curriculum" });
-  const laneRow = h("div", { class: "seg-row lane-tabs" });
+  // Chips, not a segmented control: lane names are long and variable, and four
+  // of them have to wrap on a phone. `.seg-row` is `overflow: hidden` and never
+  // wraps, which silently hid the whole switcher at narrow widths.
+  const laneRow = h("div", { class: "chip-row lane-tabs" });
   const direction = h("p", { class: "lane-direction" });
   const graphHost = h("div", { class: "flow-host" });
   let handle: FlowchartHandle | null = null;
@@ -95,12 +98,15 @@ export async function showCurriculum(
     const btn = h(
       "button",
       {
-        class: "seg",
+        class: "chip",
         onclick: () => {
           if (laneId === lane.id) return;
           laneId = lane.id;
           drawLane();
-          graphHost.scrollIntoView({ block: "start" });
+          // Back to the top of the screen, not the top of the graph: scrolling
+          // to the graph would push the lane switcher off a phone screen right
+          // after you'd used it.
+          screen.scrollTop = 0;
         },
       },
       lane.name.replace(/\s+Lane$/, "")

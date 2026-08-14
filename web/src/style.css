@@ -1269,8 +1269,16 @@ input.hidden[type="file"] {
   gap: 10px;
 }
 
+/* This is a scrolling column-flex container, so its children are shrinkable by
+   default — and once the content is taller than the viewport they DO shrink,
+   collapsing to a sliver instead of scrolling. Pin every child to its natural
+   height and let the container scroll, which is the whole point of it. */
+.screen.curriculum > * {
+  flex: none;
+}
+
 .lane-tabs {
-  flex-wrap: wrap;
+  padding-bottom: 2px;
 }
 
 .lane-direction {
