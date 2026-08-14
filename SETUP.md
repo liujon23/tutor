@@ -130,3 +130,7 @@ run `npm run restart` — to rebuild and restart. See **DEVELOPING.md**.
   `tailscale funnel --https=443 off`, then `tailscale serve --bg 4321`.
 - **"port already in use"** — another copy is running, or set `TUTOR_PORT=4322`
   (and point `tailscale serve` at the same port).
+- **Clone fails on Windows with "Filename too long"** — the demo's artwork files
+  have long content-hash names, so a deeply nested folder can exceed the legacy
+  260-character path limit. Either clone somewhere shorter (`C:\dev\tutor`) or
+  run `git config --global core.longpaths true` and clone again.
