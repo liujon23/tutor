@@ -3,7 +3,8 @@
 // input queue (user messages in) and a listener set (SSE events out). If the
 // server restarts mid-lesson, the manager revives the runner with `resume` on
 // the stored SDK session id — the transcript in the store covers the UI side.
-import { query, type Options, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import { query, type Options, type Query, type SDKMessage, type SDKUserMessage, type SyncHookJSONOutput } from "@anthropic-ai/claude-agent-sdk";
+import { checkFetchUrl, urlFromWebFetchInput } from "../core/url-guard.js";
 import { ROOT } from "../scripts/lib.js";
 import { saveInboundImage } from "./assets.js";
 import { createTutorServer, COMMIT_TOOL_NAME } from "./tutor-tool.js";
@@ -25,6 +26,33 @@ export function buildUserContent(
   }));
   if (text) blocks.push({ type: "text" as const, text });
   return blocks;
+}
+
+/**
+ * PreToolUse gate on WebFetch. Web tools mean third-party text reaches model
+ * context, and WebFetch is the one tool that can carry context back out in a
+ * URL — see core/url-guard.ts for the reasoning and the limits.
+ *
+ * A PreToolUse deny is the right hook: it short-circuits ahead of canUseTool and
+ * fires regardless of permissionMode, so it holds under `dontAsk`. The denial
+ * reason goes back to the model as text so it retries with a plain URL instead
+ * of stalling. WebSearch is not matched here — it stays unrestricted.
+ */
+export function webFetchGate(toolName: string, toolInput: unknown): SyncHookJSONOutput {
+  if (toolName !== "WebFetch") return {};
+  const url = urlFromWebFetchInput(toolInput);
+  // No URL to read means the input shape changed under us. Denying would break
+  // fetching wholesale on an SDK bump; the guard is a narrowing, not a seal.
+  if (url === null) return {};
+  const verdict = checkFetchUrl(url);
+  if (verdict.ok) return {};
+  return {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: `Blocked by the tutor's outbound URL guard: ${verdict.reason}`,
+    },
+  };
 }
 
 export class LessonRunner {
@@ -73,6 +101,22 @@ export class LessonRunner {
       permissionMode: "dontAsk",
       includePartialMessages: true,
       resume: session.sdkSessionId ?? undefined,
+      // Narrow WebFetch's outbound URLs (see webFetchGate). Registered even when
+      // web tools are off so the gate can't be missed if that default flips.
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "WebFetch",
+            hooks: [
+              async (input) =>
+                webFetchGate(
+                  (input as { tool_name?: string }).tool_name ?? "",
+                  (input as { tool_input?: unknown }).tool_input
+                ),
+            ],
+          },
+        ],
+      },
     };
 
     this.q = query({ prompt: this.input(), options });

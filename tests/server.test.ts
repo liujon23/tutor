@@ -363,8 +363,10 @@ test("asset proxy helpers: url hashing, extension mapping, host blocking", () =>
   assert.notEqual(assetHash(url), assetHash(url + "?x=1"));
 
   assert.equal(extForContentType("image/jpeg"), "jpg");
-  assert.equal(extForContentType("image/svg+xml"), "svg");
   assert.equal(extForContentType("image/x-weird"), "img");
+  // SVG is an executable document served back from our own origin — the proxy
+  // must not recognize it, so it falls through to the unknown-type extension.
+  assert.equal(extForContentType("image/svg+xml"), "img");
 
   for (const h of ["localhost", "a.localhost", "printer.local", "127.0.0.1", "10.1.2.3",
                    "192.168.1.10", "172.16.0.9", "172.31.255.1", "169.254.0.5", "0.0.0.0", "[::1]"]) {

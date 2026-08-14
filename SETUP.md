@@ -92,6 +92,13 @@ the browser's **Add to Home Screen** — it installs like a native app. The serv
 itself only ever listens on localhost; Tailscale is what makes it reachable, and
 only to your own devices.
 
+> **`serve`, never `funnel`.** They're one word apart and they do opposite things:
+> `tailscale serve` reaches your own devices, `tailscale funnel` publishes to the
+> whole internet. The tutor has no login — anyone who reached a funnelled URL could
+> read your transcripts and spend your Claude subscription. The server checks for
+> this at startup and refuses to run if it finds a funnel on its port, but the
+> habit is the real protection.
+
 ## Keeping it running
 
 Leave the server window open while you study. After changing anything,
@@ -104,5 +111,10 @@ run `npm run restart` — to rebuild and restart. See **DEVELOPING.md**.
 - **Auth error during a lesson** — Step 2; re-run `npm run echo-test`.
 - **Phone can't connect** — Tailscale running and signed in on *both* devices?
   Server running? `tailscale serve` set up for port 4321? Firewall allowed Node?
+- **"unrecognized Host"** — the server only answers to localhost and its own
+  tailnet name (it logs the list as `hosts: …` at startup). If you reach it under
+  some other name, add it: `TUTOR_ALLOWED_HOSTS=my-name.example` in `.env`.
+- **Server refuses to start, complaining about a funnel** — run
+  `tailscale funnel --https=443 off`, then `tailscale serve --bg 4321`.
 - **"port already in use"** — another copy is running, or set `TUTOR_PORT=4322`
   (and point `tailscale serve` at the same port).

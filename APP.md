@@ -211,6 +211,8 @@ and feedback totals on top of the same `analyzeUsage()` used by the CLI.
 | `TUTOR_WEB_TOOLS` | on | `0` disables the WebSearch/WebFetch tools (kill switch) |
 | `TUTOR_GIT_PUSH` | off | `1` pushes after every lesson commit (non-blocking, best-effort) |
 | `TUTOR_LOG_LEVEL` | `info` | Fastify log level |
+| `TUTOR_ALLOWED_HOSTS` | — | extra comma-separated Host headers to accept (see below) |
+| `TUTOR_ALLOW_PUBLIC` | off | `1` downgrades the startup exposure check to a warning |
 
 ### Off-site durability (`TUTOR_GIT_PUSH=1`)
 
@@ -220,11 +222,56 @@ configured remote on the data repo and non-interactive auth (an SSH
 key or a credential helper — the push must not prompt). Both the app and the CLI
 scripts funnel through the same commit helper, so both get pushed.
 
+## Reachability (the actual security model)
+
+There is **no login on any endpoint**. Whoever can reach port 4321 can read every
+transcript and your profile, start lessons on your subscription, and cause git
+commits. That's a deliberate trade for a single-user app, and it means the whole
+security model is *who can reach the port*. Three things enforce it:
+
+1. **Loopback bind.** The server listens on `127.0.0.1`. `tailscale serve` is what
+   makes it reachable from your phone, and only to your own devices.
+2. **Startup exposure check** (`server/exposure.ts`). If a Tailscale **Funnel** —
+   the public internet, one word away from `serve` — is fronting our port, the
+   server refuses to start. A non-loopback `TUTOR_HOST` prints a loud warning.
+   (Funnel is also gated at the tailnet level: unless it has been enabled for the
+   node in the Tailscale admin console, `tailscale funnel` refuses to do anything.
+   That's a second lock on the same door — worth leaving unopened.)
+   Set `TUTOR_ALLOW_PUBLIC=1` if you really mean it. The check fails open: no
+   tailscale binary, a timeout, or changed output is treated as "nothing found",
+   because a security check that bricks the app on an unrelated failure is worse
+   than the risk it covers.
+3. **Host-header allowlist.** Requests are only served for `127.0.0.1`,
+   `localhost`, and this machine's tailnet name (auto-detected at boot; the log
+   line `hosts: …` shows the final list). This is what stops DNS rebinding, where
+   a page you visit resolves its own hostname to `127.0.0.1` and thereby becomes
+   same-origin with this server. Add names with `TUTOR_ALLOWED_HOSTS=a.lan,b.lan`
+   if you front the app with something else.
+
+If you ever do want this reachable by someone other than you, add real
+authentication first — the checks above are guardrails against a slip, not a
+substitute for a login.
+
 ## Boundaries (by design)
 
 - The lesson model has **no file tools** — its only write path is the
   `commit_session` tool, which runs the same `checkPatch`/`applySessionPatch` as the
   CLI. Rejected patches are returned to the model to fix; nothing is written on error.
+- **Outbound URLs are gated** (`core/url-guard.ts`). Web tools mean third-party text
+  reaches model context, and `WebFetch` is the one tool that can carry that context
+  back out in a URL — your profile sits verbatim in the system prompt. Rather than a
+  domain allowlist (which would break looking things up mid-lesson), WebFetch is
+  gated on URL *shape*: any domain is fine, but long query strings, oversized
+  parameters, and request-capture hosts like `webhook.site` are refused, with the
+  reason handed back to the model. `WebSearch` is not gated. This narrows the
+  channel rather than sealing it — a patient attacker could still drip data out a
+  few dozen bytes per fetch, but every fetch is a visible tool-use event.
+- **The asset proxy validates every redirect hop** (`server/assets.ts`) and resolves
+  each hostname through DNS, so a public name pointing at a private address is
+  refused. It does not serve SVG: SVG is an executable document, and these bytes come
+  back from our own origin. Residual, accepted: Node's `fetch` won't let us pin the
+  resolved address into the connection, so a TOCTOU rebind between check and request
+  stays theoretically possible.
 - **course-setup stays in Claude Code**; the app is lesson-only.
 - No visitor mode on the live server — your token never serves anyone else. (The
   public demo is a static replay with no server and no token at all.)
