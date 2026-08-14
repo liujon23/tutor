@@ -169,7 +169,7 @@ async function status(): Promise<Status> {
   });
   return {
     today: new Date().toISOString().slice(0, 10),
-    staleDays: 10,
+    spacing: { baseDays: 14, growth: 2.5, maxDays: 365 },
     lanes: [
       {
         id: "art",
@@ -186,7 +186,7 @@ async function status(): Promise<Status> {
       locked("ai", "AI Lane", 50),
       locked("sts", "Science and Technology Studies (STS) Lane", 30),
     ],
-    recallCandidates: [],
+    recallCandidatesByLane: {},
     openSettledItems: [],
     topics: [],
     activeSessions: [],

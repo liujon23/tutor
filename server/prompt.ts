@@ -131,7 +131,7 @@ Patch shape (TypeScript source of truth is core/types.ts SessionPatch):
               "topicsFreeform"?, "whatHappened", "performanceSketch",
               "sourcesUsed", "feedbackCaptured", "askedAbout" },
   "curriculum": {
-    "topicUpdates": [ { "id", "state"?, "notes"?, "touched"? } ],
+    "topicUpdates": [ { "id", "state"?, "notes"?, "touched"?, "recall"? } ],
     "unitUpdates":  [ { "id", "state"?, "currentTopic"?, "notes"? } ],
     "laneUpdates":  [ { "id", "currentUnit"?, "direction"?,
                         "nextUp"?: { "topicId" | "unitId", "plan" } } ],
@@ -158,7 +158,9 @@ Patch shape (TypeScript source of truth is core/types.ts SessionPatch):
 
 Vocabularies: topic state = not-started | touched | comfortable | shaky; unit state =
 not-started | in-progress | core-complete | complete. "touched" defaults true and
-stamps lastTouched with this lesson.
+stamps lastTouched with this lesson. "recall" = clean | rusty | miss — set it on every
+topic that got a recall warm-up (it drives the spacing streak; miss also demotes to
+shaky unless you set state explicitly); omit it on topics that were taught.
 
 Get the content right per the contract's "Patch content" section. App additions:
 - Use the packet's date for lesson.date.
@@ -202,7 +204,7 @@ export function buildLessonSystemPrompt(params: LessonParams): {
     model: params.model,
     historyN: params.historyN,
     today,
-    staleDays: params.staleDays,
+    spacing: params.spacing,
   });
 
   if (!title) {

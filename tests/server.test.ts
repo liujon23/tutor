@@ -40,6 +40,7 @@ import { appendTranscript, deleteSession } from "../server/store.js";
 import { createCommitSessionTool } from "../server/tutor-tool.js";
 import type { FeedbackLogEntry, StoredSession, UsageRecord } from "../server/types.js";
 import type { SessionPatch } from "../core/types.js";
+import { DEFAULT_SPACING } from "../core/spacing.js";
 
 function fakeSession(over: Partial<StoredSession> = {}): StoredSession {
   return {
@@ -47,7 +48,7 @@ function fakeSession(over: Partial<StoredSession> = {}): StoredSession {
     createdAt: "2026-07-03T08:00:00.000Z",
     lastActivityAt: "2026-07-03T08:30:00.000Z",
     status: "active",
-    params: { size: "tight", model: "opus", historyN: 3, staleDays: 14 },
+    params: { size: "tight", model: "opus", historyN: 3, spacing: DEFAULT_SPACING },
     title: "Loss Functions",
     systemPrompt: "(sys)",
     sdkSessionId: null,
@@ -58,7 +59,7 @@ function fakeSession(over: Partial<StoredSession> = {}): StoredSession {
 }
 
 test("buildStatus surfaces lanes, recommendations, topics, and open items", () => {
-  const s = buildStatus(14);
+  const s = buildStatus(DEFAULT_SPACING);
   // Reads the live curriculum, so assert a lower bound, not an exact count
   // (lanes get added — e.g. the design lane).
   assert.ok(s.lanes.length >= 3, "surfaces the lanes");
@@ -75,7 +76,12 @@ test("buildStatus surfaces lanes, recommendations, topics, and open items", () =
   // shape only, not any specific item (same reason the lane count is a bound).
   assert.ok(Array.isArray(s.openSettledItems));
   assert.ok(s.openSettledItems.every((i) => typeof i === "string"));
-  assert.ok(Array.isArray(s.recallCandidates));
+  // Lane-paired recall: a per-lane map, and every entry belongs to its key lane.
+  assert.equal(typeof s.recallCandidatesByLane, "object");
+  for (const [laneId, cands] of Object.entries(s.recallCandidatesByLane)) {
+    assert.ok(cands.length > 0, "empty lanes are omitted from the map");
+    assert.ok(cands.every((r) => r.laneId === laneId), `candidates in ${laneId} match their lane`);
+  }
   assert.match(s.today, /^\d{4}-\d{2}-\d{2}$/);
 });
 
@@ -109,7 +115,7 @@ test("lesson prompt embeds the packet and the commit contract", () => {
     size: "tight",
     model: "opus",
     historyN: 3,
-    staleDays: 14,
+    spacing: DEFAULT_SPACING,
   });
   assert.ok(systemPrompt.includes("SESSION PACKET"), "packet delimiter present");
   assert.ok(systemPrompt.includes("commit_session"), "commit tool documented");
@@ -125,7 +131,7 @@ test("lesson prompt splices the shared teaching contract", () => {
     size: "tight",
     model: "opus",
     historyN: 3,
-    staleDays: 14,
+    spacing: DEFAULT_SPACING,
   });
   // Spot-check one phrase per contract section so drift in prompt.ts's splice
   // (or an emptied contract file) fails loudly.
@@ -146,7 +152,7 @@ test("topic override redirects the packet to the topic's lane", () => {
     size: "standard",
     model: "sonnet",
     historyN: 2,
-    staleDays: 14,
+    spacing: DEFAULT_SPACING,
   });
   assert.ok(systemPrompt.includes("override picker"), "override note present");
   assert.ok(systemPrompt.includes("sts-phil-merton"));
@@ -160,7 +166,7 @@ test("unknown override topic throws", () => {
       size: "tight",
       model: "opus",
       historyN: 3,
-      staleDays: 14,
+      spacing: DEFAULT_SPACING,
     })
   );
 });
@@ -343,7 +349,7 @@ test("kickoff message carries parameters and recall picks", () => {
     discuss: true,
     recallRequested: ["ai-nn-foundations-backprop"],
     historyN: 3,
-    staleDays: 14,
+    spacing: DEFAULT_SPACING,
   });
   assert.ok(k.includes("size=deep"));
   assert.ok(k.includes("discuss-selection"));
@@ -875,7 +881,7 @@ test("lesson prompt documents the per-message feedback protocol", () => {
     size: "tight",
     model: "opus",
     historyN: 3,
-    staleDays: 14,
+    spacing: DEFAULT_SPACING,
   });
   assert.ok(systemPrompt.includes("ABSENCE IS NOT A SIGNAL"), "no-signal-from-silence rule");
   assert.ok(systemPrompt.includes("double thumbs-down"), "only -2 acts live");

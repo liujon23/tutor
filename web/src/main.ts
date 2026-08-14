@@ -141,6 +141,7 @@ export async function showSelect(): Promise<void> {
     for (const [id, card] of laneCards) {
       card.classList.toggle("selected", id === selectedLane && !selectedTopic);
     }
+    renderRecallChips();
     refreshStart();
   };
 
@@ -261,14 +262,32 @@ export async function showSelect(): Promise<void> {
   );
 
   // ---- Recall warm-ups (optional) ----------------------------------------
-  if (status.recallCandidates.length > 0) {
-    const chips = h("section", { class: "card recall" }, h("h2", {}, "Recall warm-ups (tap to include)"));
+  // Lane-paired: only the effective lane's candidates are offered, and switching
+  // tracks swaps the chip set (re-rendered from refreshSelection). Picks are
+  // cleared on a lane change so an old lane's topic can't ride into a lesson
+  // whose packet no longer lists it.
+  const recallSection = h("section", { class: "card recall hidden" });
+  let chipsLane: string | undefined;
+  const renderRecallChips = () => {
+    const laneId = selectedTopic
+      ? status.topics.find((t) => t.id === selectedTopic)?.laneId
+      : selectedLane;
+    if (laneId !== chipsLane) {
+      chipsLane = laneId;
+      recallPicked.clear();
+    }
+    const cands = (laneId && status.recallCandidatesByLane[laneId]) || [];
+    recallSection.classList.toggle("hidden", cands.length === 0);
+    clear(recallSection);
+    if (cands.length === 0) return;
+    recallSection.append(h("h2", {}, "Recall warm-ups (tap to include)"));
     const row = h("div", { class: "chip-row" });
-    for (const r of status.recallCandidates) {
+    for (const r of cands) {
       const chip = h(
         "button",
         {
-          class: "chip",
+          class: `chip ${recallPicked.has(r.topicId) ? "on" : ""}`,
+          title: `interval ${Math.round(r.stabilityDays)}d · ${r.overdueDays}d overdue`,
           onclick: () => {
             if (recallPicked.has(r.topicId)) recallPicked.delete(r.topicId);
             else recallPicked.add(r.topicId);
@@ -279,9 +298,9 @@ export async function showSelect(): Promise<void> {
       );
       row.append(chip);
     }
-    chips.append(row);
-    screen.append(chips);
-  }
+    recallSection.append(row);
+  };
+  screen.append(recallSection);
 
   // ---- Session size + model ----------------------------------------------
   // modelRow is built first so sizeRow's handler can drive its "on" state:

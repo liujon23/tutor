@@ -28,9 +28,24 @@ Offer 1–3 **cold-retrieval** questions on them before the main topic — genui
 me X before I show you anything" prompts. Cold retrieval beats re-exposition: ask
 first, show after; if the profile confirms a recall preference, lean into it harder.
 Keep it to a few minutes; it's a warm-up, not a quiz block. Skip gracefully if the
-learner wants to dive in (tight sessions especially). Fold what you learn into the
-patch (a topic that's gone rusty → state `shaky`; a clean recall → just update
-`lastTouched` via `touched: true`).
+learner wants to dive in (tight sessions especially). Candidates are already paired to
+today's track and scheduled by mastery — each clean recall pushes a topic's next
+appearance much further out, so a candidate in the packet has genuinely earned its slot.
+
+**Bundles are one question, not several.** When the packet marks candidates as a
+bundle, they're linked in the curriculum graph — ask ONE question that can't be
+answered without all of them (a comparison, a dependency, a "how does X constrain Y").
+A bridged question is both faster and a better retrieval test than quizzing each topic
+in isolation; fall back to separate questions only if the learner stalls on the bridge.
+
+**Grade every warm-up in the patch** via `topicUpdates[].recall` — fairly, never
+generously; the grade directly sets how long until the topic resurfaces:
+- `clean` — retrieved it unaided. The streak grows and the next review moves much
+  further out.
+- `rusty` — needed a hint, or got it partly. The streak resets to the base interval;
+  the topic stays `comfortable`.
+- `miss` — it's gone. The streak resets and the topic is demoted to `shaky` for
+  re-teaching (automatic; set `state` yourself only to override that).
 
 ## Readiness check (fair, brief, scaled)
 
@@ -146,9 +161,10 @@ Either of you can call it; name natural stopping points and let the learner choo
 - **lesson** — honest, compact entry. Performance graded *fairly*, never generously.
   Keep `whatHappened` to the load-bearing arc — what the next lesson needs, not a
   blow-by-blow; the transcript is the full record.
-- **topicUpdates** — state changes for everything genuinely touched (including recall
-  warm-ups). Trim notes on now-comfortable topics; spend words only where they help
-  the next lesson.
+- **topicUpdates** — state changes for everything genuinely touched. Every recall
+  warm-up gets a `recall: clean|rusty|miss` grade (see the warm-up section); topics
+  that were taught rather than recalled omit `recall`. Trim notes on now-comfortable
+  topics; spend words only where they help the next lesson.
 - **unit/laneUpdates** — advance pointers; flip unit state when warranted
   (`in-progress` → `core-complete` when the last core topic is done; → `complete`
   only when the learner actually moves on). **Always set `nextUp`** with a one-line

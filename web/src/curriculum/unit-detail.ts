@@ -15,7 +15,8 @@ const TOPIC_STATE_MARK: Record<string, string> = {
  * archived and plain text when it wasn't — lessons 1-3 predate the archive, so
  * a topic can legitimately point at a lesson with nothing to read. It can also
  * point at a lesson in a DIFFERENT unit (a recall warm-up run inside another
- * lane's lesson), which is exactly why it's worth linking from here.
+ * unit's lesson — recall is paired to the lane, so it never crosses lanes),
+ * which is exactly why it's worth linking from here.
  */
 function topicRow(
   t: CurriculumTopic,

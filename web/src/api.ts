@@ -28,6 +28,11 @@ export interface RecallCandidate {
   unitId: string;
   lastTouched: string;
   daysStale: number;
+  streak: number;
+  stabilityDays: number;
+  overdueDays: number;
+  offerProbability: number;
+  bundleWith: string[];
 }
 
 export interface TopicRow {
@@ -55,11 +60,19 @@ export interface AttentionItem {
   at: string;
 }
 
+export interface SpacingConfig {
+  baseDays: number;
+  growth: number;
+  maxDays: number;
+}
+
 export interface Status {
   today: string;
-  staleDays: number;
+  spacing: SpacingConfig;
   lanes: StatusLane[];
-  recallCandidates: RecallCandidate[];
+  /** Recall chips per lane — the client shows only the selected lane's set. Lanes
+   *  with nothing due are absent. */
+  recallCandidatesByLane: Record<string, RecallCandidate[]>;
   openSettledItems: string[];
   topics: TopicRow[];
   activeSessions: ActiveSession[];

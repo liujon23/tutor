@@ -28,6 +28,22 @@ export interface TopicAsset {
   note?: string;
 }
 
+/** How a spaced-recall warm-up went. Graded fairly — this literally sets how
+ *  long until the topic is asked about again. */
+export type RecallResult = "clean" | "rusty" | "miss";
+export const RECALL_RESULTS: RecallResult[] = ["clean", "rusty", "miss"];
+
+/**
+ * Per-topic recall history — the memory the flat "stale for 14 days" rule never had.
+ * `streak` drives the interval (see core/spacing.ts); `reviews` is for stats.
+ * Absent on topics never quizzed; read it via `getRecall()`, never directly.
+ */
+export interface RecallHistory {
+  streak: number; // consecutive clean recalls; reset to 0 by rusty/miss
+  reviews: number; // total recall attempts
+  last?: { date: string; result: RecallResult };
+}
+
 export interface Topic {
   id: string;
   name: string;
@@ -37,6 +53,7 @@ export interface Topic {
   buildsToward: string[]; // topic ids, same unit only
   notes: string;
   assets?: TopicAsset[]; // normalized to [] on load
+  recall?: RecallHistory; // omitted until the topic's first recall warm-up
 }
 
 export interface Unit {
@@ -104,6 +121,10 @@ export interface TopicUpdate {
   state?: TopicState;
   notes?: string;
   touched?: boolean; // default true → lastTouched set from the lesson date/number
+  /** Set on topics that got a recall warm-up this lesson. Drives the streak, and
+   *  hence the next interval; `miss` also demotes to `shaky` unless `state` says
+   *  otherwise. Omit on topics that were taught rather than recalled. */
+  recall?: RecallResult;
 }
 
 export interface UnitUpdate {
@@ -196,13 +217,20 @@ export interface SessionPatch {
 
 export type SessionSize = "tight" | "standard" | "deep";
 
+/** Spaced-recall tuning. Defaults and the curve itself live in core/spacing.ts. */
+export interface SpacingConfig {
+  baseDays: number; // interval at streak 0 — the old flat staleness threshold
+  growth: number; // multiplier per clean recall
+  maxDays: number; // interval ceiling
+}
+
 export interface PacketOptions {
   laneId?: string; // omit → use the recommendation across lanes
   size: SessionSize;
   model: string; // "opus" | "sonnet" — echoed into the packet, enforced by the caller
   historyN: number; // how many recent lesson-history entries to include
   today: string; // YYYY-MM-DD
-  staleDays: number; // recall-candidate threshold
+  spacing: SpacingConfig; // recall interval growth
 }
 
 export interface DataPaths {

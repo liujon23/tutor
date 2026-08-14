@@ -48,16 +48,16 @@ export interface LaneProgress {
   lessonsTaken: number;
 }
 
-// Matches the app's default TUTOR_STALE_DAYS (server/index.ts) — the report
-// isn't wired to that env var, so this mirrors its default directly.
-const STALE_DAYS = 14;
-
 function buildProgress(entries: LedgerEntry[]): LaneProgress[] {
   const c = loadCurriculum(DATA_PATHS.curriculum);
   const today = todayLocal();
-  // A high cap turns recallCandidates into "every stale comfortable topic",
-  // not just the top few offered on the select screen.
-  const stale = recallCandidates(c, today, STALE_DAYS, Number.MAX_SAFE_INTEGER);
+  // Unsampled + uncapped = every topic past its earned interval, not just the few
+  // the day's probabilistic draw would offer on the select screen.
+  const stale = recallCandidates(c, {
+    today,
+    probabilistic: false,
+    max: Number.MAX_SAFE_INTEGER,
+  });
   const staleByLane = new Map<string, number>();
   for (const s of stale) staleByLane.set(s.laneId, (staleByLane.get(s.laneId) ?? 0) + 1);
 

@@ -5,6 +5,8 @@ import { join } from "node:path";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { applyProfilePatch } from "../core/profile.js";
+import { DEFAULT_SPACING } from "../core/spacing.js";
+import type { SpacingConfig } from "../core/types.js";
 import { DATA_PATHS, PATHS, ROOT, gitCommit, todayLocal } from "../scripts/lib.js";
 import { registerAssetRoutes } from "./assets.js";
 import { buildCurriculumView } from "./curriculum-view.js";
@@ -28,7 +30,14 @@ import type {
 
 const PORT = Number(process.env.TUTOR_PORT ?? 4321);
 const HOST = process.env.TUTOR_HOST ?? "127.0.0.1";
-const STALE_DAYS = Number(process.env.TUTOR_STALE_DAYS ?? 14);
+// Recall spacing: TUTOR_STALE_DAYS is the interval at streak 0, widened by
+// TUTOR_RECALL_GROWTH on every clean recall. One config, passed to every caller —
+// the constants themselves live in core/spacing.ts.
+const SPACING: SpacingConfig = {
+  ...DEFAULT_SPACING,
+  baseDays: Number(process.env.TUTOR_STALE_DAYS ?? DEFAULT_SPACING.baseDays),
+  growth: Number(process.env.TUTOR_RECALL_GROWTH ?? DEFAULT_SPACING.growth),
+};
 const WEB_DIST = join(ROOT, "web", "dist");
 
 const manager = new LessonManager();
@@ -60,7 +69,7 @@ registerAssetRoutes(app);
 
 // --- Selection screen -------------------------------------------------------
 
-app.get("/api/status", async () => buildStatus(STALE_DAYS));
+app.get("/api/status", async () => buildStatus(SPACING));
 
 // Usage + curriculum progress + feedback trends — the in-app Stats screen
 // (also available as `npm run usage-report` on the CLI).
@@ -97,7 +106,7 @@ app.post<{ Body: CreateLessonBody }>("/api/lesson", async (req, reply) => {
     size,
     model: defaultModel(size, b.model),
     historyN: b.historyN ?? 3,
-    staleDays: STALE_DAYS,
+    spacing: SPACING,
   };
   if (params.laneId && !laneExists(params.laneId)) {
     return reply.code(400).send({ error: `lane '${params.laneId}' not found` });
