@@ -12,7 +12,16 @@ profile.md          # who the learner is and how they like to learn — prose, m
 curriculum.yaml     # the topic graph + knowledge state + recency — structured, YAML
 lesson-history.md   # append-only log, one entry per lesson, newest first — markdown
 projects/<lane>.md  # OPTIONAL per-lane project artifact (only project-bearing lanes)
+unit-summaries.json # DERIVED — generated unit blurbs for the viewer; not read by lessons
 ```
+
+`unit-summaries.json` is the one derived file here: a cache of one- or two-sentence
+descriptions of what each unit covers, written by `npm run unit-summaries` and keyed
+by a hash of the unit's *structure* (its name, its topic names and order, its
+prerequisites, and its lane's `direction`). Progress, notes and dates are deliberately
+outside that hash, so an ordinary lesson never invalidates it. It exists only for the
+app's curriculum viewer — it never enters a session packet, and deleting it costs
+nothing but a regeneration.
 
 **Access rule for lessons:** `daily-lesson` never reads these files directly. It reads
 the *session packet* from `npm run start-lesson` and writes back via a *session patch*
@@ -31,7 +40,14 @@ Key fields (see the shipped file for a live example):
   heading — themes, not a fixed syllabus), `nextUp`, `units`.
 - **Unit:** `id`, `name`, `state`, `currentTopic`, `prerequisites` (unit ids, same
   lane), `bridgeTopics` (topic ids in *other* units — suggestions for connecting
-  lessons, not dependencies), `notes`, `coreTopics`, `optionalTopics`.
+  lessons, not dependencies), `notes`, `coreTopics`, `optionalTopics`,
+  `completedAt`.
+- **Unit.completedAt** (machine-written): `YYYY-MM-DD` the unit first reached
+  `core-complete`/`complete`, stamped by the patcher from the lesson date. Like
+  `Topic.lastTouched` there is **no patch field for it** — the tutor never sets
+  it. A later `core-complete` → `complete` keeps the first date; reopening the
+  unit clears it so the next completion re-stamps. `null` until the unit
+  completes.
 - **Topic:** `id`, `name`, `state`, `lastTouched` (`{date, lesson}` or `null`),
   `prerequisites` / `buildsToward` (topic ids, **same unit only**), `notes`,
   optional `assets`, optional `recall`.

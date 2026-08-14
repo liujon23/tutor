@@ -27,6 +27,7 @@ const REAL: DataPaths = {
   profile: join(ROOT, "data", "profile.md"),
   history: join(ROOT, "data", "lesson-history.md"),
   projectsDir: join(ROOT, "data", "projects"),
+  unitSummaries: join(ROOT, "data", "unit-summaries.json"),
 };
 
 // A frozen snapshot of the data — see tests/fixtures/README.md. All behavioural
@@ -37,6 +38,7 @@ const FIXTURE: DataPaths = {
   profile: join(ROOT, "tests", "fixtures", "profile.md"),
   history: join(ROOT, "tests", "fixtures", "lesson-history.md"),
   projectsDir: join(ROOT, "tests", "fixtures", "projects"),
+  unitSummaries: join(ROOT, "tests", "fixtures", "unit-summaries.json"),
 };
 
 function scratchCopy(): DataPaths {
@@ -49,6 +51,7 @@ function scratchCopy(): DataPaths {
     profile: join(dir, "profile.md"),
     history: join(dir, "lesson-history.md"),
     projectsDir: join(dir, "projects"),
+    unitSummaries: join(dir, "unit-summaries.json"),
   };
 }
 
@@ -392,6 +395,67 @@ test("end-to-end: apply a session patch, curriculum + history + profile all upda
   assert.deepEqual(parseHistory(hist).entries.map((e) => e.number), [4, 3, 2, 1]);
 
   assert.ok(readFileSync(paths.profile, "utf8").includes("end-to-end patch worked"));
+});
+
+// --- completedAt ------------------------------------------------------------
+// Machine-written from the lesson date whenever a unit's state crosses into (or
+// back out of) a completed state. There is no patch field for it, so these are
+// the only tests that pin the behaviour.
+
+/** Apply a patch that drives `ai-nn-foundations` to `state`, on the given paths. */
+function patchUnitState(paths: DataPaths, state: "core-complete" | "complete" | "in-progress", date: string) {
+  const p = structuredClone(goodPatch);
+  p.lesson.date = date;
+  p.curriculum!.unitUpdates = [{ id: "ai-nn-foundations", state }];
+  delete p.profile;
+  applySessionPatch(paths, p);
+  return loadCurriculum(paths.curriculum).lanes[0].units[0];
+}
+
+test("completedAt: stamped from the lesson date when a unit first completes", () => {
+  const paths = scratchCopy();
+  assert.equal(loadCurriculum(paths.curriculum).lanes[0].units[0].completedAt, null);
+  assert.equal(patchUnitState(paths, "core-complete", "2026-07-01").completedAt, "2026-07-01");
+});
+
+test("completedAt: core-complete → complete keeps the FIRST completion date", () => {
+  const paths = scratchCopy();
+  patchUnitState(paths, "core-complete", "2026-07-01");
+  const unit = patchUnitState(paths, "complete", "2026-08-09");
+  assert.equal(unit.state, "complete");
+  assert.equal(unit.completedAt, "2026-07-01", "a later state bump must not restamp");
+});
+
+test("completedAt: reopening a unit clears it, and re-completing re-stamps", () => {
+  const paths = scratchCopy();
+  patchUnitState(paths, "core-complete", "2026-07-01");
+  assert.equal(patchUnitState(paths, "in-progress", "2026-07-05").completedAt, null);
+  assert.equal(patchUnitState(paths, "core-complete", "2026-07-09").completedAt, "2026-07-09");
+});
+
+test("completedAt: a unitUpdate that doesn't touch state leaves the date alone", () => {
+  const paths = scratchCopy();
+  patchUnitState(paths, "core-complete", "2026-07-01");
+  const p = structuredClone(goodPatch);
+  p.lesson.date = "2026-07-11";
+  p.curriculum!.unitUpdates = [{ id: "ai-nn-foundations", notes: "just a note" }];
+  delete p.profile;
+  applySessionPatch(paths, p);
+  const unit = loadCurriculum(paths.curriculum).lanes[0].units[0];
+  assert.equal(unit.completedAt, "2026-07-01");
+  assert.equal(unit.notes, "just a note");
+});
+
+test("completedAt survives the YAML round-trip and passes validation", () => {
+  const paths = scratchCopy();
+  patchUnitState(paths, "core-complete", "2026-07-01");
+  const c = loadCurriculum(paths.curriculum);
+  assert.deepEqual(validateCurriculum(c), []);
+  assert.ok(readFileSync(paths.curriculum, "utf8").includes("completedAt: 2026-07-01"));
+
+  // A malformed date is a validation error, not a silent pass.
+  c.lanes[0].units[0].completedAt = "07/01/2026";
+  assert.ok(validateCurriculum(c).some((e) => e.includes("completedAt")));
 });
 
 test("project arm: checkPatch validates laneId and content", () => {

@@ -9,6 +9,7 @@ import { DEFAULT_SPACING } from "../core/spacing.js";
 import type { SpacingConfig } from "../core/types.js";
 import { DATA_PATHS, PATHS, ROOT, gitCommit, todayLocal } from "../scripts/lib.js";
 import { registerAssetRoutes } from "./assets.js";
+import { buildCurriculumView } from "./curriculum-view.js";
 import { composeFeedbackHandoff, messageSnippet, validateFeedbackInput } from "./feedback.js";
 import { buildLessonSystemPrompt, kickoffMessage } from "./prompt.js";
 import { defaultModel, readBuildId } from "./params.js";
@@ -73,6 +74,10 @@ app.get("/api/status", async () => buildStatus(SPACING));
 // Usage + curriculum progress + feedback trends — the in-app Stats screen
 // (also available as `npm run usage-report` on the CLI).
 app.get("/api/report", async () => buildReport());
+
+// The whole curriculum as a per-lane unit graph — the in-app Curriculum screen.
+// Read-only aggregation over the data files; spends no tokens.
+app.get("/api/curriculum", async () => buildCurriculumView());
 
 // Build-id check for the PWA's "update available" toast — read fresh each
 // request since dist/ can change under a running server after a rebuild.

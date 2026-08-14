@@ -47,6 +47,10 @@ lightly (if you want) — each clean recall pushes a topic's next quiz exponenti
 and related stale topics get bundled into a single bridging question.
 - **Session sizes** (tight / standard / deep) and per-lesson model choice, with
   a live switch if you hit your subscription's rate window.
+- **Curriculum viewer**: see a whole track at once as a flowchart of units laid
+  out from their prerequisites, each showing what it covers, how far in you are,
+  and when you finished it. Open a unit to read any of its lessons back — every
+  committed lesson keeps a full transcript.
 - **Stats screen**: token/cost trends, per-lane progress, feedback history.
 - **Wrap-up receipts**: every lesson ends with what was committed, what it cost,
   and what's queued next.

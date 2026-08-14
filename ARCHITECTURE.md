@@ -40,6 +40,7 @@ On disk, that's:
 
 ```
 data/        the state: profile.md · curriculum.yaml · lesson-history.md
+             (+ unit-summaries.json — derived, viewer-only, regenerable)
 core/        deterministic TS library — slicer, selector, validator, patcher
 scripts/     CLIs: start-lesson · commit-session · validate · export-lane
 server/      Fastify + Claude Agent SDK backend; serves the PWA
@@ -47,6 +48,21 @@ web/         the PWA (vanilla TS + Vite); web/src/demo/ is the static replay
 skills/      Claude Code skills + the teaching contract (how lessons are taught)
 tests/       node:test suite (npm test)
 ```
+
+### Reading, as its own path
+
+The loop above is how state *changes*. Reading it back is a separate, strictly
+read-only path with no model in it at all: `/api/status`, `/api/report` and
+`/api/curriculum` aggregate the same files and spend zero tokens.
+
+The curriculum viewer sits on that path. `core/layout.ts` turns a lane's unit
+`prerequisites` into rows for the flowchart; `server/lesson-index.ts` reconstructs
+every lesson ever taught by merging three records that accumulated over time
+(`usage.jsonl`, transcript headers, and `lesson-history.md` for the oldest
+lessons, which predate both). The one piece of generated prose — each unit's
+summary — is written ahead of time by `npm run unit-summaries` and cached in
+`data/unit-summaries.json` behind a structure hash, so serving a page never
+calls a model.
 
 Two invariants make the design hold:
 

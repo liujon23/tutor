@@ -2,6 +2,7 @@ import "./style.css";
 import { api } from "./api.js";
 import type { LessonModel, SessionSize, Status, StatusLane } from "./api.js";
 import { showStats } from "./stats.js";
+import { showCurriculum } from "./curriculum/screen.js";
 import { h, clear } from "./dom.js";
 import { showLesson } from "./lesson/screen.js";
 
@@ -59,6 +60,13 @@ export async function showSelect(): Promise<void> {
       { class: "app-header" },
       h("h1", {}, "Tutor"),
       h("span", { class: "date" }, status.today),
+      // Unlike Stats, this works in a demo build too — it reads a static
+      // curriculum snapshot rather than live usage history.
+      h(
+        "button",
+        { class: "stats-link", onclick: () => void showCurriculum(root, () => void showSelect()) },
+        "Curriculum"
+      ),
       // Stats reports on real usage/cost history — nothing to show in a static replay.
       __DEMO__
         ? null

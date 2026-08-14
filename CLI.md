@@ -39,6 +39,9 @@ npm run commit-session -- --patch .session/patch.json [--dry-run]
 npm run validate
 npm run usage-report [-- --json]
 npm run export-lane -- --lane sts [--out <dir>] [--md-only] [--clean]
+npm run unit-summaries [-- --check | --force]
+npm run backfill-completed-at [-- --dry-run]
+npm run demo:snapshot
 npm run echo-test
 ```
 
@@ -55,6 +58,19 @@ npm run echo-test
   state or progress, just the direction, notes, and curated links. `--clean`
   strips all authored prose down to a bare syllabus / reading list, safe to
   send to anyone.
+- **`unit-summaries`** writes the short "what this unit covers" blurbs the app's
+  curriculum viewer shows. The **only** script here that spends tokens, and the
+  only non-deterministic one — so it's explicit rather than automatic. It
+  regenerates just the units whose *structure* changed (renamed, topics
+  added/removed/reordered, or the lane's `direction` rewritten); ordinary lessons
+  never invalidate a summary. `--check` lists what's stale and spends nothing;
+  `--force` regenerates everything. Writes `data/unit-summaries.json` and commits.
+- **`backfill-completed-at`** a one-time migration for curricula that predate the
+  `completedAt` field: stamps each already-finished unit with the date of its
+  last lesson. Idempotent — it only fills blanks — so it's harmless to re-run.
+- **`demo:snapshot`** freezes one lane of the curriculum plus a single lesson
+  transcript into `web/public/demo/` for the public demo build (which has no
+  data repo to read). Commit what it writes.
 - **`echo-test`** verifies the Agent SDK and your token before the first app
   lesson.
 

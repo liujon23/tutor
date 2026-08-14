@@ -83,6 +83,33 @@ The app now shows an "update available" toast whenever the server is running a
 newer build than the one the PWA has cached — no more reopen-twice ritual to pick
 up a fix.
 
+### Curriculum viewer and transcripts
+
+**Curriculum** in the header opens a track as a whole. Pick a lane and its units
+lay out as a flowchart, arranged from their `prerequisites` — so a branching lane
+reads as a branching graph rather than a list. Solid arrows are prerequisites;
+dashed ones are `bridgeTopics`, the softer "leans on this" links, which can point
+either forward or back. Each block carries its state, when it was completed, how
+many core topics are comfortable, and a short summary of what the unit covers.
+Below ~640px the graph becomes one column and the arrows turn into "after: …"
+labels, since a DAG at phone width is unreadable.
+
+Tapping a block expands it in place: core topics with their state and when each
+was last touched, optional topics in a dimmer group, cross-lane connections, and
+every lesson taught in that unit. Tapping a lesson opens its **transcript**, fully
+rendered with math, code and the artwork the lesson embedded. A topic's
+last-touched lesson is a link too, which matters when a topic was last exercised
+as a recall warm-up inside *another* lane's lesson.
+
+Two things render as plain text rather than links, on purpose: lessons from before
+the transcript archive existed (they show "no transcript archived"), and a unit
+summary whose unit has since been restructured (marked "outdated" until you re-run
+`npm run unit-summaries`).
+
+This whole screen is read-only and spends no tokens. The summaries are the one
+generated ingredient, and they're written ahead of time by an explicit CLI — see
+`unit-summaries` in CLI.md.
+
 ### Per-message feedback
 
 Long-press (phone) or right-click (PC) any tutor message to rate it: strong/normal

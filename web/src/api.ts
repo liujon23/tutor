@@ -178,6 +178,61 @@ export interface Report {
   feedbackTrend: FeedbackTrend;
 }
 
+// --- Curriculum viewer -------------------------------------------------------
+// Mirrors server/curriculum-view.ts. Kept as a hand-written mirror (like Report
+// above) rather than a shared import — web/ compiles on its own tsconfig.
+
+export interface CurriculumTopic {
+  id: string;
+  name: string;
+  state: string;
+  lastTouchedDate: string | null;
+  lastLesson: number | null;
+  /** False when that lesson predates the transcript archive — render text, not a link. */
+  lastLessonHasTranscript: boolean;
+}
+
+export interface CurriculumUnitLesson {
+  lessonNumber: number;
+  date: string;
+  topicsLabel: string;
+  topicsFull: string;
+  hasTranscript: boolean;
+}
+
+export interface CurriculumUnit {
+  id: string;
+  name: string;
+  state: string;
+  completedAt: string | null;
+  prerequisites: string[];
+  summary: string | null;
+  summaryStale: boolean;
+  progress: { coreComfortable: number; coreTotal: number };
+  optionalRemaining: number;
+  lastLessonDate: string | null;
+  coreTopics: CurriculumTopic[];
+  optionalTopics: CurriculumTopic[];
+  bridgesInLane: { topicId: string; topicName: string; unitId: string; unitName: string }[];
+  bridgesCrossLane: { topicId: string; topicName: string; unitName: string; laneName: string }[];
+  lessons: CurriculumUnitLesson[];
+}
+
+export interface CurriculumLane {
+  id: string;
+  name: string;
+  weight: number;
+  direction: string;
+  currentUnitId: string | null;
+  layers: string[][];
+  units: CurriculumUnit[];
+}
+
+export interface CurriculumView {
+  today: string;
+  lanes: CurriculumLane[];
+}
+
 export interface TranscriptEntry {
   id?: string; // stable per-message handle (absent only on pre-feature sessions)
   role: "user" | "assistant";
@@ -260,6 +315,11 @@ export type LessonEvent =
   | { type: "error"; message: string }
   | { type: "closed" };
 
+/** lesson-007.md — mirrors transcriptRelPath() in server/transcript.ts. */
+export function transcriptName(lessonNumber: number): string {
+  return `lesson-${String(lessonNumber).padStart(3, "0")}.md`;
+}
+
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let msg = `${res.status}`;
@@ -280,6 +340,9 @@ export interface Api {
   status(): Promise<Status>;
   version(): Promise<VersionInfo>;
   report(): Promise<Report>;
+  curriculum(): Promise<CurriculumView>;
+  /** Raw markdown of an archived lesson transcript. */
+  transcript(lessonNumber: number): Promise<string>;
   createLesson(body: {
     laneId?: string;
     topicOverride?: string;
@@ -308,6 +371,23 @@ const liveApi: Api = {
   version: (): Promise<VersionInfo> => fetch("/api/version").then((r) => j<VersionInfo>(r)),
 
   report: (): Promise<Report> => fetch("/api/report").then((r) => j<Report>(r)),
+
+  curriculum: (): Promise<CurriculumView> =>
+    fetch("/api/curriculum").then((r) => j<CurriculumView>(r)),
+
+  // Archived transcripts are plain files on the static /transcripts/ route the
+  // server already exposes — no API endpoint, so this reads text, not JSON.
+  transcript: async (lessonNumber: number): Promise<string> => {
+    const res = await fetch(`/transcripts/${transcriptName(lessonNumber)}`);
+    if (!res.ok) {
+      throw new Error(
+        res.status === 404
+          ? `No archived transcript for lesson ${lessonNumber}.`
+          : `Couldn't load the transcript (${res.status}).`
+      );
+    }
+    return res.text();
+  },
 
   createLesson: (body: {
     laneId?: string;

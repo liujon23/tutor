@@ -20,6 +20,7 @@ export function loadCurriculum(path: string): Curriculum {
       unit.bridgeTopics ??= [];
       unit.currentTopic ??= null;
       unit.notes ??= "";
+      unit.completedAt ??= null;
       for (const t of [...unit.coreTopics, ...unit.optionalTopics]) {
         t.prerequisites ??= [];
         t.buildsToward ??= [];

@@ -66,6 +66,14 @@ export interface Unit {
   notes: string;
   coreTopics: Topic[];
   optionalTopics: Topic[];
+  /**
+   * YYYY-MM-DD the unit FIRST reached core-complete/complete. Machine-written by
+   * the patcher from the lesson date — like a topic's `lastTouched`, there is no
+   * patch surface for it, so the model can never set it. Cleared if the unit is
+   * ever reopened, so it re-stamps on the next completion. Normalized to null on
+   * load.
+   */
+  completedAt?: string | null;
 }
 
 export interface NextUp {
@@ -230,4 +238,5 @@ export interface DataPaths {
   profile: string;
   history: string;
   projectsDir: string; // dir of per-lane project docs: <projectsDir>/<laneId>.md
+  unitSummaries: string; // generated per-unit blurbs (see core/unit-summaries.ts)
 }
