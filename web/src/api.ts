@@ -70,8 +70,8 @@ export interface Status {
   today: string;
   spacing: SpacingConfig;
   lanes: StatusLane[];
-  /** Recall chips per lane — the client shows only the selected lane's set. Lanes
-   *  with nothing due are absent. */
+  /** Recall candidates due per lane, same seeded draw the session packet uses.
+   *  Lanes with nothing due are absent. */
   recallCandidatesByLane: Record<string, RecallCandidate[]>;
   openSettledItems: string[];
   topics: TopicRow[];
@@ -347,7 +347,6 @@ export interface Api {
     laneId?: string;
     topicOverride?: string;
     discuss?: boolean;
-    recallRequested?: string[];
     size: SessionSize;
     model: LessonModel;
   }): Promise<{ sessionId: string; title: string }>;
@@ -393,7 +392,6 @@ const liveApi: Api = {
     laneId?: string;
     topicOverride?: string;
     discuss?: boolean;
-    recallRequested?: string[];
     size: SessionSize;
     model: LessonModel;
   }): Promise<{ sessionId: string; title: string }> =>

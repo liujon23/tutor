@@ -157,7 +157,6 @@ interface CreateLessonBody {
   laneId?: string;
   topicOverride?: string;
   discuss?: boolean;
-  recallRequested?: string[];
   size?: "tight" | "standard" | "deep";
   model?: "opus" | "sonnet";
   historyN?: number;
@@ -170,7 +169,6 @@ app.post<{ Body: CreateLessonBody }>("/api/lesson", async (req, reply) => {
     laneId: b.laneId,
     topicOverride: b.topicOverride,
     discuss: b.discuss ?? false,
-    recallRequested: b.recallRequested,
     size,
     model: defaultModel(size, b.model),
     historyN: b.historyN ?? 3,

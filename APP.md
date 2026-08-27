@@ -63,12 +63,13 @@ Open the app → the select screen shows each lane's queued topic and carried pl
 (zero tokens spent until you commit). Pick lane or a specific topic, size
 (tight/standard/deep), model (Opus default; Sonnet toggle — picking "tight"
 preselects Sonnet, still freely switchable) — or "Discuss it instead" to move
-selection into the chat. Recall warm-up chips are paired to the selected track and
-scheduled by mastery: a comfortable topic comes due 14 days after it was last touched
-(`TUTOR_STALE_DAYS`), and each cleanly-recalled warm-up multiplies that interval by
-2.5 (`TUTOR_RECALL_GROWTH`, capped at a year) — so a topic you keep nailing goes
-quiet for months. Past its interval a topic is *sampled* (seeded per day, so refresh
-doesn't reshuffle) rather than offered outright, which adds variety near the due date.
+selection into the chat. The session packet carries recall warm-up candidates paired
+to that track, scheduled by mastery: a comfortable topic comes due 14 days after it was
+last touched (`TUTOR_STALE_DAYS`), and each cleanly-recalled warm-up multiplies that
+interval by 2.5 (`TUTOR_RECALL_GROWTH`, capped at a year) — so a topic you keep nailing
+goes quiet for months. Past its interval a topic is *sampled* (seeded per day, so a
+refresh doesn't reshuffle) rather than offered outright, which adds variety near the due
+date.
 Note the sampling has little effect once a lane has a large overdue backlog: candidates
 are ranked by how overdue they are and cut to three, and everything deep in a backlog
 draws a near-certain probability, so the same most-overdue few keep surfacing until
