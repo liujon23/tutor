@@ -74,9 +74,9 @@ export function buildStatus(spacing: SpacingConfig) {
       lastActivityAt: s.lastActivityAt,
     }));
 
-  // Recall chips are lane-paired: the client shows only the selected lane's set,
-  // computed per lane here so a lane switch is a lookup, not a refetch. The seeded
-  // draw keeps each day's sets stable across renders and consistent with the packet.
+  // What's due per lane, computed for every lane here so a consumer picking a
+  // different track is a lookup rather than a refetch. The seeded draw keeps each
+  // day's sets stable across renders and consistent with the packet.
   const recallCandidatesByLane: Record<string, RecallCandidate[]> = {};
   for (const lane of c.lanes) {
     const cands = recallCandidates(c, { today, laneId: lane.id, spacing });

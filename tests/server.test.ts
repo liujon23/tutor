@@ -351,18 +351,16 @@ test("renderTranscript includes a commit-timing block when given one", () => {
   assert.ok(md.includes("through archive 42.1s"), "subtotal shown");
 });
 
-test("kickoff message carries parameters and recall picks", () => {
+test("kickoff message carries parameters", () => {
   const k = kickoffMessage({
     size: "deep",
     model: "opus",
     discuss: true,
-    recallRequested: ["ai-nn-foundations-backprop"],
     historyN: 3,
     spacing: DEFAULT_SPACING,
   });
   assert.ok(k.includes("size=deep"));
   assert.ok(k.includes("discuss-selection"));
-  assert.ok(k.includes("ai-nn-foundations-backprop"));
 });
 
 test("asset proxy helpers: url hashing, extension mapping, host blocking", () => {

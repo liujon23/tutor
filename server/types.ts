@@ -8,7 +8,6 @@ export interface LessonParams {
   laneId?: string;
   topicOverride?: string; // topic id from the picker — the learner's explicit override
   discuss?: boolean; // selection moved into the chat
-  recallRequested?: string[]; // recall-candidate topic ids the learner tapped on the select screen
   size: SessionSize;
   model: LessonModel;
   historyN: number;

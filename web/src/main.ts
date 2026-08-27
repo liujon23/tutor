@@ -50,7 +50,6 @@ export async function showSelect(): Promise<void> {
   let size: SessionSize = "standard";
   let model: LessonModel = "opus";
   let modelTouched = false; // true once the user explicitly taps a model button
-  const recallPicked = new Set<string>();
 
   const screen = h("div", { class: "screen select" });
 
@@ -141,7 +140,6 @@ export async function showSelect(): Promise<void> {
     for (const [id, card] of laneCards) {
       card.classList.toggle("selected", id === selectedLane && !selectedTopic);
     }
-    renderRecallChips();
     refreshStart();
   };
 
@@ -261,47 +259,6 @@ export async function showSelect(): Promise<void> {
     h("section", { class: "card override" }, overrideToggle, overrideOptions, allLanesPanel, topicPanel)
   );
 
-  // ---- Recall warm-ups (optional) ----------------------------------------
-  // Lane-paired: only the effective lane's candidates are offered, and switching
-  // tracks swaps the chip set (re-rendered from refreshSelection). Picks are
-  // cleared on a lane change so an old lane's topic can't ride into a lesson
-  // whose packet no longer lists it.
-  const recallSection = h("section", { class: "card recall hidden" });
-  let chipsLane: string | undefined;
-  const renderRecallChips = () => {
-    const laneId = selectedTopic
-      ? status.topics.find((t) => t.id === selectedTopic)?.laneId
-      : selectedLane;
-    if (laneId !== chipsLane) {
-      chipsLane = laneId;
-      recallPicked.clear();
-    }
-    const cands = (laneId && status.recallCandidatesByLane[laneId]) || [];
-    recallSection.classList.toggle("hidden", cands.length === 0);
-    clear(recallSection);
-    if (cands.length === 0) return;
-    recallSection.append(h("h2", {}, "Recall warm-ups (tap to include)"));
-    const row = h("div", { class: "chip-row" });
-    for (const r of cands) {
-      const chip = h(
-        "button",
-        {
-          class: `chip ${recallPicked.has(r.topicId) ? "on" : ""}`,
-          title: `interval ${Math.round(r.stabilityDays)}d · ${r.overdueDays}d overdue`,
-          onclick: () => {
-            if (recallPicked.has(r.topicId)) recallPicked.delete(r.topicId);
-            else recallPicked.add(r.topicId);
-            chip.classList.toggle("on", recallPicked.has(r.topicId));
-          },
-        },
-        `${r.name} · ${r.daysStale}d`
-      );
-      row.append(chip);
-    }
-    recallSection.append(row);
-  };
-  screen.append(recallSection);
-
   // ---- Session size + model ----------------------------------------------
   // modelRow is built first so sizeRow's handler can drive its "on" state:
   // picking "tight" preselects Sonnet (and standard/deep preselect Opus)
@@ -371,7 +328,6 @@ export async function showSelect(): Promise<void> {
         laneId: selectedTopic ? undefined : selectedLane,
         topicOverride: selectedTopic,
         discuss,
-        recallRequested: recallPicked.size ? [...recallPicked] : undefined,
         size,
         model,
       });

@@ -230,13 +230,10 @@ export function buildLessonSystemPrompt(params: LessonParams): {
 }
 
 export function kickoffMessage(params: LessonParams): string {
-  const recall = params.recallRequested?.length
-    ? ` The learner tapped these recall warm-up candidates on the selection screen — include them: ${params.recallRequested.join(", ")}.`
-    : "";
   return (
     `[Session start — the learner opened the app and is ready. Parameters: ` +
     `size=${params.size}, model=${params.model}` +
     (params.discuss ? ", mode=discuss-selection" : "") +
-    `.${recall} Open the lesson per your instructions.]`
+    `. Open the lesson per your instructions.]`
   );
 }
