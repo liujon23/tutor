@@ -13,7 +13,12 @@ import { join } from "node:path";
 import { buildReport } from "../server/report.js";
 import { buildStatus, computeAttention } from "../server/status.js";
 import { defaultModel, readBuildId } from "../server/params.js";
-import { buildLessonSystemPrompt, kickoffMessage } from "../server/prompt.js";
+import {
+  buildLessonSystemPrompt,
+  buildRecallSystemPrompt,
+  kickoffMessage,
+  teachingContractSection,
+} from "../server/prompt.js";
 import { renderTranscript, rewriteArchivedImages } from "../server/transcript.js";
 import { assetHash, extForContentType, inboundAssetFile, isBlockedHost } from "../server/assets.js";
 import { buildUserContent } from "../server/runner.js";
@@ -41,7 +46,14 @@ import {
   validateFeedbackInput,
 } from "../server/feedback.js";
 import { appendTranscript, deleteSession } from "../server/store.js";
-import { createCommitSessionTool } from "../server/tutor-tool.js";
+import {
+  COMMIT_TOOL_NAME,
+  RECALL_TOOL_NAME,
+  createCommitSessionTool,
+  createRecordRecallTool,
+  tutorToolsFor,
+  writeToolFor,
+} from "../server/tutor-tool.js";
 import type { FeedbackLogEntry, StoredSession, UsageRecord } from "../server/types.js";
 import type { SessionPatch } from "../core/types.js";
 import { DEFAULT_SPACING } from "../core/spacing.js";
@@ -288,6 +300,187 @@ test("commit_session's ALREADY-COMMITTED guard blocks a retry before touching da
   if (block.type !== "text") throw new Error("expected a text content block");
   assert.match(block.text, /ALREADY COMMITTED as Lesson 5/);
   assert.match(block.text, /do not commit again/);
+});
+
+// --- Quick recall mode -------------------------------------------------------
+
+/** A real topic id from the configured curriculum — structural, so this holds on
+ *  the starter courses and on a long-running personal curriculum alike. */
+function someTopicId(): string {
+  const s = buildStatus(DEFAULT_SPACING);
+  const t = s.topics[0];
+  assert.ok(t, "curriculum has topics");
+  return t.id;
+}
+
+test("the recall prompt carries the shared rubric and none of the lesson machinery", () => {
+  const topicId = someTopicId();
+  const { systemPrompt, title } = buildRecallSystemPrompt({
+    mode: "recall",
+    recallTopicIds: [topicId],
+    size: "tight",
+    model: "sonnet",
+    historyN: 3,
+    spacing: DEFAULT_SPACING,
+  });
+
+  assert.ok(systemPrompt.includes("## Recall grading"), "the shared grading rubric");
+  assert.ok(systemPrompt.includes("record_recall"), "names its write tool");
+  assert.ok(systemPrompt.includes(topicId), "names the drawn topic");
+  assert.match(title, /^Recall: /);
+
+  // The negative half is the real assertion: it proves the lightweight prompt
+  // didn't quietly re-absorb STATIC_PROMPT, and that the contract split kept
+  // in-lesson framing out of a session that has no lesson around it.
+  for (const absent of [
+    "commit_session",
+    "proposedConfirmedPatterns",
+    "SESSION PACKET",
+    "## Synthesis capstone",
+    "before the main topic",
+    "not a quiz block",
+  ]) {
+    assert.ok(!systemPrompt.includes(absent), `recall prompt must not contain '${absent}'`);
+  }
+});
+
+test("the lesson prompt still carries both recall sections after the split", () => {
+  const { systemPrompt } = buildLessonSystemPrompt({
+    laneId: "ai",
+    size: "tight",
+    model: "opus",
+    historyN: 3,
+    spacing: DEFAULT_SPACING,
+  });
+  // The split moved guidance between sections; a lesson must still get all of it.
+  assert.ok(systemPrompt.includes("## Recall warm-up"), "in-lesson placement guidance");
+  assert.ok(systemPrompt.includes("## Recall grading"), "the grading rubric");
+  assert.ok(systemPrompt.includes("before the main topic"), "warm-up placement survived");
+  assert.ok(systemPrompt.includes("never generously"), "grading rubric survived");
+});
+
+test("teachingContractSection slices one section and fails loudly on a rename", () => {
+  const section = teachingContractSection("## Recall grading");
+  assert.ok(section.startsWith("## Recall grading"));
+  assert.ok(section.includes("clean"), "carries the rubric");
+  assert.ok(!section.includes("## Readiness check"), "stops at the next heading");
+  assert.throws(
+    () => teachingContractSection("## No Such Section"),
+    /has no section/,
+    "a renamed heading must fail at startup, not ship a prompt with a hole"
+  );
+});
+
+test("kickoff message for a recall check asks for the question, not a lesson", () => {
+  const k = kickoffMessage({
+    mode: "recall",
+    recallTopicIds: ["x"],
+    size: "tight",
+    model: "sonnet",
+    historyN: 3,
+    spacing: DEFAULT_SPACING,
+  });
+  assert.match(k, /Quick recall/);
+  assert.ok(!k.includes("discuss-selection"));
+  assert.ok(!k.includes("size="), "no lesson parameters to announce");
+});
+
+test("tool gating: each mode gets exactly one write tool, and never the other", () => {
+  const ctx = {
+    session: () => fakeSession(),
+    onCommitted: () => {},
+    composeStartedAt: () => Date.now(),
+    onRecallRecorded: () => {},
+  };
+  assert.deepEqual(
+    tutorToolsFor(ctx, "recall").map((t) => t.name),
+    ["record_recall"],
+    "a recall session cannot even see commit_session"
+  );
+  assert.deepEqual(
+    tutorToolsFor(ctx, "lesson").map((t) => t.name),
+    ["commit_session"]
+  );
+  assert.equal(writeToolFor("recall"), RECALL_TOOL_NAME);
+  assert.equal(writeToolFor("lesson"), COMMIT_TOOL_NAME);
+});
+
+test("record_recall's ALREADY-RECORDED guard blocks a retry before touching data", async () => {
+  const recorded = fakeSession({
+    params: {
+      size: "tight",
+      model: "opus",
+      historyN: 3,
+      spacing: DEFAULT_SPACING,
+      mode: "recall",
+      recallTopicIds: ["ai-nn-foundations-backprop"],
+    },
+    recall: {
+      graded: [
+        {
+          topicId: "ai-nn-foundations-backprop",
+          name: "Backpropagation Refresher",
+          result: "clean",
+          streak: 2,
+          nextInDays: 88,
+        },
+      ],
+      summary: ["curriculum.yaml written"],
+      gitMessage: "git: committed",
+      recordedAt: "2026-07-03T09:00:00.000Z",
+    },
+  });
+  let calls = 0;
+  const recallTool = createRecordRecallTool({
+    session: () => recorded,
+    onRecallRecorded: () => {
+      calls++;
+    },
+  });
+
+  const result = await recallTool.handler(
+    { grades: [{ topicId: "ai-nn-foundations-backprop", result: "clean", rationale: "nailed it" }] },
+    {}
+  );
+  assert.equal(calls, 0, "a retry must never fire onRecallRecorded (no second write)");
+  assert.equal(result.isError, true);
+  const block = result.content[0];
+  if (block.type !== "text") throw new Error("expected a text content block");
+  assert.match(block.text, /ALREADY RECORDED/);
+  assert.match(block.text, /do not call record_recall again/i);
+});
+
+test("record_recall refuses a topic this check didn't draw", async () => {
+  const session = fakeSession({
+    params: {
+      size: "tight",
+      model: "opus",
+      historyN: 3,
+      spacing: DEFAULT_SPACING,
+      mode: "recall",
+      recallTopicIds: ["ai-nn-foundations-backprop"],
+    },
+  });
+  let calls = 0;
+  const recallTool = createRecordRecallTool({
+    session: () => session,
+    onRecallRecorded: () => {
+      calls++;
+    },
+  });
+
+  // Off-list topics are rejected before any DATA_PATHS access, which is what
+  // keeps this test hermetic — it never writes to data/ or makes a git commit.
+  const result = await recallTool.handler(
+    { grades: [{ topicId: "ai-nn-foundations-loss", result: "miss", rationale: "gone" }] },
+    {}
+  );
+  assert.equal(calls, 0);
+  assert.equal(result.isError, true);
+  const block = result.content[0];
+  if (block.type !== "text") throw new Error("expected a text content block");
+  assert.match(block.text, /aren't part of this check/);
+  assert.match(block.text, /ai-nn-foundations-backprop/, "names what it may grade");
 });
 
 test("renderTranscript archives the human-readable conversation", () => {

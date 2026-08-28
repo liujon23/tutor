@@ -9,6 +9,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildSessionPacket } from "../core/slicer.js";
 import { topicById, loadCurriculum } from "../core/curriculum.js";
+import { getRecall, stabilityDays } from "../core/spacing.js";
+import { SECTIONS } from "../core/profile.js";
 import { DATA_PATHS, ROOT, todayLocal } from "../scripts/lib.js";
 import type { LessonParams } from "./types.js";
 
@@ -30,6 +32,27 @@ function loadTeachingContract(): string {
   return raw.slice(firstSection + 1).trim();
 }
 const TEACHING_CONTRACT = loadTeachingContract();
+
+/**
+ * One `## ` section of the shared contract, for a prompt that wants part of it
+ * rather than the whole thing. Throws on a missing heading — same loud-failure
+ * posture as loadTeachingContract(), so renaming a section in the contract
+ * fails at startup instead of silently shipping a prompt with a hole in it.
+ */
+export function teachingContractSection(heading: string): string {
+  // Match the heading only as its own line. Sections cross-reference each other
+  // by name in prose (`## Recall warm-up` points at `## Recall grading`), and a
+  // bare indexOf would happily slice from one of those mentions instead — which
+  // silently ships the wrong section.
+  const start = TEACHING_CONTRACT.startsWith(`${heading}\n`)
+    ? 0
+    : TEACHING_CONTRACT.indexOf(`\n${heading}\n`) + 1;
+  if (start === 0 && !TEACHING_CONTRACT.startsWith(`${heading}\n`)) {
+    throw new Error(`teaching contract has no section '${heading}' (${TEACHING_CONTRACT_PATH})`);
+  }
+  const next = TEACHING_CONTRACT.indexOf("\n## ", start + 1);
+  return (next === -1 ? TEACHING_CONTRACT.slice(start) : TEACHING_CONTRACT.slice(start, next)).trim();
+}
 
 const APP_INTRO = `You are the learner's personal tutor, running one lesson end to end inside their
 tutoring app. The learner (their name is in the packet's profile — use it) is chatting
@@ -176,6 +199,146 @@ wrap-up panel.`;
 
 const STATIC_PROMPT = `${APP_INTRO}\n\n${TEACHING_CONTRACT}\n\n${APP_MACHINERY}`;
 
+// --- Quick recall: a standalone one-question check ---------------------------
+// Deliberately NOT built from STATIC_PROMPT. A recall check has no lesson, no
+// wrap-up, no ratings and no commit_session, so the lesson machinery would be
+// pure noise at best and wrong instructions at worst. It takes the contract's
+// `## Recall grading` section — written to hold with no lesson around it — and
+// nothing else from the contract.
+
+const RECALL_INTRO = `You are the learner's personal tutor, running a single spaced-recall check inside
+their tutoring app. The learner (their name is in the packet below — use it) is chatting
+with you from a phone, tablet, or PC; your replies render as markdown with LaTeX support
+($...$ inline, $$...$$ display), syntax-highlighted code fences, embedded images
+(![alt](url)), and mermaid diagrams (fenced mermaid blocks).
+
+You have no file access and no way to touch the learner's data except the record_recall
+tool described below. You may use web search and fetch when answering a follow-up.
+
+The grading rubric that follows is shared with the app's full lessons and with the CLI
+tutor — it is the authority on how to score a recall. How this particular session runs
+comes after it.
+
+=== RECALL GRADING (shared contract) ===`;
+
+const RECALL_MACHINERY = `=== QUICK RECALL — HOW THIS SESSION RUNS ===
+
+This is a one-question spaced-recall check, not a lesson. It is short by design —
+typically four or five messages start to finish. There is no lesson number, no
+curriculum bookkeeping beyond the single grade, no wrap-up checklist, no ratings, and
+no transcript is kept. Only the grade is written.
+
+Run it in this order.
+
+1. OPEN WITH THE QUESTION. One or two sentences of framing at most ("Quick recall, no
+   notes —"), then the question. Do not preamble, do not remind the learner what the
+   topic was, and do not re-teach anything first: cold retrieval is the entire
+   measurement, and showing the answer first destroys it. If the packet lists more than
+   one topic they are bundled — ask ONE question that cannot be answered without all of
+   them.
+
+2. HEAR THE ANSWER, THEN RESPOND AS A TEACHER WOULD. Say plainly how it went. If it was
+   solid, say so and say what made it solid. If something was wrong or missing, name it
+   and give the correct account — this is the one place you do teach, and it should be
+   proportionate: a sentence for a small slip, a short paragraph for a real gap. If
+   there is an obvious retry to be had, hand back one nudge before you supply the
+   correction. Do not run a multi-round tutoring loop here.
+
+3. GRADE, THEN CALL record_recall — EXACTLY ONCE. One entry per topic in the packet; a
+   bundle gets a grade per topic, not one shared grade. Each entry carries a
+   one-sentence \`rationale\` quoting what earned the grade — the conversation is not
+   kept, so that line is the only record of why. Call the tool right after your feedback
+   message; do not wait for the follow-up conversation below. If the tool returns an
+   error, fix the arguments and call it again.
+
+4. OFFER FOLLOW-UPS, THEN END. Ask whether any of this raised a question. Answer what
+   they ask, for as many turns as they want; use web search when it would let you source
+   an answer properly rather than reciting from memory. When they say no, or the thread
+   is done, close in one line — what you recorded and roughly when the topic comes back
+   around — and stop. Do not offer to keep teaching, do not propose turning this into a
+   lesson, and do not ask for a rating.
+
+If the learner wants a real lesson on this, tell them to start one from the app's select
+screen. You cannot turn this session into one, and there is no tool here that would
+record it.`;
+
+const RECALL_STATIC_PROMPT = `${RECALL_INTRO}\n\n${teachingContractSection("## Recall grading")}\n\n${RECALL_MACHINERY}`;
+
+/**
+ * The packet for a recall check: the drawn topics and what's known about them.
+ * Much smaller than a session packet — no lane slice, no recommendation, no
+ * lesson history, no project doc. `notes` is the load-bearing part: it is what
+ * lets the tutor judge an answer against what was actually taught rather than
+ * against the topic's name.
+ */
+function buildRecallPacket(topicIds: string[], today: string): { packet: string; title: string } {
+  const c = loadCurriculum(DATA_PATHS.curriculum);
+  const hits = topicIds.map((id) => {
+    const hit = topicById(c, id);
+    if (!hit) throw new Error(`recall topic '${id}' not found`);
+    return hit;
+  });
+
+  const lines = [`=== RECALL PACKET — ${today} ===`, ``, `## What you're checking (the server drew these — do not substitute)`];
+  for (const { lane, unit, topic } of hits) {
+    const r = getRecall(topic);
+    const taught = topic.lastTouched
+      ? `last taught ${topic.lastTouched.date} (Lesson ${topic.lastTouched.lesson})`
+      : `never taught in a numbered lesson`;
+    const history = r.reviews
+      ? `${r.streak} clean in a row over ${r.reviews} attempt(s)` +
+        (r.last ? `, last ${r.last.result} on ${r.last.date}` : "")
+      : `never recall-checked`;
+    lines.push(
+      `- ${topic.name} (${topic.id})`,
+      `  lane ${lane.id} · unit ${unit.id} (${unit.name})`,
+      `  ${taught} · ${history} · current interval ${Math.round(stabilityDays(r.streak))}d`,
+      `  what was taught: ${topic.notes || "(no notes recorded)"}`
+    );
+  }
+  if (hits.length > 1) {
+    lines.push(
+      ``,
+      `**Bundle:** these are linked in the curriculum graph — ask ONE question that ` +
+        `cannot be answered without all of them, and grade each topic separately.`
+    );
+  }
+
+  const patterns = readProfileSection(DATA_PATHS.profile, SECTIONS.confirmedPatterns);
+  if (patterns) {
+    lines.push(``, `## How this learner likes to be taught (confirmed patterns, verbatim)`, ``, patterns);
+  }
+
+  const title = hits.length === 1 ? `Recall: ${hits[0].topic.name}` : `Recall: ${hits.length} topics`;
+  return { packet: lines.join("\n"), title };
+}
+
+/**
+ * One `## ` section of the profile, verbatim — "" when it's absent or carries no
+ * actual entries. The confirmed-patterns section ships empty-by-design with an
+ * explanatory HTML comment in it; that comment is for whoever edits the file,
+ * not for the tutor, so a section with no bullets is treated as nothing to say.
+ */
+function readProfileSection(path: string, heading: string): string {
+  const raw = readFileSync(path, "utf8");
+  const start = raw.indexOf(heading);
+  if (start === -1) return "";
+  const next = raw.indexOf("\n## ", start + 1);
+  const section = (next === -1 ? raw.slice(start) : raw.slice(start, next)).trim();
+  const hasEntries = section.split("\n").some((l) => l.trimStart().startsWith("- "));
+  return hasEntries ? section : "";
+}
+
+export function buildRecallSystemPrompt(params: LessonParams): {
+  systemPrompt: string;
+  title: string;
+} {
+  const ids = params.recallTopicIds ?? [];
+  if (!ids.length) throw new Error("recall session has no topics");
+  const { packet, title } = buildRecallPacket(ids, todayLocal());
+  return { systemPrompt: `${RECALL_STATIC_PROMPT}\n\n${packet}`, title };
+}
+
 export function buildLessonSystemPrompt(params: LessonParams): {
   systemPrompt: string;
   title: string;
@@ -230,6 +393,12 @@ export function buildLessonSystemPrompt(params: LessonParams): {
 }
 
 export function kickoffMessage(params: LessonParams): string {
+  if (params.mode === "recall") {
+    return (
+      `[Quick recall — the learner tapped the recall button and is ready. ` +
+      `Ask your one question now, per your instructions.]`
+    );
+  }
   return (
     `[Session start — the learner opened the app and is ready. Parameters: ` +
     `size=${params.size}, model=${params.model}` +

@@ -31,6 +31,7 @@ export interface TutorPaths extends DataPaths {
   transcriptsDir: string;
   usageLedger: string;
   feedbackLedger: string;
+  recallLedger: string;
   appDir: string;
   sessionsDir: string;
   assetsDir: string;
@@ -52,6 +53,7 @@ export function resolveTutorPaths(codeRoot: string, dataRootRaw?: string): Tutor
     transcriptsDir: join(dataRoot, "transcripts"),
     usageLedger: join(dataRoot, "transcripts", "usage.jsonl"),
     feedbackLedger: join(dataRoot, "transcripts", "feedback.jsonl"),
+    recallLedger: join(dataRoot, "transcripts", "recall.jsonl"),
     appDir,
     sessionsDir: join(appDir, "sessions"),
     assetsDir: join(appDir, "assets"),

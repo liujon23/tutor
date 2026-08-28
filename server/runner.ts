@@ -7,10 +7,18 @@ import { query, type Options, type Query, type SDKMessage, type SDKUserMessage, 
 import { checkFetchUrl, urlFromWebFetchInput } from "../core/url-guard.js";
 import { ROOT } from "../scripts/lib.js";
 import { saveInboundImage } from "./assets.js";
-import { createTutorServer, COMMIT_TOOL_NAME } from "./tutor-tool.js";
+import { createTutorServer, writeToolFor, COMMIT_TOOL_NAME, RECALL_TOOL_NAME } from "./tutor-tool.js";
 import { appendTranscript, listSessions, loadSession, saveSession, touchSession } from "./store.js";
 import { costDelta, usageFromResult } from "./usage.js";
-import type { CommitResult, InboundImage, LessonEvent, StoredSession, TranscriptEntry } from "./types.js";
+import type {
+  CommitResult,
+  InboundImage,
+  LessonEvent,
+  RecallRecord,
+  SessionMode,
+  StoredSession,
+  TranscriptEntry,
+} from "./types.js";
 
 /**
  * SDK user-turn content: image blocks first, then the text. This is the
@@ -78,11 +86,19 @@ export class LessonRunner {
     private session: StoredSession,
     private emit: (ev: LessonEvent) => void
   ) {
-    const tutorServer = createTutorServer({
-      session: () => this.session,
-      onCommitted: (commit) => this.onCommitted(commit),
-      composeStartedAt: () => this.lastUserTurnAt,
-    });
+    // Recall sessions get a different write tool, gated at registration so the
+    // wrong one is not merely disallowed but absent from the server entirely.
+    const mode: SessionMode = session.params.mode === "recall" ? "recall" : "lesson";
+    const tutorServer = createTutorServer(
+      {
+        session: () => this.session,
+        onCommitted: (commit) => this.onCommitted(commit),
+        composeStartedAt: () => this.lastUserTurnAt,
+        onRecallRecorded: (recall) => this.onRecallRecorded(recall),
+      },
+      mode
+    );
+    const writeTool = writeToolFor(mode);
     // Web tools default ON (kill switch: TUTOR_WEB_TOOLS=0) — sourcing and
     // link verification shouldn't depend on an opt-in flag the learner forgets.
     const webTools = process.env.TUTOR_WEB_TOOLS !== "0";
@@ -95,9 +111,10 @@ export class LessonRunner {
       // commit_session plus web search/fetch for sourcing.
       tools: webTools ? ["WebSearch", "WebFetch"] : [],
       mcpServers: { tutor: tutorServer },
-      allowedTools: webTools
-        ? [COMMIT_TOOL_NAME, "WebSearch", "WebFetch"]
-        : [COMMIT_TOOL_NAME],
+      allowedTools: webTools ? [writeTool, "WebSearch", "WebFetch"] : [writeTool],
+      // Belt-and-braces over the registration gate: a resumed SDK session could
+      // otherwise still have the other mode's tool in its cached context.
+      disallowedTools: [mode === "recall" ? COMMIT_TOOL_NAME : RECALL_TOOL_NAME],
       permissionMode: "dontAsk",
       includePartialMessages: true,
       resume: session.sdkSessionId ?? undefined,
@@ -214,6 +231,18 @@ export class LessonRunner {
         this.wake = resolve;
       });
     }
+  }
+
+  /**
+   * A recall check finished writing. Unlike a commit this does NOT flip status:
+   * a check is not a lesson, so the session stays "active" with commit null and
+   * never shows up under "Needs your attention".
+   */
+  private onRecallRecorded(recall: RecallRecord): void {
+    this.session.recall = recall;
+    this.clearError();
+    touchSession(this.session);
+    this.emit({ type: "recall_recorded", recall });
   }
 
   private onCommitted(commit: CommitResult): void {

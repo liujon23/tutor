@@ -18,7 +18,9 @@ import {
   tailnetHostname,
 } from "./exposure.js";
 import { composeFeedbackHandoff, messageSnippet, validateFeedbackInput } from "./feedback.js";
-import { buildLessonSystemPrompt, kickoffMessage } from "./prompt.js";
+import { buildLessonSystemPrompt, buildRecallSystemPrompt, kickoffMessage } from "./prompt.js";
+import { pickRecallBundle } from "../core/selector.js";
+import { loadCurriculum } from "../core/curriculum.js";
 import { defaultModel, readBuildId } from "./params.js";
 import { buildReport } from "./report.js";
 import { LessonManager } from "./runner.js";
@@ -32,6 +34,7 @@ import type {
   LessonParams,
   MessageFeedback,
   RatingLevel,
+  SessionMode,
   StoredSession,
 } from "./types.js";
 
@@ -157,6 +160,7 @@ interface CreateLessonBody {
   laneId?: string;
   topicOverride?: string;
   discuss?: boolean;
+  mode?: "lesson" | "recall";
   size?: "tight" | "standard" | "deep";
   model?: "opus" | "sonnet";
   historyN?: number;
@@ -165,10 +169,13 @@ interface CreateLessonBody {
 app.post<{ Body: CreateLessonBody }>("/api/lesson", async (req, reply) => {
   const b = req.body ?? {};
   const size = b.size ?? "standard";
+  // Narrow explicitly — never let a request body land straight in a union.
+  const mode: SessionMode = b.mode === "recall" ? "recall" : "lesson";
   const params: LessonParams = {
     laneId: b.laneId,
     topicOverride: b.topicOverride,
     discuss: b.discuss ?? false,
+    mode,
     size,
     model: defaultModel(size, b.model),
     historyN: b.historyN ?? 3,
@@ -178,9 +185,22 @@ app.post<{ Body: CreateLessonBody }>("/api/lesson", async (req, reply) => {
     return reply.code(400).send({ error: `lane '${params.laneId}' not found` });
   }
 
+  if (mode === "recall") {
+    // The server draws the topics — a recall check has no selection UI. Frozen
+    // into params so the tool's allow-list survives a restart and SDK resume.
+    const bundle = pickRecallBundle(loadCurriculum(DATA_PATHS.curriculum), {
+      today: todayLocal(),
+      spacing: SPACING,
+    });
+    if (!bundle.length) {
+      return reply.code(409).send({ error: "nothing is due for recall today" });
+    }
+    params.recallTopicIds = bundle.map((r) => r.topicId);
+  }
+
   let prompt;
   try {
-    prompt = buildLessonSystemPrompt(params);
+    prompt = mode === "recall" ? buildRecallSystemPrompt(params) : buildLessonSystemPrompt(params);
   } catch (e) {
     return reply.code(400).send({ error: (e as Error).message });
   }
@@ -270,6 +290,11 @@ app.post<{ Params: { id: string } }>("/api/lesson/:id/end", async (req, reply) =
   // Re-fetch AFTER runnerFor so we mutate the (possibly just-revived) runner's
   // live record — a stale copy would clobber its transcript writes.
   const session = manager.sessionFor(req.params.id)!;
+  // A recall check has no commit_session tool, so the wrap-up checklist below
+  // would be an instruction it cannot follow. The client hides the button too.
+  if (session.params.mode === "recall") {
+    return reply.code(409).send({ error: "a recall check has no wrap-up — it ends on its own" });
+  }
   if (session.commit) return { ok: true, alreadyCommitted: true };
   session.ending = true;
   saveSession(session);

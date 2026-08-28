@@ -18,7 +18,10 @@ files directly, never regenerate documents, and never hand-edit state. You run
   session-size anchors, materials & sourcing, primary-source-first, project-bearing
   lanes, the synthesis capstone, stopping, and the patch-content rules. It is shared
   with the app so the tutor behaves identically in both media — this file only adds the
-  terminal-specific flow around it.
+  terminal-specific flow around it. The app also slices that file's `## Recall grading`
+  section alone into a standalone one-question recall check, which has no CLI
+  equivalent; nothing to do here, but that is why recall is two sections rather than
+  one, and why the grading half reads as if no lesson were in progress.
 - `skills/references/document-formats.md` — the patch schema and update rules
   (especially the confirmed-pattern gate).
 

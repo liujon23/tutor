@@ -1,13 +1,30 @@
 // Shared types for the app server.
-import type { SessionSize, SpacingConfig } from "../core/types.js";
+import type { RecallResult, SessionSize, SpacingConfig } from "../core/types.js";
 
 export type LessonModel = "opus" | "sonnet";
 export type LessonStatus = "active" | "committed" | "abandoned";
+
+/**
+ * What kind of session this is. "recall" is the one-click check: no topic
+ * selection, one question, and a different write tool (record_recall, not
+ * commit_session) — so it changes the tool surface, the prompt, and the write
+ * path, which is why it's a named mode rather than another boolean like
+ * `discuss`.
+ *
+ * Optional on LessonParams and absent on every session file written before this
+ * existed, so always test `=== "recall"`, never `!== "lesson"`.
+ */
+export type SessionMode = "lesson" | "recall";
 
 export interface LessonParams {
   laneId?: string;
   topicOverride?: string; // topic id from the picker — the learner's explicit override
   discuss?: boolean; // selection moved into the chat
+  mode?: SessionMode; // absent ⇒ "lesson"
+  /** Recall mode only: the topic ids the server drew for this check. Frozen at
+   *  creation — record_recall refuses to grade anything outside this list, so a
+   *  restart or SDK resume can't widen what the session may write. */
+  recallTopicIds?: string[];
   size: SessionSize;
   model: LessonModel;
   historyN: number;
@@ -122,6 +139,23 @@ export interface CommitResult {
   usage?: LessonUsage;
 }
 
+/** What a completed recall check recorded — the recall-mode analogue of
+ *  CommitResult. No lesson number: a check consumes none. */
+export interface RecallRecord {
+  graded: {
+    topicId: string;
+    name: string;
+    result: RecallResult;
+    streak: number;
+    nextInDays: number;
+  }[];
+  summary: string[];
+  gitMessage: string;
+  recordedAt: string; // ISO
+  /** Resource use for this check; absent when no turns were recorded. */
+  usage?: LessonUsage;
+}
+
 export interface StoredSession {
   id: string;
   createdAt: string;
@@ -133,6 +167,10 @@ export interface StoredSession {
   sdkSessionId: string | null;
   transcript: TranscriptEntry[];
   commit: CommitResult | null;
+  /** Recall mode only: set once record_recall has written. Durable idempotency —
+   *  a second call is refused — and what the client renders instead of a wrap-up.
+   *  `status` stays "active" and `commit` stays null: a check is not a lesson. */
+  recall?: RecallRecord;
   /** The learner tapped "End lesson" — the wrap-up was requested. Used to flag a lesson
    *  that ended without a commit so it isn't silently lost at expiry. */
   ending?: boolean;
@@ -157,6 +195,7 @@ export type LessonEvent =
   | { type: "tool_use"; name: string }
   | { type: "feedback_flag"; messageId: string; note: string }
   | { type: "committed"; commit: CommitResult }
+  | { type: "recall_recorded"; recall: RecallRecord }
   // costUsd here is the lesson-so-far total (sum of turns recorded this
   // session so far), not the cost of this one turn.
   | { type: "turn_done"; costUsd: number; isError: boolean; errors?: string[]; tokens?: TokenCounts }

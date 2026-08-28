@@ -185,3 +185,33 @@ export function appendUsageLedger(
   appendFileSync(USAGE_LEDGER, line, "utf8");
   return "transcripts/usage.jsonl";
 }
+
+/** Metadata pinning a recall-ledger line to the check that produced it. */
+export interface RecallLedgerMeta {
+  date: string; // YYYY-MM-DD the grades were stamped with
+  topicIds: string[];
+  grades: { topicId: string; result: string; rationale: string }[];
+  recordedAt: string; // ISO
+}
+
+/**
+ * Append one JSON line per recall check to transcripts/recall.jsonl.
+ *
+ * Deliberately NOT usage.jsonl: that ledger is keyed on lessons — usage-report
+ * counts one lesson per line and builds its timeline from lessonNumber — so
+ * recall lines would inflate every per-lesson cost figure on the Stats screen.
+ *
+ * This is also the only durable record of a recall check's reasoning. No
+ * transcript is archived for these sessions, so each grade's `rationale` is what
+ * makes a grade auditable after the fact.
+ */
+export function appendRecallLedger(
+  meta: RecallLedgerMeta,
+  usage: LessonUsage,
+  records: UsageRecord[]
+): string {
+  mkdirSync(PATHS.transcriptsDir, { recursive: true });
+  const line = JSON.stringify({ ...meta, costModel: "delta", usage, turns: records }) + "\n";
+  appendFileSync(PATHS.recallLedger, line, "utf8");
+  return "transcripts/recall.jsonl";
+}

@@ -6,12 +6,13 @@ import { z } from "zod";
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import type { SessionPatch } from "../core/types.js";
 import { applySessionPatch, checkPatch } from "../core/patcher.js";
+import { applyRecallCheck, checkRecallCheck, type RecallGrade } from "../core/recall.js";
 import { appendFeedbackLedger, checkFeedbackCoverage, composeFeedbackHandoff } from "./feedback.js";
-import { DATA_PATHS, gitCommit } from "../scripts/lib.js";
+import { DATA_PATHS, gitCommit, todayLocal } from "../scripts/lib.js";
 import { fmtDuration, writeTranscript, type CommitTimings } from "./transcript.js";
-import { appendUsageLedger, formatInt, formatUsd, summarizeUsage, totalTokens } from "./usage.js";
+import { appendRecallLedger, appendUsageLedger, formatInt, formatUsd, summarizeUsage, totalTokens } from "./usage.js";
 import { saveSession } from "./store.js";
-import type { CommitResult, StoredSession } from "./types.js";
+import type { CommitResult, RecallRecord, SessionMode, StoredSession } from "./types.js";
 
 export interface TutorToolContext {
   /** The live session record — read at call time so the commit guard sees fresh state. */
@@ -21,6 +22,16 @@ export interface TutorToolContext {
    *  "compose" timing: how long the model took to build the patch (spanning any
    *  rejection/retry cycles, since those are model-driven, not new user turns). */
   composeStartedAt: () => number;
+}
+
+/**
+ * Context for record_recall. A sibling of TutorToolContext rather than extra
+ * fields on it: the commit tool's tests construct that interface as a literal,
+ * and a new required field there would break them for no reason.
+ */
+export interface RecallToolContext {
+  session: () => StoredSession;
+  onRecallRecorded: (result: RecallRecord) => void;
 }
 
 // Serialize the whole read-modify-write-commit path. Even single-user, a
@@ -302,9 +313,197 @@ export function createCommitSessionTool(ctx: TutorToolContext) {
   );
 }
 
-export function createTutorServer(ctx: TutorToolContext) {
-  const commitSession = createCommitSessionTool(ctx);
-  return createSdkMcpServer({ name: "tutor", version: "1.0.0", tools: [commitSession] });
+const recallSchema = {
+  grades: z
+    .array(
+      z.object({
+        topicId: z.string(),
+        result: z.enum(["clean", "rusty", "miss"]),
+        rationale: z
+          .string()
+          .describe(
+            "One sentence: what the learner actually produced that earns this grade. " +
+              "Kept in the recall ledger — no transcript is saved, so this is the only record."
+          ),
+        state: z
+          .enum(["not-started", "touched", "comfortable", "shaky"])
+          .optional()
+          .describe("Only to override the automatic miss → shaky demotion."),
+      })
+    )
+    .min(1)
+    .describe("One entry per topic in your packet. A bundle gets a grade PER TOPIC."),
+};
+
+/**
+ * The record_recall tool: the only write path a quick-recall session has.
+ *
+ * Narrow by construction. It grades topics and nothing else — no lesson number,
+ * no history entry, no transcript — and it refuses any topic the server didn't
+ * draw for this session. Both guards run before any DATA_PATHS access, so tests
+ * can exercise them without touching the real data directory or git.
+ */
+export function createRecordRecallTool(ctx: RecallToolContext) {
+  return tool(
+    "record_recall",
+    "Record the grade(s) for this recall check and git-commit the result. Call this " +
+      "exactly once, right after you give the learner your feedback on their answer. " +
+      "One entry per topic in your packet. On errors, fix the arguments and call again.",
+    recallSchema,
+    async ({ grades }) =>
+      serialize(async () => {
+        // Idempotency: a check records exactly once. A second call would
+        // double-count `reviews` and could bogusly grow a streak.
+        const already = ctx.session().recall;
+        if (already) {
+          return textResult(
+            `ALREADY RECORDED — nothing written. This check's grades are already saved ` +
+              `(${already.graded.map((g) => `${g.name}: ${g.result}`).join(", ")}). ` +
+              `Do not call record_recall again; just finish the follow-up conversation.`,
+            true
+          );
+        }
+
+        // The session may only grade what the server drew for it. This is what
+        // keeps the tool a recall *check* rather than an arbitrary recall write.
+        const allowed = ctx.session().params.recallTopicIds ?? [];
+        const offList = grades.filter((g) => !allowed.includes(g.topicId));
+        if (offList.length) {
+          return textResult(
+            `REJECTED — nothing written. These topics aren't part of this check: ` +
+              `${offList.map((g) => g.topicId).join(", ")}. ` +
+              `Grade only what your packet listed: ${allowed.join(", ")}.`,
+            true
+          );
+        }
+
+        // Server-supplied, so a session left open past midnight still stamps the
+        // date the grade was actually earned rather than one the model guessed.
+        const date = todayLocal();
+        const input = {
+          date,
+          grades: grades.map((g) => ({ ...g }) as RecallGrade),
+        };
+
+        const errors = checkRecallCheck(DATA_PATHS, input);
+        if (errors.length) {
+          return textResult(
+            `RECALL REJECTED — nothing written. Fix these and call record_recall again:\n` +
+              errors.map((e) => `  - ${e}`).join("\n"),
+            true
+          );
+        }
+
+        const res = applyRecallCheck(DATA_PATHS, input);
+
+        // Durable idempotency the moment the write lands, before anything that
+        // can still fail — same pattern as commit_session.
+        const provisional: RecallRecord = {
+          graded: res.graded.map(({ topicId, name, result, streak, nextInDays }) => ({
+            topicId,
+            name,
+            result,
+            streak,
+            nextInDays,
+          })),
+          summary: res.summary,
+          gitMessage: "",
+          recordedAt: new Date().toISOString(),
+        };
+        const liveSession = ctx.session();
+        liveSession.recall = provisional;
+        saveSession(liveSession);
+
+        let gitMessage = "";
+        let ledgerPath = "";
+        try {
+          const records = liveSession.usage ?? [];
+          const wallClockMs =
+            Date.parse(liveSession.lastActivityAt) - Date.parse(liveSession.createdAt);
+          const usage = summarizeUsage(records, wallClockMs);
+          if (records.length) {
+            ledgerPath = appendRecallLedger(
+              {
+                date,
+                topicIds: grades.map((g) => g.topicId),
+                grades: grades.map((g) => ({
+                  topicId: g.topicId,
+                  result: g.result,
+                  rationale: g.rationale,
+                })),
+                recordedAt: provisional.recordedAt,
+              },
+              usage,
+              records
+            );
+          }
+
+          gitMessage = gitCommit(
+            `Recall check — ${date} — ${grades.map((g) => g.topicId).join(", ")}`,
+            ["data", "transcripts"]
+          );
+
+          const result: RecallRecord = {
+            ...provisional,
+            summary: [...res.summary, ...(ledgerPath ? [`recall logged: ${ledgerPath}`] : [])],
+            gitMessage,
+            ...(records.length ? { usage } : {}),
+          };
+          ctx.onRecallRecorded(result);
+
+          return textResult(
+            `Recall recorded.\n` +
+              result.summary.map((x) => `  - ${x}`).join("\n") +
+              `\n${gitMessage}\n` +
+              `Now ask the learner whether any of this raised a question, answer what they ask, ` +
+              `then close out. Do not call record_recall again.`
+          );
+        } catch (e) {
+          // curriculum.yaml and the session's recall record are already written;
+          // only the ledger or the git commit failed. Non-error result so the
+          // model closes out cleanly instead of retrying into the guard above.
+          const message = (e as Error).message;
+          const finalResult: RecallRecord = {
+            ...provisional,
+            summary: [
+              ...res.summary,
+              ...(ledgerPath ? [`recall logged: ${ledgerPath}`] : []),
+              ...(gitMessage ? [gitMessage] : []),
+              `WARNING: a post-write step failed (${message}) — the grades are saved; ` +
+                `do NOT call record_recall again.`,
+            ],
+            gitMessage,
+          };
+          ctx.onRecallRecorded(finalResult);
+          return textResult(
+            `Recall recorded, but a post-write step failed.\n` +
+              finalResult.summary.map((x) => `  - ${x}`).join("\n")
+          );
+        }
+      })
+  );
+}
+
+/**
+ * The write tools a session of this mode gets. The gate is at REGISTRATION: a
+ * recall session's MCP server never exposes commit_session at all, so it cannot
+ * burn a lesson number even if its prompt were wrong.
+ */
+export function tutorToolsFor(ctx: TutorToolContext & RecallToolContext, mode: SessionMode) {
+  return mode === "recall" ? [createRecordRecallTool(ctx)] : [createCommitSessionTool(ctx)];
+}
+
+export function createTutorServer(
+  ctx: TutorToolContext & RecallToolContext,
+  mode: SessionMode = "lesson"
+) {
+  return createSdkMcpServer({ name: "tutor", version: "1.0.0", tools: tutorToolsFor(ctx, mode) });
 }
 
 export const COMMIT_TOOL_NAME = "mcp__tutor__commit_session";
+export const RECALL_TOOL_NAME = "mcp__tutor__record_recall";
+
+/** The one write tool a session of this mode is allowed to call. */
+export function writeToolFor(mode: SessionMode): string {
+  return mode === "recall" ? RECALL_TOOL_NAME : COMMIT_TOOL_NAME;
+}
