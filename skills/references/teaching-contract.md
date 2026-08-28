@@ -1,11 +1,19 @@
 # Teaching contract — shared by the CLI skill and the app
 
-The single source of truth for HOW a lesson is taught. Two consumers read it:
-`skills/daily-lesson/SKILL.md` (Claude Code CLI lessons) and `server/prompt.ts`
-(the app splices this file into the lesson system prompt at lesson creation).
+The single source of truth for HOW a lesson is taught. Three consumers read it:
+`skills/daily-lesson/SKILL.md` (Claude Code CLI lessons), and `server/prompt.ts`
+twice over — the app splices the whole file into the lesson system prompt, and
+slices **`## Recall grading` alone** into the prompt for its one-click recall
+check, a standalone session that asks a single recall question and nothing else.
+
+That third consumer is why recall is two sections rather than one. Everything in
+`## Recall grading` must read correctly with no lesson around it; anything that
+assumes a lesson is in progress belongs in `## Recall warm-up`. Renaming either
+heading breaks `server/prompt.ts` loudly, which is the intent.
+
 Medium-specific machinery — parameter/selection flow, per-message ratings, the
-commit mechanics — stays in those consumers; everything here applies to both.
-Edit here once; don't mirror by hand.
+commit mechanics — stays in those consumers; everything here applies to all of
+them. Edit here once; don't mirror by hand.
 
 ## The one idea: rigid scaffolding, fluid teaching
 
@@ -24,6 +32,8 @@ mechanics.
 
 ## Recall warm-up (when the packet lists candidates)
 
+*Placement and pacing inside a lesson. How to ask and grade is `## Recall grading`.*
+
 Offer 1–3 **cold-retrieval** questions on them before the main topic — genuine "tell
 me X before I show you anything" prompts. Cold retrieval beats re-exposition: ask
 first, show after; if the profile confirms a recall preference, lean into it harder.
@@ -32,20 +42,36 @@ learner wants to dive in (tight sessions especially). Candidates are already pai
 today's track and scheduled by mastery — each clean recall pushes a topic's next
 appearance much further out, so a candidate in the packet has genuinely earned its slot.
 
+## Recall grading
+
+*How to ask a recall question and score the answer. This holds wherever recall
+happens — inside a lesson, or in a standalone check with no lesson around it.*
+
 **Bundles are one question, not several.** When the packet marks candidates as a
 bundle, they're linked in the curriculum graph — ask ONE question that can't be
 answered without all of them (a comparison, a dependency, a "how does X constrain Y").
 A bridged question is both faster and a better retrieval test than quizzing each topic
 in isolation; fall back to separate questions only if the learner stalls on the bridge.
+A bundle still gets a grade **per topic** — a learner can hold one end of a bridge and
+not the other.
 
-**Grade every warm-up in the patch** via `topicUpdates[].recall` — fairly, never
-generously; the grade directly sets how long until the topic resurfaces:
+**Grade every recall you ask for** — fairly, never generously; the grade directly sets
+how long until the topic resurfaces:
 - `clean` — retrieved it unaided. The streak grows and the next review moves much
   further out.
 - `rusty` — needed a hint, or got it partly. The streak resets to the base interval;
   the topic stays `comfortable`.
 - `miss` — it's gone. The streak resets and the topic is demoted to `shaky` for
   re-teaching (automatic; set `state` yourself only to override that).
+
+**Grade what the learner produced *before* you corrected them.** "Oh right, of course"
+once you've supplied the answer is a `rusty` or a `miss` — never a `clean`. The grade
+is a measurement of retrieval, and a generous one quietly buys silence the learner
+hasn't earned.
+
+The mechanism for recording the grade is medium-specific — a lesson writes it in the
+session patch, a standalone check calls its own tool — so your consumer's instructions
+name it.
 
 ## Readiness check (fair, brief, scaled)
 
