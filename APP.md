@@ -75,23 +75,26 @@ are ranked by how overdue they are and cut to three, and everything deep in a ba
 draws a near-certain probability, so the same most-overdue few keep surfacing until
 they're actually recalled.
 
-**Quick recall** is the same machinery without the lesson. The select screen's second
-button starts a one-question check: no selection at all — the server draws the most
-overdue topic across every lane, plus any topics linked to it, and the tutor asks one
-cold-retrieval question, grades it, and ends. It takes a minute, so an overdue backlog
-can be worked down without sitting a full lesson. The button carries the due count and
-goes quiet ("Nothing due today") when the backlog is clear. Unlike a lesson this draw is
+**Quick recall** is the same machinery without the lesson. A "Quick recall" button below
+the start row runs a one-question check: no selection at all — the server draws the most
+overdue topic across every lane, plus any topics genuinely linked to it, and the tutor
+asks one cold-retrieval question, grades it, records it, and offers follow-ups. It takes
+a minute, so an overdue backlog can be worked down without sitting a full lesson. A
+caption under the button shows how many topics are due, and the button greys out
+("Nothing due today") when the backlog is clear. Unlike a lesson this draw is
 *unsampled* — a click is the ask, so it gives you the most overdue topic rather than a
-varied one.
+varied one. When you're done, "Back to start" closes the check.
 
-A recall check writes only the grade. It consumes no lesson number, appends nothing to
-`lesson-history.md`, and keeps no transcript — the conversation is gone when you leave.
-What it does write is durable: the topic's recall streak in `curriculum.yaml`, its own
-`Recall check —` git commit, and a line in `transcripts/recall.jsonl` carrying the
-tutor's one-sentence justification per grade (the audit trail that replaces the missing
-transcript). Recall checks deliberately do **not** re-stamp `lastTouched`, which stays
-the honest "last taught in Lesson N" the Curriculum screen links a transcript from;
-staleness reads whichever of the two dates is later. Their token cost is in
+A recall check writes only the grade. It consumes no lesson number and appends nothing to
+`lesson-history.md`, and no transcript is archived under `transcripts/` — the
+conversation lives only in the session's scratch file under `.app/`, which is gitignored
+and swept after a day. What it does write is durable: the topic's recall streak in
+`curriculum.yaml`, its own `Recall check —` git commit, and a line in
+`transcripts/recall.jsonl` carrying the tutor's one-sentence justification per grade (the
+audit trail that stands in for the missing transcript). Recall checks deliberately do
+**not** re-stamp `lastTouched`, which stays the honest "last taught in Lesson N" the
+Curriculum screen links a transcript from; staleness reads whichever of the two dates is
+later. Their token cost is in
 `recall.jsonl` rather than `usage.jsonl` — the Stats screen is lesson-keyed and doesn't
 show it yet.
 

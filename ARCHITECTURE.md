@@ -72,9 +72,13 @@ calls a model.
 
 Two invariants make the design hold:
 
-1. **Everything writes through the same patcher.** The CLI (`commit-session`) and
-   the app (`server/tutor-tool.ts`) both call `checkPatch` → `applySessionPatch`.
-   There is no second write path to corrupt state.
+1. **Every write is validate-then-apply, and the rules have one home.** Lesson
+   commits — the CLI's `commit-session` and the app's `commit_session` — both go
+   `checkPatch` → `applySessionPatch`. The app's one-click recall check is the one
+   other writer: `checkRecallCheck` → `applyRecallCheck` in `core/recall.ts`, which
+   touches nothing but a topic's `recall` block. The two cannot drift because the
+   grading rules live in a single shared function (`applyRecallGrade`) that both
+   call, and both refuse to write anything when validation fails.
 2. **Paths flow from one place.** `scripts/lib.ts` resolves a data root
    (`TUTOR_DATA_DIR`, default: `my-data/`) into a `TutorPaths` object; core takes
    its `DataPaths` subset as an argument. Nothing else touches path logic.

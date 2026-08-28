@@ -117,7 +117,14 @@ export async function showLesson(id: string): Promise<void> {
     {
       class: "hdr-chip danger",
       onclick: async () => {
-        if (!confirm("Abandon this lesson? Nothing will be written back.")) return;
+        // A recorded recall check has already written its grade to curriculum.yaml
+        // and git — abandoning drops the conversation, not the grade.
+        const warning = isRecall
+          ? lesson.recall
+            ? "Close this recall check? The grade is already saved and won't be undone."
+            : "Close this recall check? Nothing has been graded yet."
+          : "Abandon this lesson? Nothing will be written back.";
+        if (!confirm(warning)) return;
         await api.abandon(id);
         ctx.leaveLesson();
       },
@@ -145,8 +152,10 @@ export async function showLesson(id: string): Promise<void> {
       // Model switch and abandon are meaningless against a fixed recording.
       __DEMO__ ? null : modelBtn,
       // A recall check has no commit_session tool, so the wrap-up checklist the
-      // End button sends would be an instruction it cannot follow. It ends on
-      // its own after the follow-up conversation. (The server 409s too.)
+      // End button sends would be an instruction it cannot follow — the server
+      // 409s it too. The check closes when the learner taps "Back to start" on
+      // the recall panel (or the 24h sweep collects it); nothing flips its
+      // status the way a commit does.
       isRecall ? null : endBtn,
       __DEMO__ ? null : moreBtn
     )
