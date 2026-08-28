@@ -97,12 +97,8 @@ test("buildStatus surfaces lanes, recommendations, topics, and open items", () =
   // shape only, not any specific item (same reason the lane count is a bound).
   assert.ok(Array.isArray(s.openSettledItems));
   assert.ok(s.openSettledItems.every((i) => typeof i === "string"));
-  // Lane-paired recall: a per-lane map, and every entry belongs to its key lane.
-  assert.equal(typeof s.recallCandidatesByLane, "object");
-  for (const [laneId, cands] of Object.entries(s.recallCandidatesByLane)) {
-    assert.ok(cands.length > 0, "empty lanes are omitted from the map");
-    assert.ok(cands.every((r) => r.laneId === laneId), `candidates in ${laneId} match their lane`);
-  }
+  // What the quick-recall button gates on: an unsampled count across every lane.
+  assert.ok(Number.isInteger(s.recallDueCount) && s.recallDueCount >= 0, "recall due count");
   assert.match(s.today, /^\d{4}-\d{2}-\d{2}$/);
 });
 
