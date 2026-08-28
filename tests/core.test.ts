@@ -7,11 +7,17 @@ import { fileURLToPath } from "node:url";
 
 import { loadCurriculum, saveCurriculum } from "../core/curriculum.js";
 import { validateCurriculum } from "../core/validator.js";
-import { recommendNext, recallCandidates } from "../core/selector.js";
+import { recommendNext, recallCandidates, pickRecallBundle } from "../core/selector.js";
 import { DEFAULT_SPACING, offerProbability, seededUnit, stabilityDays } from "../core/spacing.js";
 import { parseHistory, nextLessonNumber, condenseEntry } from "../core/history.js";
 import { applyProfilePatch, checkProfilePatch } from "../core/profile.js";
 import { applySessionPatch, checkPatch } from "../core/patcher.js";
+import {
+  applyRecallCheck,
+  applyRecallGrade,
+  checkRecallCheck,
+  lastExercised,
+} from "../core/recall.js";
 import { buildSessionPacket } from "../core/slicer.js";
 import { renderUnitFull } from "../core/render.js";
 import { buildLaneDoc, renderLaneMarkdown, renderLaneHtml } from "../core/lane-doc.js";
@@ -270,6 +276,184 @@ test("checkPatch rejects a bad recall grade; validator flags malformed recall hi
   assert.ok(errs.some((e) => e.includes("recall.reviews")), errs.join("; "));
   assert.ok(errs.some((e) => e.includes("recall.last.result")), errs.join("; "));
   assert.ok(errs.some((e) => e.includes("recall.last.date")), errs.join("; "));
+});
+
+// --- Standalone recall checks (core/recall.ts) -------------------------------
+
+const bpId = "ai-nn-foundations-backprop";
+const actId = "ai-nn-foundations-activation";
+/** The fixture's two comfortable ai topics, in file order: [activation, backprop]. */
+const aiTopics = (paths: DataPaths) => loadCurriculum(paths.curriculum).lanes[0].units[0].coreTopics;
+
+test("applyRecallGrade: streak rules, and miss demotes unless a state is given", () => {
+  const base = () => structuredClone(loadCurriculum(FIXTURE.curriculum).lanes[0].units[0].coreTopics[1]);
+
+  const clean = base();
+  applyRecallGrade(clean, "clean", "2026-08-01");
+  assert.deepEqual(clean.recall, { streak: 2, reviews: 3, last: { date: "2026-08-01", result: "clean" } });
+  assert.equal(clean.state, "comfortable");
+
+  const rusty = base();
+  applyRecallGrade(rusty, "rusty", "2026-08-01");
+  assert.equal(rusty.recall!.streak, 0, "rusty resets the streak");
+  assert.equal(rusty.state, "comfortable");
+
+  const miss = base();
+  applyRecallGrade(miss, "miss", "2026-08-01");
+  assert.equal(miss.recall!.streak, 0);
+  assert.equal(miss.state, "shaky", "miss demotes for re-teaching");
+
+  const missOverride = base();
+  applyRecallGrade(missOverride, "miss", "2026-08-01", "comfortable");
+  assert.equal(missOverride.state, "comfortable", "an explicit state wins over the demotion");
+});
+
+test("applyRecallCheck writes recall but never lastTouched, and burns no lesson", () => {
+  const paths = scratchCopy();
+  const historyBefore = readFileSync(paths.history, "utf8");
+  const lessonBefore = nextLessonNumber(paths.history);
+
+  const res = applyRecallCheck(paths, {
+    date: "2026-08-01",
+    grades: [{ topicId: bpId, result: "clean" }],
+  });
+
+  const bp = aiTopics(paths)[1];
+  assert.deepEqual(bp.recall, { streak: 2, reviews: 3, last: { date: "2026-08-01", result: "clean" } });
+  // The whole point: the topic was recalled, not re-taught. "last taught in
+  // Lesson 3" and the transcript the curriculum viewer links from it stay true.
+  assert.deepEqual(bp.lastTouched, { date: "2026-07-10", lesson: 3 });
+
+  assert.equal(nextLessonNumber(paths.history), lessonBefore, "no lesson number consumed");
+  assert.equal(readFileSync(paths.history, "utf8"), historyBefore, "lesson-history.md untouched");
+  assert.equal(res.graded[0].nextInDays, 88, "streak 2 → 14 · 2.5² ≈ 88d");
+  assert.match(res.summary.join("\n"), /recall clean \(streak 2/);
+});
+
+test("applyRecallCheck grades a whole bundle in one call", () => {
+  const paths = scratchCopy();
+  applyRecallCheck(paths, {
+    date: "2026-08-01",
+    grades: [
+      { topicId: actId, result: "clean" },
+      { topicId: bpId, result: "miss" },
+    ],
+  });
+  const [act, bp] = aiTopics(paths);
+  assert.equal(act.recall!.streak, 1);
+  assert.equal(act.state, "comfortable", "the clean topic is untouched");
+  assert.equal(bp.recall!.streak, 0);
+  assert.equal(bp.state, "shaky", "only the missed topic demotes");
+
+  // An explicit state still overrides the demotion here too.
+  const paths2 = scratchCopy();
+  applyRecallCheck(paths2, {
+    date: "2026-08-01",
+    grades: [{ topicId: bpId, result: "miss", state: "comfortable" }],
+  });
+  assert.equal(aiTopics(paths2)[1].state, "comfortable");
+});
+
+test("checkRecallCheck rejects bad input, and a rejected check writes nothing", () => {
+  const paths = scratchCopy();
+  const before = readFileSync(paths.curriculum, "utf8");
+  const cases: [string, Parameters<typeof checkRecallCheck>[1], RegExp][] = [
+    ["unknown topic", { date: "2026-08-01", grades: [{ topicId: "nope", result: "clean" }] }, /does not exist/],
+    ["bad result", { date: "2026-08-01", grades: [{ topicId: bpId, result: "great" as never }] }, /bad result/],
+    ["no grades", { date: "2026-08-01", grades: [] }, /at least one topic/],
+    [
+      "duplicate topic",
+      { date: "2026-08-01", grades: [{ topicId: bpId, result: "clean" }, { topicId: bpId, result: "miss" }] },
+      /listed twice/,
+    ],
+    ["bad date", { date: "08/01/2026", grades: [{ topicId: bpId, result: "clean" }] }, /not YYYY-MM-DD/],
+    [
+      "bad state",
+      { date: "2026-08-01", grades: [{ topicId: bpId, result: "clean", state: "great" as never }] },
+      /bad state/,
+    ],
+  ];
+  for (const [label, input, pattern] of cases) {
+    const errs = checkRecallCheck(paths, input);
+    assert.ok(errs.some((e) => pattern.test(e)), `${label}: ${errs.join("; ")}`);
+    assert.throws(() => applyRecallCheck(paths, input), /recall check rejected/, label);
+  }
+  assert.equal(readFileSync(paths.curriculum, "utf8"), before, "nothing written on any rejection");
+});
+
+test("pickRecallBundle: most overdue across all lanes, unsampled, with linked siblings", () => {
+  const c = loadCurriculum(FIXTURE.curriculum);
+  const tight = { ...DEFAULT_SPACING, baseDays: 2 };
+
+  // Default spacing at 2026-07-16: only activation has cleared its interval.
+  assert.deepEqual(
+    pickRecallBundle(c, { today: "2026-07-16" }).map((r) => r.topicId),
+    [actId]
+  );
+
+  // At a 2-day base both come due; activation is far more overdue so it leads,
+  // and backprop rides along as a same-unit sibling of the head.
+  const bundle = pickRecallBundle(c, { today: "2026-07-16", spacing: tight });
+  assert.deepEqual(bundle.map((r) => r.topicId), [actId, bpId]);
+  assert.deepEqual(bundle[0].bundleWith, [bpId], "bundle is cross-linked for a bridging question");
+  assert.deepEqual(bundle[1].bundleWith, [actId]);
+
+  // Unsampled: it agrees with the deterministic due list and never varies.
+  const due = recallCandidates(c, { today: "2026-07-16", probabilistic: false, spacing: tight });
+  assert.equal(bundle[0].topicId, due[0].topicId);
+  assert.deepEqual(pickRecallBundle(c, { today: "2026-07-16", spacing: tight }), bundle);
+
+  // Nothing due → nothing offered. The button's disabled state rides on this.
+  assert.deepEqual(pickRecallBundle(c, { today: "2026-06-02" }), []);
+});
+
+test("staleness measures from the later of taught-vs-recalled, and only ever the later", () => {
+  // A standalone check advances the recall clock without re-stamping lastTouched,
+  // so the selector has to read both dates. This is the test that fails if
+  // recallCandidates ever reverts to lastTouched alone.
+  const paths = scratchCopy();
+  applyRecallCheck(paths, { date: "2026-07-16", grades: [{ topicId: bpId, result: "clean" }] });
+
+  const c = loadCurriculum(paths.curriculum);
+  const bp = c.lanes[0].units[0].coreTopics[1];
+  assert.equal(lastExercised(bp), "2026-07-16");
+  assert.equal(bp.lastTouched!.date, "2026-07-10", "still the last lesson that taught it");
+
+  const cand = recallCandidates(c, {
+    today: "2026-08-20",
+    probabilistic: false,
+    spacing: { ...DEFAULT_SPACING, baseDays: 2 },
+  }).find((r) => r.topicId === bpId);
+  assert.ok(cand, "due again at a 2-day base");
+  assert.equal(cand.daysStale, 35, "measured from the recall (2026-07-16), not the lesson (07-10)");
+  assert.equal(cand.lastTouched, "2026-07-10");
+  assert.equal(cand.lastSeen, "2026-07-16");
+
+  // ...and the reverse case: a recall OLDER than the last lesson doesn't drag the
+  // clock backwards. It's a max, not "recall always wins".
+  const c2 = loadCurriculum(FIXTURE.curriculum);
+  const act = c2.lanes[0].units[0].coreTopics[0];
+  act.recall = { streak: 1, reviews: 1, last: { date: "2026-05-01", result: "clean" } };
+  assert.equal(lastExercised(act), "2026-06-01", "lastTouched is the later date here");
+  const cand2 = recallCandidates(c2, { today: "2026-07-16", probabilistic: false }).find(
+    (r) => r.topicId === actId
+  );
+  assert.equal(cand2!.daysStale, 45, "measured from the lesson, not the older recall");
+});
+
+test("a recall check quiets the topics it graded — back-to-back checks can't double-grade", () => {
+  const paths = scratchCopy();
+  const tight = { ...DEFAULT_SPACING, baseDays: 2 };
+  const first = pickRecallBundle(loadCurriculum(paths.curriculum), { today: "2026-07-16", spacing: tight });
+  assert.ok(first.length, "something to grade");
+
+  applyRecallCheck(paths, {
+    date: "2026-07-16",
+    grades: first.map((r) => ({ topicId: r.topicId, result: "clean" as const })),
+  });
+
+  const again = pickRecallBundle(loadCurriculum(paths.curriculum), { today: "2026-07-16", spacing: tight });
+  assert.deepEqual(again, [], "every graded topic is inside its freshly-earned interval");
 });
 
 test("history parses and numbers correctly", () => {

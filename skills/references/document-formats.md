@@ -57,12 +57,27 @@ Key fields (see the shipped file for a live example):
 - **Topic:** `id`, `name`, `state`, `lastTouched` (`{date, lesson}` or `null`),
   `prerequisites` / `buildsToward` (topic ids, **same unit only**), `notes`,
   optional `assets`, optional `recall`.
+- **Topic.lastTouched** means *last **taught** in a numbered lesson* — it carries the
+  lesson number, and the app's curriculum viewer links that lesson's transcript from
+  it. A standalone recall check (below) deliberately does **not** re-stamp it.
 - **Topic.recall** (optional): spaced-recall history —
   `{streak, reviews, last?: {date, result}}` with `result` = `clean|rusty|miss`.
-  Written only by the patcher when a recall warm-up is graded; absent until then
-  (code reads it via `getRecall()` in `core/spacing.ts`). `streak` counts consecutive
-  clean recalls and drives the review interval: base 14 days, ×2.5 per clean recall,
-  capped at a year. A `rusty`/`miss` resets it.
+  Absent until the topic's first graded recall (code reads it via `getRecall()` in
+  `core/spacing.ts`). `streak` counts consecutive clean recalls and drives the review
+  interval: base 14 days, ×2.5 per clean recall, capped at a year. A `rusty`/`miss`
+  resets it.
+
+  **Two writers, one rule.** A lesson grades warm-ups through `topicUpdates[].recall`
+  (below); the app's one-click recall check writes through `record_recall` →
+  `applyRecallCheck`. Both route through `applyRecallGrade` in `core/recall.ts`, so the
+  streak and `miss` → `shaky` rules can't drift between them.
+
+  **`recall.last.date` may be newer than `lastTouched.date`.** A lesson stamps both from
+  the same lesson date, so for anything a lesson wrote they agree. A standalone recall
+  check advances only `recall.last.date` — the topic was recalled, not re-taught.
+  Staleness is therefore measured from the **later of the two** (`lastExercised()` in
+  `core/recall.ts`), so a recall check genuinely buys silence without falsely claiming
+  the topic was taught again.
 - **Topic.assets** (optional): curated materials for future lessons —
   `{kind: image|text|link, url, title, note?}`. `image` URLs must be public-domain
   sources (embedded and cached by the app); `text`/`link` are navigational and may

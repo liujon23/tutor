@@ -100,10 +100,15 @@ function renderRecall(recall: RecallCandidate[]): string {
     const mastery = r.streak
       ? `recalled cleanly ${r.streak}×`
       : `not yet recalled since it was learned`;
+    // lastSeen diverges from lastTouched only after a standalone recall check;
+    // saying "last touched" then counting days from the other date would lie.
+    const when =
+      r.lastSeen === r.lastTouched
+        ? `last touched ${r.lastTouched} (${r.daysStale} days ago)`
+        : `last taught ${r.lastTouched} · last recalled ${r.lastSeen} (${r.daysStale} days ago)`;
     return (
-      `- ${r.name} (${r.topicId}) — ${r.laneId}/${r.unitId}, last touched ${r.lastTouched} ` +
-      `(${r.daysStale} days ago) · ${mastery} · interval ${Math.round(r.stabilityDays)}d, ` +
-      `${r.overdueDays}d overdue`
+      `- ${r.name} (${r.topicId}) — ${r.laneId}/${r.unitId}, ${when} · ${mastery} · ` +
+      `interval ${Math.round(r.stabilityDays)}d, ${r.overdueDays}d overdue`
     );
   });
   for (const group of bundleGroups(recall)) {

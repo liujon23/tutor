@@ -11,6 +11,7 @@ import type {
 import { RECALL_RESULTS, TOPIC_STATES, UNIT_STATES } from "./types.js";
 import { laneById, loadCurriculum, saveCurriculum, topicById, unitById } from "./curriculum.js";
 import { getRecall, stabilityDays } from "./spacing.js";
+import { applyRecallGrade } from "./recall.js";
 import { validateCurriculum } from "./validator.js";
 import { nextLessonNumber, prependEntry, renderEntry } from "./history.js";
 import { applyProfilePatchToLines, checkProfilePatch } from "./profile.js";
@@ -191,17 +192,8 @@ function applyCurriculumChanges(
     if (u.state) hit.topic.state = u.state;
     if (u.notes !== undefined) hit.topic.notes = u.notes;
     if (u.touched !== false) hit.topic.lastTouched = { date: L.date, lesson: lessonNumber };
-    if (u.recall) {
-      const prev = getRecall(hit.topic);
-      hit.topic.recall = {
-        streak: u.recall === "clean" ? prev.streak + 1 : 0,
-        reviews: prev.reviews + 1,
-        last: { date: L.date, result: u.recall },
-      };
-      // A topic that's gone is due for re-teaching, not another warm-up. Deterministic
-      // bookkeeping, but an explicit `state` in the patch still wins.
-      if (u.recall === "miss" && !u.state) hit.topic.state = "shaky";
-    }
+    // Shared with the standalone recall check so the streak rules can't drift.
+    if (u.recall) applyRecallGrade(hit.topic, u.recall, L.date, u.state);
     summary?.push(`topic ${u.id}: ${describeTopicUpdate(u, hit.topic)}`);
   }
 
