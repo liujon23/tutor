@@ -186,7 +186,7 @@ async function status(): Promise<Status> {
       locked("ai", "AI Lane", 50),
       locked("sts", "Science and Technology Studies (STS) Lane", 30),
     ],
-    recallCandidatesByLane: {},
+    recallDueCount: 0, // no recall data in the demo — the button shows its empty state
     openSettledItems: [],
     topics: [],
     activeSessions: [],

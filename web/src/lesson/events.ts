@@ -4,7 +4,7 @@ import type { LessonCtx } from "./ctx.js";
 import { showBanner } from "./ctx.js";
 import { addBubble, photoUrls, renderStream, scrollDown, setCommitProgress } from "./bubbles.js";
 import { registerAssistantBubble, decorateFeedback, closeRating } from "./rating.js";
-import { showWrapup, mapError, refreshEndingHint } from "./wrapup.js";
+import { showWrapup, showRecallPanel, mapError, refreshEndingHint } from "./wrapup.js";
 
 // ---------------------------------------------------------------------------
 // The SSE subscription: the event-type switch, reconnect/reconcile logic,
@@ -50,6 +50,12 @@ export function subscribeEvents(ctx: LessonCtx): () => void {
         ctx.thinking.classList.add("hidden");
         showWrapup(ctx, fresh.commit);
       }
+      // Same catch-up for a recall check whose event landed while we were away.
+      if (fresh.recall && !ctx.lesson.recall) {
+        ctx.lesson.recall = fresh.recall;
+        ctx.thinking.classList.add("hidden");
+        showRecallPanel(ctx, fresh.recall);
+      }
       if (fresh.lastError && !fresh.commit) showBanner(ctx, mapError(fresh.lastError));
       refreshEndingHint(ctx);
     } catch {
@@ -92,6 +98,7 @@ export function subscribeEvents(ctx: LessonCtx): () => void {
           break;
         case "tool_use":
           if (ev.name.includes("commit_session")) setCommitProgress(ctx, "Committing session…");
+          if (ev.name.includes("record_recall")) setCommitProgress(ctx, "Recording recall…");
           break;
         case "feedback_flag": {
           // A ⏬ fired (this device or another) — show the note under the message.
@@ -112,6 +119,12 @@ export function subscribeEvents(ctx: LessonCtx): () => void {
           ctx.endingHint.classList.add("hidden");
           closeRating(ctx); // ratings close at commit
           showWrapup(ctx, ev.commit);
+          break;
+        case "recall_recorded":
+          // A recall check writes without committing a lesson, so status stays
+          // "active" — the conversation carries on into follow-ups.
+          ctx.lesson.recall = ev.recall;
+          showRecallPanel(ctx, ev.recall);
           break;
         case "turn_done":
           ctx.thinking.classList.add("hidden");

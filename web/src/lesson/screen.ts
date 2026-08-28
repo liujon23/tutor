@@ -6,7 +6,7 @@ import type { LessonCtx } from "./ctx.js";
 import { showBanner } from "./ctx.js";
 import { addBubble, addNote, photoUrls, scrollDown } from "./bubbles.js";
 import { closeRating } from "./rating.js";
-import { showWrapup, mapError, refreshEndingHint } from "./wrapup.js";
+import { showWrapup, showRecallPanel, mapError, refreshEndingHint } from "./wrapup.js";
 import { subscribeEvents } from "./events.js";
 import { buildComposer } from "./composer.js";
 
@@ -26,6 +26,10 @@ export async function showLesson(id: string): Promise<void> {
     return;
   }
   clear(root);
+
+  // A recall check reuses this whole screen — only the header chips and the
+  // end-of-session panel differ, and both read off params.mode.
+  const isRecall = lesson.params.mode === "recall";
 
   const screen = h("div", { class: "screen lesson" });
   const messages = h("div", { class: "messages" });
@@ -132,10 +136,18 @@ export async function showLesson(id: string): Promise<void> {
         },
         "‹"
       ),
-      h("div", { class: "hdr-title" }, h("strong", {}, lesson.title || "Lesson"), h("span", { class: "hdr-sub" }, lesson.params.size)),
+      h(
+        "div",
+        { class: "hdr-title" },
+        h("strong", {}, lesson.title || "Lesson"),
+        h("span", { class: "hdr-sub" }, isRecall ? "quick recall" : lesson.params.size)
+      ),
       // Model switch and abandon are meaningless against a fixed recording.
       __DEMO__ ? null : modelBtn,
-      endBtn,
+      // A recall check has no commit_session tool, so the wrap-up checklist the
+      // End button sends would be an instruction it cannot follow. It ends on
+      // its own after the follow-up conversation. (The server 409s too.)
+      isRecall ? null : endBtn,
       __DEMO__ ? null : moreBtn
     )
   );
@@ -157,6 +169,7 @@ export async function showLesson(id: string): Promise<void> {
   }
   if (lesson.status === "abandoned") addNote(ctx, "This lesson was abandoned.");
   if (lesson.commit) showWrapup(ctx, lesson.commit);
+  if (lesson.recall) showRecallPanel(ctx, lesson.recall);
   if (lesson.lastError && !lesson.commit) showBanner(ctx, mapError(lesson.lastError));
   refreshEndingHint(ctx);
 

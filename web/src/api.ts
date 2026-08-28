@@ -26,7 +26,10 @@ export interface RecallCandidate {
   name: string;
   laneId: string;
   unitId: string;
+  /** Last taught in a numbered lesson. */
   lastTouched: string;
+  /** Last exercised at all — taught or recall-checked. What daysStale measures from. */
+  lastSeen: string;
   daysStale: number;
   streak: number;
   stabilityDays: number;
@@ -70,9 +73,9 @@ export interface Status {
   today: string;
   spacing: SpacingConfig;
   lanes: StatusLane[];
-  /** Recall candidates due per lane, same seeded draw the session packet uses.
-   *  Lanes with nothing due are absent. */
-  recallCandidatesByLane: Record<string, RecallCandidate[]>;
+  /** How many topics are due for recall across every lane — unsampled, so it
+   *  agrees with what a quick-recall check would actually draw. Gates the button. */
+  recallDueCount: number;
   openSettledItems: string[];
   topics: TopicRow[];
   activeSessions: ActiveSession[];
@@ -285,13 +288,37 @@ export interface CommitResult {
   usage?: LessonUsage;
 }
 
+/** What a completed recall check recorded. The recall-mode analogue of
+ *  CommitResult — no lesson number, because a check consumes none. */
+export interface RecallRecord {
+  graded: {
+    topicId: string;
+    name: string;
+    result: "clean" | "rusty" | "miss";
+    streak: number;
+    nextInDays: number;
+  }[];
+  summary: string[];
+  gitMessage: string;
+  recordedAt: string;
+  usage?: LessonUsage;
+}
+
 export interface LessonState {
   id: string;
   status: "active" | "committed" | "abandoned";
   title: string;
-  params: { laneId?: string; size: SessionSize; model: LessonModel; discuss?: boolean };
+  params: {
+    laneId?: string;
+    size: SessionSize;
+    model: LessonModel;
+    discuss?: boolean;
+    mode?: "lesson" | "recall";
+  };
   transcript: TranscriptEntry[];
   commit: CommitResult | null;
+  /** Recall mode only: set once the check has recorded its grades. */
+  recall?: RecallRecord;
   createdAt: string;
   ending?: boolean;
   lastError?: string;
@@ -308,6 +335,7 @@ export type LessonEvent =
   | { type: "tool_use"; name: string }
   | { type: "feedback_flag"; messageId: string; note: string }
   | { type: "committed"; commit: CommitResult }
+  | { type: "recall_recorded"; recall: RecallRecord }
   // costUsd here is the lesson-so-far total, not the cost of this one turn.
   | { type: "turn_done"; costUsd: number; isError: boolean; errors?: string[]; tokens?: TokenCounts }
   | { type: "rate_limit"; status: string; resetsAt?: number }
@@ -336,6 +364,19 @@ async function j<T>(res: Response): Promise<T> {
 // The full surface every screen/module calls through `api.*`. Both the live
 // (fetch-based) and demo (static-replay) implementations satisfy this shape;
 // see the seam at the bottom of this file.
+/** The POST /api/lesson body. One declaration — this used to be spelled out
+ *  separately in the Api interface and in liveApi, which is a footgun every time
+ *  a field is added. `mode: "recall"` starts a one-click recall check: the server
+ *  draws the topics, so laneId/topicOverride/discuss are all ignored. */
+export interface CreateLessonBody {
+  laneId?: string;
+  topicOverride?: string;
+  discuss?: boolean;
+  mode?: "lesson" | "recall";
+  size: SessionSize;
+  model: LessonModel;
+}
+
 export interface Api {
   status(): Promise<Status>;
   version(): Promise<VersionInfo>;
@@ -343,13 +384,7 @@ export interface Api {
   curriculum(): Promise<CurriculumView>;
   /** Raw markdown of an archived lesson transcript. */
   transcript(lessonNumber: number): Promise<string>;
-  createLesson(body: {
-    laneId?: string;
-    topicOverride?: string;
-    discuss?: boolean;
-    size: SessionSize;
-    model: LessonModel;
-  }): Promise<{ sessionId: string; title: string }>;
+  createLesson(body: CreateLessonBody): Promise<{ sessionId: string; title: string }>;
   lesson(id: string): Promise<LessonState>;
   sendMessage(id: string, text: string, images?: OutgoingImage[]): Promise<{ ok: boolean }>;
   endLesson(id: string): Promise<{ ok: boolean; alreadyCommitted?: boolean }>;
@@ -388,13 +423,7 @@ const liveApi: Api = {
     return res.text();
   },
 
-  createLesson: (body: {
-    laneId?: string;
-    topicOverride?: string;
-    discuss?: boolean;
-    size: SessionSize;
-    model: LessonModel;
-  }): Promise<{ sessionId: string; title: string }> =>
+  createLesson: (body: CreateLessonBody): Promise<{ sessionId: string; title: string }> =>
     fetch("/api/lesson", {
       method: "POST",
       headers: { "content-type": "application/json" },

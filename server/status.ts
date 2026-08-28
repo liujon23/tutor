@@ -2,7 +2,7 @@
 // Zero AI tokens are spent here; that's the point of Option B selection.
 import { readFileSync } from "node:fs";
 import { allTopics, laneById, loadCurriculum, topicById, unitById } from "../core/curriculum.js";
-import { recallCandidates, recommendNext, type RecallCandidate } from "../core/selector.js";
+import { recallCandidates, recommendNext } from "../core/selector.js";
 import type { SpacingConfig } from "../core/types.js";
 import { SECTIONS } from "../core/profile.js";
 import { DATA_PATHS, todayLocal } from "../scripts/lib.js";
@@ -65,7 +65,11 @@ export function buildStatus(spacing: SpacingConfig) {
 
   const all = listSessions();
   const active = all
-    .filter((s) => s.status === "active")
+    // A recall check that already recorded is done — its grade is durable in
+    // curriculum.yaml and nothing is kept from the conversation, so there is
+    // nothing to resume. One that hasn't recorded yet stays resumable: that's
+    // the useful failure mode (backgrounded mid-question).
+    .filter((s) => s.status === "active" && !(s.params.mode === "recall" && s.recall))
     .map((s) => ({
       id: s.id,
       title: s.title,
@@ -74,20 +78,22 @@ export function buildStatus(spacing: SpacingConfig) {
       lastActivityAt: s.lastActivityAt,
     }));
 
-  // What's due per lane, computed for every lane here so a consumer picking a
-  // different track is a lookup rather than a refetch. The seeded draw keeps each
-  // day's sets stable across renders and consistent with the packet.
-  const recallCandidatesByLane: Record<string, RecallCandidate[]> = {};
-  for (const lane of c.lanes) {
-    const cands = recallCandidates(c, { today, laneId: lane.id, spacing });
-    if (cands.length) recallCandidatesByLane[lane.id] = cands;
-  }
+  // How many topics are actually due, across every lane. Unsampled and uncapped
+  // on purpose: this is the same draw pickRecallBundle uses, so the quick-recall
+  // button's enabled state agrees exactly with what the server would pick. The
+  // per-lane seeded draw would under-report — it samples, and caps at 3 a lane.
+  const recallDueCount = recallCandidates(c, {
+    today,
+    spacing,
+    probabilistic: false,
+    max: Number.MAX_SAFE_INTEGER,
+  }).length;
 
   return {
     today,
     spacing,
     lanes,
-    recallCandidatesByLane,
+    recallDueCount,
     openSettledItems: openSettledItems(),
     topics,
     activeSessions: active,

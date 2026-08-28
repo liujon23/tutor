@@ -1,6 +1,6 @@
 import { h, clear } from "../dom.js";
 import { api } from "../api.js";
-import type { CommitResult, LessonUsage } from "../api.js";
+import type { CommitResult, LessonUsage, RecallRecord } from "../api.js";
 import type { LessonCtx } from "./ctx.js";
 import { showBanner } from "./ctx.js";
 import { addNote, scrollDown } from "./bubbles.js";
@@ -79,6 +79,48 @@ function renderUsage(u: LessonUsage): HTMLElement {
   );
 
   return box;
+}
+
+/**
+ * The recall-mode counterpart of showWrapup. Reuses the same .wrapup container
+ * and classes — a recall check has no lesson number, no proposed patterns, and
+ * no approval gate, so none of showWrapup's machinery applies, but the shape of
+ * the panel is the same.
+ */
+export function showRecallPanel(ctx: LessonCtx, recall: RecallRecord): void {
+  ctx.commitNote?.remove();
+  ctx.commitNote = null;
+  clear(ctx.wrapup);
+  ctx.wrapup.classList.remove("hidden");
+  ctx.wrapup.append(h("h2", {}, "Recall recorded"));
+  const ul = h("ul", { class: "wrapup-summary" });
+  for (const g of recall.graded) {
+    const back = g.nextInDays >= 60 ? `~${Math.round(g.nextInDays / 30)} months` : `~${g.nextInDays} days`;
+    ul.append(h("li", {}, `${g.name} — ${g.result} · streak ${g.streak} · back in ${back}`));
+  }
+  ctx.wrapup.append(ul);
+  if (recall.usage) ctx.wrapup.append(renderUsage(recall.usage));
+  if (recall.gitMessage) ctx.wrapup.append(h("div", { class: "wrapup-git" }, recall.gitMessage));
+  ctx.wrapup.append(
+    h(
+      "button",
+      {
+        class: "secondary small",
+        onclick: async () => {
+          // The grade is already durable in curriculum.yaml and git, and nothing
+          // from this conversation is kept — so the session file is disposable.
+          try {
+            await api.abandon(ctx.id);
+          } catch {
+            /* best-effort cleanup; leaving it costs only a session file */
+          }
+          ctx.leaveLesson();
+        },
+      },
+      "Back to start"
+    )
+  );
+  scrollDown(ctx, true);
 }
 
 export function showWrapup(ctx: LessonCtx, commit: CommitResult): void {

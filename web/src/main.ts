@@ -320,8 +320,33 @@ export async function showSelect(): Promise<void> {
     const topic = selectedTopic ? status.topics.find((t) => t.id === selectedTopic) : undefined;
     startBtn.textContent = topic ? `Start: ${topic.name}` : "Start lesson";
   };
+  // ---- Quick recall ------------------------------------------------------
+  // A one-question spaced-recall check: no selection at all, the server draws
+  // the most overdue topic(s). Its own row rather than a third button in the
+  // start row — .start-row children are flex:1, and three of them is cramped on
+  // a phone. The button stays put on a quiet day rather than vanishing; a daily
+  // habit needs a fixed place to tap.
+  const recallBtn = h("button", { class: "secondary" }, "Quick recall") as HTMLButtonElement;
+  const dueCount = status.recallDueCount;
+  const recallNote = h(
+    "div",
+    { class: "card-note" },
+    dueCount === 0
+      ? "Nothing due today"
+      : `${dueCount} topic${dueCount === 1 ? "" : "s"} due for recall`
+  );
+
+  // One switch for every action button. The old code chained
+  // `startBtn.disabled = discussBtn.disabled = true`, which silently leaves any
+  // newly-added button live — a double-tap would then open two sessions.
+  const actionButtons = [startBtn, discussBtn, recallBtn];
+  const setBusy = (busy: boolean) => {
+    for (const b of actionButtons) b.disabled = busy;
+    if (!busy && dueCount === 0) recallBtn.disabled = true; // never re-enable an empty recall
+  };
+
   const start = async (discuss: boolean) => {
-    startBtn.disabled = discussBtn.disabled = true;
+    setBusy(true);
     startBtn.textContent = "Starting…";
     try {
       const res = await api.createLesson({
@@ -333,17 +358,34 @@ export async function showSelect(): Promise<void> {
       });
       showLesson(res.sessionId);
     } catch (e) {
-      startBtn.disabled = discussBtn.disabled = false;
+      setBusy(false);
       refreshStart();
+      alert(`Couldn't start: ${(e as Error).message}`);
+    }
+  };
+  const startRecall = async () => {
+    setBusy(true);
+    recallBtn.textContent = "Starting…";
+    try {
+      // No lane, topic, or discuss flag — the server picks what's most overdue.
+      const res = await api.createLesson({ mode: "recall", size, model });
+      showLesson(res.sessionId);
+    } catch (e) {
+      setBusy(false);
+      recallBtn.textContent = "Quick recall";
       alert(`Couldn't start: ${(e as Error).message}`);
     }
   };
   startBtn.addEventListener("click", () => start(false));
   discussBtn.addEventListener("click", () => start(true));
+  recallBtn.addEventListener("click", () => void startRecall());
+  if (dueCount === 0) recallBtn.disabled = true;
+
   // Demo mode: no "discuss it instead" — selection-in-chat needs a live model.
   // The element still exists (start() toggles its disabled state); it just
   // never enters the DOM.
   screen.append(h("div", { class: "start-row" }, startBtn, __DEMO__ ? null : discussBtn));
+  screen.append(h("div", { class: "start-row" }, recallBtn), recallNote);
 
   refreshSelection();
   root.append(screen);
