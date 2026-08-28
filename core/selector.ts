@@ -1,6 +1,7 @@
 import type { Curriculum, Lane, SpacingConfig, Topic, Unit } from "./types.js";
 import { allTopics, topicById, unitById } from "./curriculum.js";
 import { DEFAULT_SPACING, getRecall, offerProbability, seededUnit, stabilityDays } from "./spacing.js";
+import { lastExercised } from "./recall.js";
 
 export interface Recommendation {
   laneId: string;
@@ -137,7 +138,12 @@ export interface RecallCandidate {
   name: string;
   laneId: string;
   unitId: string;
+  /** The date this topic was last *taught* in a numbered lesson. */
   lastTouched: string;
+  /** The date it was last exercised at all — taught or recall-checked. This is
+   *  what `daysStale` measures from; it differs from `lastTouched` only when a
+   *  standalone recall check has run since the last lesson. */
+  lastSeen: string;
   daysStale: number;
   streak: number; // consecutive clean recalls so far
   stabilityDays: number; // the interval that streak earns
@@ -176,7 +182,11 @@ export function recallCandidates(c: Curriculum, opts: RecallOptions): RecallCand
   for (const { lane, unit, topic } of allTopics(c)) {
     if (laneId && lane.id !== laneId) continue;
     if (topic.state !== "comfortable" || !topic.lastTouched) continue;
-    const t1 = new Date(topic.lastTouched.date + "T00:00:00Z").getTime();
+    // Measured from the last time the topic was *exercised* — taught or
+    // recall-checked. Identical to lastTouched.date for anything a lesson wrote;
+    // they diverge only after a standalone recall check. See core/recall.ts.
+    const lastSeen = lastExercised(topic);
+    const t1 = new Date(lastSeen + "T00:00:00Z").getTime();
     const daysStale = Math.floor((t0 - t1) / 86_400_000);
     const { streak } = getRecall(topic);
     const stability = stabilityDays(streak, spacing);
@@ -189,6 +199,7 @@ export function recallCandidates(c: Curriculum, opts: RecallOptions): RecallCand
       laneId: lane.id,
       unitId: unit.id,
       lastTouched: topic.lastTouched.date,
+      lastSeen,
       daysStale,
       streak,
       stabilityDays: stability,
@@ -200,6 +211,43 @@ export function recallCandidates(c: Curriculum, opts: RecallOptions): RecallCand
 
   out.sort((a, b) => b.overdueDays - a.overdueDays);
   const picked = out.slice(0, max);
+  fillBundles(c, picked);
+  return picked;
+}
+
+/**
+ * The single most overdue recall candidate across EVERY lane, plus any other due
+ * topics it is genuinely linked to — the draw behind the app's one-click recall
+ * check.
+ *
+ * Deliberately UNSAMPLED, unlike `recallCandidates`. The sampling exists so a
+ * warm-up *offered* inside a lesson varies day to day without the learner asking;
+ * a one-click check IS the ask. Determinism also lets the select screen's
+ * enabled/disabled state agree exactly with what the server will pick.
+ *
+ * Returns [] when nothing is due.
+ */
+export function pickRecallBundle(
+  c: Curriculum,
+  opts: { today: string; spacing?: SpacingConfig; maxBundle?: number }
+): RecallCandidate[] {
+  const due = recallCandidates(c, {
+    today: opts.today,
+    spacing: opts.spacing,
+    probabilistic: false,
+    max: Number.MAX_SAFE_INTEGER,
+  });
+  if (!due.length) return [];
+
+  // recallCandidates already sorts by overdueDays desc; break exact ties on id so
+  // reordering curriculum.yaml can't silently change which topic gets asked.
+  due.sort((a, b) => b.overdueDays - a.overdueDays || a.topicId.localeCompare(b.topicId));
+
+  const head = due[0];
+  const siblings = due.filter((r) => r.topicId !== head.topicId && areRelated(c, head, r));
+  const picked = [head, ...siblings.slice(0, (opts.maxBundle ?? 3) - 1)];
+  // bundleWith was filled against the full due set; recompute against the final one.
+  for (const p of picked) p.bundleWith = [];
   fillBundles(c, picked);
   return picked;
 }
