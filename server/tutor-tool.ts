@@ -376,6 +376,19 @@ export function createRecordRecallTool(ctx: RecallToolContext) {
             true
           );
         }
+        // ...and every drawn topic must be graded. A partial call would set
+        // session.recall and then be locked out by the guard above, leaving the
+        // rest of the bundle silently ungraded with no way to correct it.
+        const gradedIds = new Set(grades.map((g) => g.topicId));
+        const missing = allowed.filter((id) => !gradedIds.has(id));
+        if (missing.length) {
+          return textResult(
+            `REJECTED — nothing written. This check covers ${allowed.length} topic(s) and you ` +
+              `graded ${grades.length}. Missing: ${missing.join(", ")}. A bundle gets one grade ` +
+              `per topic — call record_recall once with all of them.`,
+            true
+          );
+        }
 
         // Server-supplied, so a session left open past midnight still stamps the
         // date the grade was actually earned rather than one the model guessed.
@@ -383,6 +396,9 @@ export function createRecordRecallTool(ctx: RecallToolContext) {
         const input = {
           date,
           grades: grades.map((g) => ({ ...g }) as RecallGrade),
+          // The session's configured curve, so the "next in Nd" we report is the
+          // interval the selector will actually honor.
+          spacing: ctx.session().params.spacing,
         };
 
         const errors = checkRecallCheck(DATA_PATHS, input);
@@ -421,22 +437,24 @@ export function createRecordRecallTool(ctx: RecallToolContext) {
           const wallClockMs =
             Date.parse(liveSession.lastActivityAt) - Date.parse(liveSession.createdAt);
           const usage = summarizeUsage(records, wallClockMs);
-          if (records.length) {
-            ledgerPath = appendRecallLedger(
-              {
-                date,
-                topicIds: grades.map((g) => g.topicId),
-                grades: grades.map((g) => ({
-                  topicId: g.topicId,
-                  result: g.result,
-                  rationale: g.rationale,
-                })),
-                recordedAt: provisional.recordedAt,
-              },
-              usage,
-              records
-            );
-          }
+          // Unconditional, unlike the usage ledger: no transcript is archived for
+          // a recall check, so this line is the only record of why a grade was
+          // given. Gating it on turn accounting would drop the audit trail in
+          // exactly the case it's most needed.
+          ledgerPath = appendRecallLedger(
+            {
+              date,
+              topicIds: grades.map((g) => g.topicId),
+              grades: grades.map((g) => ({
+                topicId: g.topicId,
+                result: g.result,
+                rationale: g.rationale,
+              })),
+              recordedAt: provisional.recordedAt,
+            },
+            usage,
+            records
+          );
 
           gitMessage = gitCommit(
             `Recall check — ${date} — ${grades.map((g) => g.topicId).join(", ")}`,

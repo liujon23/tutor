@@ -104,7 +104,13 @@ export async function showSelect(): Promise<void> {
           "button",
           { class: "resume-row", onclick: () => showLesson(s.id) },
           h("span", { class: "resume-title" }, s.title || "Lesson"),
-          h("span", { class: "resume-meta" }, `${s.params.size} · started ${s.createdAt.slice(0, 10)}`)
+          h(
+            "span",
+            { class: "resume-meta" },
+            // A recall check has no size worth reporting, and reading as
+            // "standard" would send the learner to a screen with no End button.
+            `${s.params.mode === "recall" ? "quick recall" : s.params.size} · started ${s.createdAt.slice(0, 10)}`
+          )
         )
       );
     }

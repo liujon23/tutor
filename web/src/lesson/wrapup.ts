@@ -99,6 +99,12 @@ export function showRecallPanel(ctx: LessonCtx, recall: RecallRecord): void {
     ul.append(h("li", {}, `${g.name} — ${g.result} · streak ${g.streak} · back in ${back}`));
   }
   ctx.wrapup.append(ul);
+  // summary carries what actually hit disk — and, on a post-write failure, the
+  // only warning that the grade was saved but never versioned. gitMessage is ""
+  // in that case, so without this the panel would look like a clean success.
+  const details = h("ul", { class: "wrapup-summary" });
+  for (const line of recall.summary) details.append(h("li", {}, line));
+  ctx.wrapup.append(details);
   if (recall.usage) ctx.wrapup.append(renderUsage(recall.usage));
   if (recall.gitMessage) ctx.wrapup.append(h("div", { class: "wrapup-git" }, recall.gitMessage));
   ctx.wrapup.append(
@@ -107,8 +113,9 @@ export function showRecallPanel(ctx: LessonCtx, recall: RecallRecord): void {
       {
         class: "secondary small",
         onclick: async () => {
-          // The grade is already durable in curriculum.yaml and git, and nothing
-          // from this conversation is kept — so the session file is disposable.
+          // The grade is already durable in curriculum.yaml and git. The session
+          // file (transcript included) is transient scratch under .app/ — never
+          // archived, never versioned — so abandoning it loses nothing that counts.
           try {
             await api.abandon(ctx.id);
           } catch {

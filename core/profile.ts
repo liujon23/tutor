@@ -21,12 +21,14 @@ export function learnerName(profileMarkdown: string): string {
   return m ? m[1].trim() : "Learner";
 }
 
-interface Section {
+export interface Section {
   start: number; // index of heading line
   end: number; // exclusive — index of next "## " heading or EOF
 }
 
-function findSection(lines: string[], headingPrefix: string): Section | null {
+/** Locate one `## ` section by heading prefix. Line-anchored on purpose: a prose
+ *  mention of a heading inside a bullet must not be mistaken for the heading. */
+export function findSection(lines: string[], headingPrefix: string): Section | null {
   const start = lines.findIndex((l) => l.startsWith(headingPrefix));
   if (start === -1) return null;
   let end = lines.length;

@@ -2,7 +2,7 @@
 // Zero AI tokens are spent here; that's the point of Option B selection.
 import { readFileSync } from "node:fs";
 import { allTopics, laneById, loadCurriculum, topicById, unitById } from "../core/curriculum.js";
-import { recallCandidates, recommendNext } from "../core/selector.js";
+import { countRecallDue, recommendNext } from "../core/selector.js";
 import type { SpacingConfig } from "../core/types.js";
 import { SECTIONS } from "../core/profile.js";
 import { DATA_PATHS, todayLocal } from "../scripts/lib.js";
@@ -82,12 +82,7 @@ export function buildStatus(spacing: SpacingConfig) {
   // on purpose: this is the same draw pickRecallBundle uses, so the quick-recall
   // button's enabled state agrees exactly with what the server would pick. The
   // per-lane seeded draw would under-report — it samples, and caps at 3 a lane.
-  const recallDueCount = recallCandidates(c, {
-    today,
-    spacing,
-    probabilistic: false,
-    max: Number.MAX_SAFE_INTEGER,
-  }).length;
+  const recallDueCount = countRecallDue(c, { today, spacing });
 
   return {
     today,

@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { buildSessionPacket } from "../core/slicer.js";
 import { topicById, loadCurriculum } from "../core/curriculum.js";
 import { getRecall, stabilityDays } from "../core/spacing.js";
-import { SECTIONS } from "../core/profile.js";
+import { SECTIONS, findSection } from "../core/profile.js";
 import { DATA_PATHS, ROOT, todayLocal } from "../scripts/lib.js";
 import type { LessonParams } from "./types.js";
 
@@ -34,24 +34,47 @@ function loadTeachingContract(): string {
 const TEACHING_CONTRACT = loadTeachingContract();
 
 /**
+ * One `## ` section of a markdown document, by exact heading line.
+ *
+ * Line-based rather than a string search, for two reasons. Sections
+ * cross-reference each other by name in prose (`## Recall warm-up` points at
+ * `## Recall grading`), so a bare indexOf slices from one of those mentions
+ * instead — silently shipping the wrong section. And `trimEnd()` keeps it
+ * working on a CRLF checkout: `.gitattributes` is `* text=auto`, so a Windows
+ * working tree has `\r\n`, and anchoring on a literal `\n` threw at module load
+ * and took the whole server down with it.
+ *
+ * Pure and exported so the CRLF case is testable — the bound version below
+ * reads a module-level constant that a test can't vary.
+ */
+export function markdownSection(doc: string, heading: string): string | null {
+  // Strip \r up front so the returned text — and therefore the cached prompt
+  // prefix built from it — is byte-identical on an LF and a CRLF checkout.
+  const lines = doc.split("\n").map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l));
+  const start = lines.findIndex((l) => l === heading);
+  if (start === -1) return null;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## ")) {
+      end = i;
+      break;
+    }
+  }
+  return lines.slice(start, end).join("\n").trim();
+}
+
+/**
  * One `## ` section of the shared contract, for a prompt that wants part of it
  * rather than the whole thing. Throws on a missing heading — same loud-failure
- * posture as loadTeachingContract(), so renaming a section in the contract
- * fails at startup instead of silently shipping a prompt with a hole in it.
+ * posture as loadTeachingContract(), so renaming a section fails at startup
+ * instead of silently shipping a prompt with a hole in it.
  */
 export function teachingContractSection(heading: string): string {
-  // Match the heading only as its own line. Sections cross-reference each other
-  // by name in prose (`## Recall warm-up` points at `## Recall grading`), and a
-  // bare indexOf would happily slice from one of those mentions instead — which
-  // silently ships the wrong section.
-  const start = TEACHING_CONTRACT.startsWith(`${heading}\n`)
-    ? 0
-    : TEACHING_CONTRACT.indexOf(`\n${heading}\n`) + 1;
-  if (start === 0 && !TEACHING_CONTRACT.startsWith(`${heading}\n`)) {
+  const section = markdownSection(TEACHING_CONTRACT, heading);
+  if (section === null) {
     throw new Error(`teaching contract has no section '${heading}' (${TEACHING_CONTRACT_PATH})`);
   }
-  const next = TEACHING_CONTRACT.indexOf("\n## ", start + 1);
-  return (next === -1 ? TEACHING_CONTRACT.slice(start) : TEACHING_CONTRACT.slice(start, next)).trim();
+  return section;
 }
 
 const APP_INTRO = `You are the learner's personal tutor, running one lesson end to end inside their
@@ -318,13 +341,16 @@ function buildRecallPacket(topicIds: string[], today: string): { packet: string;
  * actual entries. The confirmed-patterns section ships empty-by-design with an
  * explanatory HTML comment in it; that comment is for whoever edits the file,
  * not for the tutor, so a section with no bullets is treated as nothing to say.
+ *
+ * Line-anchored via core/profile.ts's findSection rather than a string search:
+ * a prose mention of the heading inside a Working-notes bullet would otherwise
+ * slice mid-line into the packet.
  */
 function readProfileSection(path: string, heading: string): string {
-  const raw = readFileSync(path, "utf8");
-  const start = raw.indexOf(heading);
-  if (start === -1) return "";
-  const next = raw.indexOf("\n## ", start + 1);
-  const section = (next === -1 ? raw.slice(start) : raw.slice(start, next)).trim();
+  const lines = readFileSync(path, "utf8").split("\n");
+  const sec = findSection(lines, heading);
+  if (!sec) return "";
+  const section = lines.slice(sec.start, sec.end).join("\n").trim();
   const hasEntries = section.split("\n").some((l) => l.trimStart().startsWith("- "));
   return hasEntries ? section : "";
 }

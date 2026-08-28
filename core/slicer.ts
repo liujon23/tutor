@@ -97,9 +97,14 @@ function renderRecall(recall: RecallCandidate[]): string {
     );
   }
   const lines = recall.map((r) => {
+    // streak is reset to 0 by rusty/miss, so it alone can't tell "never quizzed"
+    // from "quizzed and it didn't stick" — printing the latter as the former
+    // contradicts the recall date on the same line.
     const mastery = r.streak
       ? `recalled cleanly ${r.streak}×`
-      : `not yet recalled since it was learned`;
+      : r.reviews
+        ? `last recall didn't stick (${r.reviews} attempt${r.reviews === 1 ? "" : "s"})`
+        : `not yet recalled since it was learned`;
     // lastSeen diverges from lastTouched only after a standalone recall check;
     // saying "last touched" then counting days from the other date would lie.
     const when =

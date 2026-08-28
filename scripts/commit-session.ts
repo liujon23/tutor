@@ -14,7 +14,7 @@
 import { readFileSync } from "node:fs";
 import type { SessionPatch } from "../core/types.js";
 import { applySessionPatch, checkPatch } from "../core/patcher.js";
-import { DATA_PATHS, ensureDataRoot, gitCommit, parseArgs } from "./lib.js";
+import { DATA_PATHS, ensureDataRoot, gitCommit, parseArgs, spacingFromEnv } from "./lib.js";
 
 ensureDataRoot();
 
@@ -57,7 +57,7 @@ if (args["dry-run"] === "true") {
 }
 
 try {
-  const res = applySessionPatch(DATA_PATHS, patch);
+  const res = applySessionPatch(DATA_PATHS, patch, spacingFromEnv());
   console.log(`Session committed as Lesson ${res.lessonNumber}.`);
   for (const s of res.summary) console.log(`  - ${s}`);
   if (res.proposedConfirmedPatterns.length) printProposals(res.proposedConfirmedPatterns);

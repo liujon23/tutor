@@ -7,7 +7,15 @@ import fastifyStatic from "@fastify/static";
 import { applyProfilePatch } from "../core/profile.js";
 import { DEFAULT_SPACING } from "../core/spacing.js";
 import type { SpacingConfig } from "../core/types.js";
-import { DATA_PATHS, PATHS, ROOT, ensureDataRoot, gitCommit, todayLocal } from "../scripts/lib.js";
+import {
+  DATA_PATHS,
+  PATHS,
+  ROOT,
+  ensureDataRoot,
+  gitCommit,
+  spacingFromEnv,
+  todayLocal,
+} from "../scripts/lib.js";
 import { registerAssetRoutes } from "./assets.js";
 import { buildCurriculumView } from "./curriculum-view.js";
 import {
@@ -43,11 +51,7 @@ const HOST = process.env.TUTOR_HOST ?? "127.0.0.1";
 // Recall spacing: TUTOR_STALE_DAYS is the interval at streak 0, widened by
 // TUTOR_RECALL_GROWTH on every clean recall. One config, passed to every caller —
 // the constants themselves live in core/spacing.ts.
-const SPACING: SpacingConfig = {
-  ...DEFAULT_SPACING,
-  baseDays: Number(process.env.TUTOR_STALE_DAYS ?? DEFAULT_SPACING.baseDays),
-  growth: Number(process.env.TUTOR_RECALL_GROWTH ?? DEFAULT_SPACING.growth),
-};
+const SPACING: SpacingConfig = spacingFromEnv();
 const WEB_DIST = join(ROOT, "web", "dist");
 
 // Seed the starter courses if this is a first run. Copies files only — serving
@@ -185,21 +189,22 @@ app.post<{ Body: CreateLessonBody }>("/api/lesson", async (req, reply) => {
     return reply.code(400).send({ error: `lane '${params.laneId}' not found` });
   }
 
-  if (mode === "recall") {
-    // The server draws the topics — a recall check has no selection UI. Frozen
-    // into params so the tool's allow-list survives a restart and SDK resume.
-    const bundle = pickRecallBundle(loadCurriculum(DATA_PATHS.curriculum), {
-      today: todayLocal(),
-      spacing: SPACING,
-    });
-    if (!bundle.length) {
-      return reply.code(409).send({ error: "nothing is due for recall today" });
-    }
-    params.recallTopicIds = bundle.map((r) => r.topicId);
-  }
-
   let prompt;
   try {
+    if (mode === "recall") {
+      // The server draws the topics — a recall check has no selection UI. Frozen
+      // into params so the tool's allow-list survives a restart and SDK resume.
+      // Inside the try so a malformed curriculum gives the same clean 400 the
+      // lesson path does, not a bare 500.
+      const bundle = pickRecallBundle(loadCurriculum(DATA_PATHS.curriculum), {
+        today: todayLocal(),
+        spacing: SPACING,
+      });
+      if (!bundle.length) {
+        return reply.code(409).send({ error: "nothing is due for recall today" });
+      }
+      params.recallTopicIds = bundle.map((r) => r.topicId);
+    }
     prompt = mode === "recall" ? buildRecallSystemPrompt(params) : buildLessonSystemPrompt(params);
   } catch (e) {
     return reply.code(400).send({ error: (e as Error).message });
@@ -280,7 +285,13 @@ app.post<{
 // Any siloed per-message feedback rides along as model-only text: the model
 // sees it, the transcript keeps just the short human message.
 app.post<{ Params: { id: string } }>("/api/lesson/:id/end", async (req, reply) => {
-  if (!manager.sessionFor(req.params.id)) return reply.code(404).send({ error: "no such lesson" });
+  const existing = manager.sessionFor(req.params.id);
+  if (!existing) return reply.code(404).send({ error: "no such lesson" });
+  // Checked BEFORE runnerFor, which constructs a LessonRunner (and with it an
+  // Agent SDK session) that a recall check would never use.
+  if (existing.params.mode === "recall") {
+    return reply.code(409).send({ error: "a recall check has no wrap-up — it ends on its own" });
+  }
   let runner;
   try {
     runner = manager.runnerFor(req.params.id);
@@ -290,11 +301,6 @@ app.post<{ Params: { id: string } }>("/api/lesson/:id/end", async (req, reply) =
   // Re-fetch AFTER runnerFor so we mutate the (possibly just-revived) runner's
   // live record — a stale copy would clobber its transcript writes.
   const session = manager.sessionFor(req.params.id)!;
-  // A recall check has no commit_session tool, so the wrap-up checklist below
-  // would be an instruction it cannot follow. The client hides the button too.
-  if (session.params.mode === "recall") {
-    return reply.code(409).send({ error: "a recall check has no wrap-up — it ends on its own" });
-  }
   if (session.commit) return { ok: true, alreadyCommitted: true };
   session.ending = true;
   saveSession(session);

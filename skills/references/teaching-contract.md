@@ -188,7 +188,7 @@ Either of you can call it; name natural stopping points and let the learner choo
   Keep `whatHappened` to the load-bearing arc — what the next lesson needs, not a
   blow-by-blow; the transcript is the full record.
 - **topicUpdates** — state changes for everything genuinely touched. Every recall
-  warm-up gets a `recall: clean|rusty|miss` grade (see the warm-up section); topics
+  warm-up gets a `recall: clean|rusty|miss` grade (see `## Recall grading`); topics
   that were taught rather than recalled omit `recall`. Trim notes on now-comfortable
   topics; spend words only where they help the next lesson.
 - **unit/laneUpdates** — advance pointers; flip unit state when warranted

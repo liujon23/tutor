@@ -21,23 +21,6 @@ export interface StatusLane {
   };
 }
 
-export interface RecallCandidate {
-  topicId: string;
-  name: string;
-  laneId: string;
-  unitId: string;
-  /** Last taught in a numbered lesson. */
-  lastTouched: string;
-  /** Last exercised at all — taught or recall-checked. What daysStale measures from. */
-  lastSeen: string;
-  daysStale: number;
-  streak: number;
-  stabilityDays: number;
-  overdueDays: number;
-  offerProbability: number;
-  bundleWith: string[];
-}
-
 export interface TopicRow {
   id: string;
   name: string;
@@ -51,7 +34,7 @@ export interface TopicRow {
 export interface ActiveSession {
   id: string;
   title: string;
-  params: { laneId?: string; size: SessionSize; model: LessonModel };
+  params: { laneId?: string; size: SessionSize; model: LessonModel; mode?: "lesson" | "recall" };
   createdAt: string;
   lastActivityAt: string;
 }

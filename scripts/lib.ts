@@ -2,7 +2,8 @@ import { execFile, execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import type { DataPaths } from "../core/types.js";
+import type { DataPaths, SpacingConfig } from "../core/types.js";
+import { DEFAULT_SPACING } from "../core/spacing.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -69,6 +70,20 @@ export const PATHS: TutorPaths = resolveTutorPaths(ROOT, process.env.TUTOR_DATA_
  *  Seeding is only ever automatic in that case — never at a path someone
  *  typed, which may be a typo we shouldn't build a tree at. */
 export const DATA_ROOT_IS_DEFAULT = !process.env.TUTOR_DATA_DIR;
+
+/**
+ * The recall curve from the environment: TUTOR_STALE_DAYS is the interval at
+ * streak 0, widened by TUTOR_RECALL_GROWTH on every clean recall. One helper so
+ * the server and the CLI commit path can't quote different intervals for the
+ * same grade (start-lesson takes them as explicit flags instead).
+ */
+export function spacingFromEnv(): SpacingConfig {
+  return {
+    ...DEFAULT_SPACING,
+    baseDays: Number(process.env.TUTOR_STALE_DAYS ?? DEFAULT_SPACING.baseDays),
+    growth: Number(process.env.TUTOR_RECALL_GROWTH ?? DEFAULT_SPACING.growth),
+  };
+}
 
 /** The core-facing subset (kept as its own export — core/* takes DataPaths). */
 export const DATA_PATHS: DataPaths = PATHS;
