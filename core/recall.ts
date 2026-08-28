@@ -10,7 +10,14 @@
 //
 // The streak/demotion rules live here too (`applyRecallGrade`), shared with the
 // patcher so the two write paths can never drift apart.
-import type { Curriculum, DataPaths, RecallResult, Topic, TopicState } from "./types.js";
+import type {
+  Curriculum,
+  DataPaths,
+  RecallResult,
+  SpacingConfig,
+  Topic,
+  TopicState,
+} from "./types.js";
 import { RECALL_RESULTS, TOPIC_STATES } from "./types.js";
 import { loadCurriculum, saveCurriculum, topicById } from "./curriculum.js";
 import { getRecall, stabilityDays } from "./spacing.js";
@@ -72,6 +79,10 @@ export interface RecallGrade {
 export interface RecallCheckInput {
   date: string; // YYYY-MM-DD — supplied by the server, never by the model
   grades: RecallGrade[];
+  /** The configured curve (TUTOR_STALE_DAYS / TUTOR_RECALL_GROWTH). Omit only in
+   *  tests: the reported "next in Nd" must match what the selector will actually
+   *  do, and the selector always runs on the configured spacing. */
+  spacing?: SpacingConfig;
 }
 
 export interface GradedTopic {
@@ -158,7 +169,7 @@ export function applyRecallCheck(paths: DataPaths, input: RecallCheckInput): Rec
     applyRecallGrade(hit.topic, g.result, input.date, g.state);
 
     const { streak } = getRecall(hit.topic);
-    const nextInDays = Math.round(stabilityDays(streak));
+    const nextInDays = Math.round(stabilityDays(streak, input.spacing));
     graded.push({
       topicId: g.topicId,
       name: hit.topic.name,

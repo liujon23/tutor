@@ -146,6 +146,7 @@ export interface RecallCandidate {
   lastSeen: string;
   daysStale: number;
   streak: number; // consecutive clean recalls so far
+  reviews: number; // total recall attempts — distinguishes "never quizzed" from "streak reset"
   stabilityDays: number; // the interval that streak earns
   overdueDays: number; // daysStale - stabilityDays (>= 0 for anything returned)
   offerProbability: number;
@@ -165,6 +166,9 @@ export interface RecallOptions {
   /** Default true. False returns every topic past its interval, unsampled —
    *  what a "how many topics are stale?" count wants. */
   probabilistic?: boolean;
+  /** Default true. False skips bundle linking, which is O(n²) — for callers that
+   *  only need the set (or its size), not which members hang together. */
+  bundle?: boolean;
 }
 
 /**
@@ -175,7 +179,14 @@ export interface RecallOptions {
  * learner's plan for the session.
  */
 export function recallCandidates(c: Curriculum, opts: RecallOptions): RecallCandidate[] {
-  const { today, laneId, max = 3, spacing = DEFAULT_SPACING, probabilistic = true } = opts;
+  const {
+    today,
+    laneId,
+    max = 3,
+    spacing = DEFAULT_SPACING,
+    probabilistic = true,
+    bundle = true,
+  } = opts;
   const t0 = new Date(today + "T00:00:00Z").getTime();
   const out: RecallCandidate[] = [];
 
@@ -188,7 +199,7 @@ export function recallCandidates(c: Curriculum, opts: RecallOptions): RecallCand
     const lastSeen = lastExercised(topic);
     const t1 = new Date(lastSeen + "T00:00:00Z").getTime();
     const daysStale = Math.floor((t0 - t1) / 86_400_000);
-    const { streak } = getRecall(topic);
+    const { streak, reviews } = getRecall(topic);
     const stability = stabilityDays(streak, spacing);
     const p = offerProbability(daysStale, stability);
     if (p <= 0) continue; // still inside the interval this topic earned
@@ -202,6 +213,7 @@ export function recallCandidates(c: Curriculum, opts: RecallOptions): RecallCand
       lastSeen,
       daysStale,
       streak,
+      reviews,
       stabilityDays: stability,
       overdueDays: daysStale - stability,
       offerProbability: p,
@@ -211,8 +223,30 @@ export function recallCandidates(c: Curriculum, opts: RecallOptions): RecallCand
 
   out.sort((a, b) => b.overdueDays - a.overdueDays);
   const picked = out.slice(0, max);
-  fillBundles(c, picked);
+  if (bundle) fillBundles(c, picked);
   return picked;
+}
+
+/**
+ * How many topics are due across every lane, using the same unsampled draw
+ * `pickRecallBundle` makes — so a caller gating on this can't offer a check the
+ * server would then refuse.
+ *
+ * Counts without bundling. `recallCandidates` runs `fillBundles`, which is
+ * O(due²) with a `topicById` scan per pair; on a large backlog that is seconds
+ * of work for a number that needs none of it.
+ */
+export function countRecallDue(
+  c: Curriculum,
+  opts: { today: string; spacing?: SpacingConfig }
+): number {
+  return recallCandidates(c, {
+    today: opts.today,
+    spacing: opts.spacing,
+    probabilistic: false,
+    max: Number.MAX_SAFE_INTEGER,
+    bundle: false,
+  }).length;
 }
 
 /**
@@ -236,6 +270,7 @@ export function pickRecallBundle(
     spacing: opts.spacing,
     probabilistic: false,
     max: Number.MAX_SAFE_INTEGER,
+    bundle: false, // recomputed below against the final pick anyway
   });
   if (!due.length) return [];
 
@@ -243,10 +278,20 @@ export function pickRecallBundle(
   // reordering curriculum.yaml can't silently change which topic gets asked.
   due.sort((a, b) => b.overdueDays - a.overdueDays || a.topicId.localeCompare(b.topicId));
 
+  // Build a CLIQUE, not a star. A sibling must be related to every topic already
+  // picked, not just to the head — otherwise the packet asks for "ONE question
+  // that can't be answered without all of them" over topics that share no unit,
+  // no prerequisite edge and no bridge, which is not a question anyone can write.
+  const cap = opts.maxBundle ?? 3;
   const head = due[0];
-  const siblings = due.filter((r) => r.topicId !== head.topicId && areRelated(c, head, r));
-  const picked = [head, ...siblings.slice(0, (opts.maxBundle ?? 3) - 1)];
-  // bundleWith was filled against the full due set; recompute against the final one.
+  const picked = [head];
+  for (const r of due) {
+    if (picked.length >= cap) break;
+    if (r.topicId === head.topicId) continue;
+    if (picked.every((p) => areRelated(c, p, r))) picked.push(r);
+  }
+  // bundleWith was filled against the full due set; recompute against the final one
+  // so a cut sibling can't leave a dangling id for the packet to print.
   for (const p of picked) p.bundleWith = [];
   fillBundles(c, picked);
   return picked;

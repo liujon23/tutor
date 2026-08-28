@@ -135,7 +135,9 @@ export async function showSelect(): Promise<void> {
           h(
             "span",
             { class: "resume-meta" },
-            `${s.params.size} · started ${s.createdAt.slice(0, 10)}${s.expiresAt ? ` · ${expiresIn(s.expiresAt)}` : ""}`
+            // A recall check has no size worth reporting, and reading as
+            // "standard" would send the learner to a screen with no End button.
+            `${s.params.mode === "recall" ? "quick recall" : s.params.size} · started ${s.createdAt.slice(0, 10)}${s.expiresAt ? ` · ${expiresIn(s.expiresAt)}` : ""}`
           )
         )
       );
