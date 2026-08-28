@@ -5,9 +5,9 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { loadCurriculum, saveCurriculum } from "../core/curriculum.js";
+import { allTopics, loadCurriculum, saveCurriculum, topicById, unitById } from "../core/curriculum.js";
 import { validateCurriculum } from "../core/validator.js";
-import { recommendNext, recallCandidates, pickRecallBundle } from "../core/selector.js";
+import { countRecallDue, recommendNext, recallCandidates, pickRecallBundle } from "../core/selector.js";
 import { DEFAULT_SPACING, offerProbability, seededUnit, stabilityDays } from "../core/spacing.js";
 import { parseHistory, nextLessonNumber, condenseEntry } from "../core/history.js";
 import { applyProfilePatch, checkProfilePatch } from "../core/profile.js";
@@ -21,7 +21,7 @@ import {
 import { buildSessionPacket } from "../core/slicer.js";
 import { renderUnitFull } from "../core/render.js";
 import { buildLaneDoc, renderLaneMarkdown, renderLaneHtml } from "../core/lane-doc.js";
-import type { DataPaths, Lane, ProfilePatch, SessionPatch } from "../core/types.js";
+import type { Curriculum, DataPaths, Lane, ProfilePatch, SessionPatch } from "../core/types.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -454,6 +454,233 @@ test("a recall check quiets the topics it graded — back-to-back checks can't d
 
   const again = pickRecallBundle(loadCurriculum(paths.curriculum), { today: "2026-07-16", spacing: tight });
   assert.deepEqual(again, [], "every graded topic is inside its freshly-earned interval");
+});
+
+// --- Recall selection: the claims mutation testing found unverified -----------
+
+/**
+ * The fixture with a hand-built due set: every topic reset to inert, then only
+ * the named ones made `comfortable` with the given lastTouched. Lets a test
+ * construct ties, cut siblings and star topologies the 2-topic fixture can't.
+ */
+function dueSet(spec: { id: string; date: string; streak?: number }[]): Curriculum {
+  const c = loadCurriculum(FIXTURE.curriculum);
+  for (const { topic } of allTopics(c)) {
+    topic.state = "not-started";
+    topic.lastTouched = null;
+    delete topic.recall;
+  }
+  for (const sp of spec) {
+    const hit = topicById(c, sp.id);
+    assert.ok(hit, `fixture has ${sp.id}`);
+    hit.topic.state = "comfortable";
+    hit.topic.lastTouched = { date: sp.date, lesson: 1 };
+    if (sp.streak) {
+      hit.topic.recall = { streak: sp.streak, reviews: sp.streak, last: { date: sp.date, result: "clean" } };
+    }
+  }
+  return c;
+}
+
+const TIGHT = { ...DEFAULT_SPACING, baseDays: 2 };
+
+test("pickRecallBundle breaks an exact overdue tie on topic id, not file order", () => {
+  // Same date and streak → identical overdueDays. Without the tiebreak the winner
+  // is whichever the curriculum happens to list first.
+  const spec = [
+    { id: "ai-nn-foundations-backprop", date: "2026-06-01" },
+    { id: "ai-nn-foundations-activation", date: "2026-06-01" },
+  ];
+  const c1 = dueSet(spec);
+  const first = pickRecallBundle(c1, { today: "2026-07-16", spacing: TIGHT, maxBundle: 1 });
+
+  // Same data, topics swapped within their unit — the pick must not move.
+  const c2 = dueSet(spec);
+  const core = unitById(c2, "ai-nn-foundations")!.unit.coreTopics;
+  const a = core.findIndex((t) => t.id === "ai-nn-foundations-activation");
+  const b = core.findIndex((t) => t.id === "ai-nn-foundations-backprop");
+  [core[a], core[b]] = [core[b], core[a]];
+  const second = pickRecallBundle(c2, { today: "2026-07-16", spacing: TIGHT, maxBundle: 1 });
+
+  assert.equal(first[0].overdueDays, second[0].overdueDays, "the tie is real");
+  assert.equal(first[0].topicId, second[0].topicId, "same pick regardless of file order");
+  assert.equal(first[0].topicId, "ai-nn-foundations-activation", "lexically smaller id wins");
+});
+
+test("pickRecallBundle bundles a clique, never a star", () => {
+  // head is bridged to two topics in different units; those two are unrelated to
+  // each other. Bundling all three would ask for one question spanning topics
+  // with no shared unit, edge or bridge — which cannot be written.
+  const c = dueSet([
+    { id: "ai-nn-foundations-activation", date: "2026-06-01" }, // head, most overdue
+    { id: "ai-sequence-models-rnn", date: "2026-06-05" },
+    { id: "ai-attn-mechanism", date: "2026-06-06" },
+  ]);
+  unitById(c, "ai-nn-foundations")!.unit.bridgeTopics = ["ai-sequence-models-rnn", "ai-attn-mechanism"];
+
+  const bundle = pickRecallBundle(c, { today: "2026-07-16", spacing: TIGHT });
+  assert.equal(bundle[0].topicId, "ai-nn-foundations-activation");
+  assert.equal(bundle.length, 2, "the third is related to the head but not to the sibling");
+  for (const r of bundle) {
+    for (const other of bundle) {
+      if (r.topicId !== other.topicId) {
+        assert.ok(r.bundleWith.includes(other.topicId), `${r.topicId} must link ${other.topicId}`);
+      }
+    }
+  }
+});
+
+test("pickRecallBundle drops bundleWith links to siblings it cut", () => {
+  // Three same-unit topics all due and all mutually related; maxBundle keeps two.
+  // The cut one must not survive in bundleWith — bundleGroups walks that list and
+  // would print a topic the packet never listed.
+  const c = dueSet([
+    { id: "ai-nn-foundations-activation", date: "2026-06-01" },
+    { id: "ai-nn-foundations-backprop", date: "2026-06-02" },
+    { id: "ai-nn-foundations-loss", date: "2026-06-03" },
+  ]);
+  const bundle = pickRecallBundle(c, { today: "2026-07-16", spacing: TIGHT, maxBundle: 2 });
+  assert.equal(bundle.length, 2);
+  const picked = new Set(bundle.map((r) => r.topicId));
+  for (const r of bundle) {
+    for (const id of r.bundleWith) {
+      assert.ok(picked.has(id), `${r.topicId} links ${id}, which was cut from the bundle`);
+    }
+  }
+});
+
+test("pickRecallBundle is unsampled — it offers on days the seeded draw would skip", () => {
+  // Barely-overdue topics draw a low offer probability, so the sampled draw is
+  // empty on some days. The button's due count is unsampled, so the pick must be
+  // too — otherwise a click 409s with "nothing is due".
+  const c = dueSet([{ id: "ai-nn-foundations-activation", date: "2026-06-01" }]);
+  let skipped: string | null = null;
+  for (let d = 3; d <= 14; d++) {
+    // Days just past the floor, where offerProbability is low enough to skip.
+    const today = `2026-06-${String(d).padStart(2, "0")}`;
+    const sampled = recallCandidates(c, { today, spacing: TIGHT });
+    const unsampled = recallCandidates(c, { today, spacing: TIGHT, probabilistic: false });
+    if (unsampled.length && !sampled.length) {
+      skipped = today;
+      break;
+    }
+  }
+  assert.ok(skipped, "found a day the seeded draw skips a due topic");
+  assert.equal(
+    pickRecallBundle(c, { today: skipped, spacing: TIGHT }).length,
+    1,
+    "the one-click check still offers it"
+  );
+});
+
+test("pickRecallBundle considers every due topic, not just the default top three", () => {
+  // The head's only related sibling is the 4th most overdue. A capped candidate
+  // list would cut it before bundling ever sees it, silently shrinking the bundle.
+  const c = dueSet([
+    { id: "ai-nn-foundations-activation", date: "2026-06-01" }, // head
+    { id: "ai-sequence-models-rnn", date: "2026-06-02" },
+    { id: "ai-attn-mechanism", date: "2026-06-03" },
+    { id: "ai-nn-foundations-backprop", date: "2026-06-04" }, // same unit as head, least overdue
+  ]);
+  const bundle = pickRecallBundle(c, { today: "2026-07-16", spacing: TIGHT });
+  assert.deepEqual(
+    bundle.map((r) => r.topicId),
+    ["ai-nn-foundations-activation", "ai-nn-foundations-backprop"],
+    "the 4th-most-overdue sibling is still reachable"
+  );
+});
+
+test("countRecallDue matches the unsampled draw without paying for bundling", () => {
+  const c = dueSet([
+    { id: "ai-nn-foundations-activation", date: "2026-06-01" },
+    { id: "ai-nn-foundations-backprop", date: "2026-06-02" },
+    { id: "ai-attn-mechanism", date: "2026-06-03" },
+  ]);
+  assert.equal(countRecallDue(c, { today: "2026-07-16", spacing: TIGHT }), 3);
+  assert.equal(countRecallDue(c, { today: "2026-06-02", spacing: TIGHT }), 0, "nothing due yet");
+
+  // The invariant the button rides on, checked on a day the seeded draw WOULD
+  // skip something: a sampled count could show 0 (button disabled while topics
+  // are overdue) or a number the server then refuses to honor.
+  const single = dueSet([{ id: "ai-nn-foundations-activation", date: "2026-06-01" }]);
+  let skipped: string | null = null;
+  for (let d = 3; d <= 14; d++) {
+    const today = `2026-06-${String(d).padStart(2, "0")}`;
+    if (
+      !recallCandidates(single, { today, spacing: TIGHT }).length &&
+      recallCandidates(single, { today, spacing: TIGHT, probabilistic: false }).length
+    ) {
+      skipped = today;
+      break;
+    }
+  }
+  assert.ok(skipped, "found a day the seeded draw skips a due topic");
+  assert.equal(countRecallDue(single, { today: skipped, spacing: TIGHT }), 1, "counts unsampled");
+  assert.equal(
+    pickRecallBundle(single, { today: skipped, spacing: TIGHT }).length,
+    1,
+    "a positive count always means a pick exists — otherwise the button 409s"
+  );
+});
+
+test("applyRecallCheck honors an explicit state and the configured spacing", () => {
+  const paths = scratchCopy();
+  // A clean grade with an explicit state — the one shape where check and apply
+  // could drift, since the state write is separate from the grade.
+  const res = applyRecallCheck(paths, {
+    date: "2026-08-01",
+    grades: [{ topicId: bpId, result: "clean", state: "shaky" }],
+    spacing: { ...DEFAULT_SPACING, baseDays: 7 },
+  });
+  const bp = aiTopics(paths)[1];
+  assert.equal(bp.state, "shaky", "an explicit state is written even on a clean grade");
+  assert.equal(bp.recall!.streak, 2);
+  // streak 2 on a 7-day base: 7 · 2.5² = 43.75 → 44. The default curve would say
+  // 88, which is not the interval the selector will honor.
+  assert.equal(res.graded[0].nextInDays, 44);
+});
+
+test("the packet's recall line never contradicts itself", () => {
+  const paths = scratchCopy();
+  const packetFor = (today: string) =>
+    buildSessionPacket(paths, {
+      laneId: "ai",
+      size: "tight",
+      model: "opus",
+      historyN: 1,
+      today,
+      spacing: TIGHT,
+    });
+  // The packet mentions a topic on several lines (recommendation, lane slice,
+  // recall). Scope to the recall section, or we assert against the wrong one.
+  const recallLine = (packet: string, name: string) => {
+    const start = packet.indexOf("## Recall warm-up candidates");
+    assert.ok(start !== -1, "packet has a recall section");
+    const section = packet.slice(start, packet.indexOf("\n## ", start + 1));
+    return section.split("\n").find((l) => l.startsWith(`- ${name}`)) ?? "";
+  };
+
+  // Never quizzed: one date, and no claim about a recall that didn't happen.
+  const fresh = recallLine(packetFor("2026-07-16"), "Activation");
+  assert.match(fresh, /last touched 2026-06-01/);
+  assert.match(fresh, /not yet recalled since it was learned/);
+  assert.ok(!fresh.includes("last recalled"), fresh);
+
+  // Graded rusty: streak resets to 0, but it HAS been recalled — and the dates
+  // now diverge, so the line must say taught-vs-recalled rather than "touched".
+  applyRecallCheck(paths, { date: "2026-08-01", grades: [{ topicId: bpId, result: "rusty" }] });
+  const rusty = recallLine(packetFor("2026-08-20"), "Backpropagation");
+  assert.match(rusty, /last taught 2026-07-10 · last recalled 2026-08-01/);
+  assert.match(rusty, /last recall didn't stick \(3 attempts\)/);
+  assert.ok(
+    !rusty.includes("not yet recalled since it was learned"),
+    `contradicts its own recall date: ${rusty}`
+  );
+
+  // A clean streak still reads as mastery.
+  applyRecallCheck(paths, { date: "2026-08-21", grades: [{ topicId: bpId, result: "clean" }] });
+  const clean = recallLine(packetFor("2026-09-30"), "Backpropagation");
+  assert.match(clean, /recalled cleanly 1×/);
 });
 
 test("history parses and numbers correctly", () => {

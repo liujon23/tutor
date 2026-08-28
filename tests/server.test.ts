@@ -7,7 +7,7 @@
 // courses on a fresh checkout and for a long-running personal curriculum alike.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildReport } from "../server/report.js";
@@ -17,6 +17,7 @@ import {
   buildLessonSystemPrompt,
   buildRecallSystemPrompt,
   kickoffMessage,
+  markdownSection,
   teachingContractSection,
 } from "../server/prompt.js";
 import { renderTranscript, rewriteArchivedImages } from "../server/transcript.js";
@@ -353,6 +354,28 @@ test("the lesson prompt still carries both recall sections after the split", () 
   assert.ok(systemPrompt.includes("## Recall grading"), "the grading rubric");
   assert.ok(systemPrompt.includes("before the main topic"), "warm-up placement survived");
   assert.ok(systemPrompt.includes("never generously"), "grading rubric survived");
+});
+
+test("markdownSection survives a CRLF checkout and ignores prose mentions", () => {
+  const raw = readFileSync(
+    join(process.cwd(), "skills", "references", "teaching-contract.md"),
+    "utf8"
+  );
+  const lf = raw.slice(raw.indexOf("\n## ") + 1).trim();
+  const crlf = lf.replace(/\n/g, "\r\n");
+
+  const fromLf = markdownSection(lf, "## Recall grading");
+  const fromCrlf = markdownSection(crlf, "## Recall grading");
+  assert.ok(fromLf, "section found on an LF checkout");
+  // .gitattributes is "* text=auto", so a Windows working tree has \r\n. This
+  // used to throw at module load and take the whole server down with it.
+  assert.equal(fromCrlf, fromLf, "same text regardless of line endings");
+
+  // `## Recall warm-up` mentions `## Recall grading` in prose; the slice must
+  // anchor on the heading line, not that mention.
+  assert.ok(fromLf!.startsWith("## Recall grading"));
+  assert.ok(!fromLf!.includes("before the main topic"), "did not slice from the prose mention");
+  assert.equal(markdownSection(lf, "## No Such Section"), null);
 });
 
 test("teachingContractSection slices one section and fails loudly on a rename", () => {

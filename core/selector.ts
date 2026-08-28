@@ -290,9 +290,8 @@ export function pickRecallBundle(
     if (r.topicId === head.topicId) continue;
     if (picked.every((p) => areRelated(c, p, r))) picked.push(r);
   }
-  // bundleWith was filled against the full due set; recompute against the final one
-  // so a cut sibling can't leave a dangling id for the packet to print.
-  for (const p of picked) p.bundleWith = [];
+  // Link only within the final pick. Bundling the full due set here would leave
+  // links to siblings that got cut, and bundleGroups prints whatever it finds.
   fillBundles(c, picked);
   return picked;
 }
