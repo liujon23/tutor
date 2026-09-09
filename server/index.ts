@@ -7,7 +7,7 @@ import fastifyStatic from "@fastify/static";
 import { applyProfilePatch } from "../core/profile.js";
 import { DEFAULT_SPACING } from "../core/spacing.js";
 import type { SpacingConfig } from "../core/types.js";
-import { DATA_PATHS, PATHS, ROOT, ensureDataRoot, gitCommit, todayLocal } from "../scripts/lib.js";
+import { DATA_PATHS, PATHS, ROOT, ensureDataRoot, gitAmendInto, gitCommit, todayLocal } from "../scripts/lib.js";
 import { registerAssetRoutes } from "./assets.js";
 import { registerTranscriptsStatic } from "./transcripts-static.js";
 import { cleanTranscript, prewarmCleanup, withHeard } from "./cleanup.js";
@@ -323,7 +323,9 @@ app.post<{ Params: { id: string }; Body: { via?: Via } | undefined }>("/api/less
     "3. Read all my ratings below and distill each one. If a rating is unclear, or a " +
     "preference guess is ready to promote to a confirmed pattern, ask me now — one short " +
     "question at a time. If I approve a promotion, fold it into approvedConfirmedPatterns " +
-    "in the single commit (don't also list it under proposedConfirmedPatterns).\n" +
+    "in the single commit (don't also list it under proposedConfirmedPatterns). Don't save " +
+    "a ready guess for the approval panel: asking here is what keeps this lesson to one " +
+    "commit.\n" +
     "4. Only once this wrap-up conversation is done, build the patch and call " +
     "commit_session exactly once.";
   const handoff = composeFeedbackHandoff(session);
@@ -589,9 +591,14 @@ app.post<{
   let gitMessage = "";
   if (approve.length > 0) {
     applyProfilePatch(DATA_PATHS.profile, { approvedConfirmedPatterns: { add: approve } });
-    gitMessage = gitCommit(
-      `Approve confirmed pattern(s) after Lesson ${session.commit.lessonNumber} — ${todayLocal()}`
-    );
+    // One lesson = one commit. The approval belongs to the lesson that proposed
+    // it, so fold it into that commit when doing so can't rewrite history anyone
+    // has seen; otherwise fall back to a commit of its own (see shouldAmend).
+    gitMessage =
+      gitAmendInto(session.commit.gitSha) ??
+      gitCommit(
+        `Approve confirmed pattern(s) after Lesson ${session.commit.lessonNumber} — ${todayLocal()}`
+      );
   }
   session.commit.patternsResolved = true;
   saveSession(session);

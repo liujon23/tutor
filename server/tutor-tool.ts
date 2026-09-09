@@ -7,7 +7,7 @@ import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import type { SessionPatch } from "../core/types.js";
 import { applySessionPatch, checkPatch } from "../core/patcher.js";
 import { appendFeedbackLedger, checkFeedbackCoverage, composeFeedbackHandoff } from "./feedback.js";
-import { DATA_PATHS, gitCommit } from "../scripts/lib.js";
+import { DATA_PATHS, gitCommit, gitHeadSha } from "../scripts/lib.js";
 import { fmtDuration, writeTranscript, type CommitTimings } from "./transcript.js";
 import {
   appendUsageLedger,
@@ -181,6 +181,7 @@ export function createCommitSessionTool(ctx: TutorToolContext) {
         let feedbackPath: string | null = null;
         let transcriptPath: string | null = null;
         let gitMessage = "";
+        let gitSha: string | undefined;
 
         try {
           const tArchive = Date.now(); // archiving logs (usage + feedback ledgers)
@@ -246,6 +247,7 @@ export function createCommitSessionTool(ctx: TutorToolContext) {
             `Lesson ${res.lessonNumber} — ${sessionPatch.lesson.date} — ${sessionPatch.lesson.topicIds.join(", ")}`,
             ["data", "transcripts"]
           );
+          gitSha = gitHeadSha() ?? undefined;
           const gitMs = Date.now() - tGit;
           const totalMs = composeMs + validateMs + writeMs + archiveMs + transcriptMs + gitMs;
           const timingLine =
@@ -270,6 +272,7 @@ export function createCommitSessionTool(ctx: TutorToolContext) {
             ],
             proposedConfirmedPatterns: res.proposedConfirmedPatterns,
             gitMessage,
+            ...(gitSha ? { gitSha } : {}),
             committedAt: new Date().toISOString(),
             ...(records.length ? { usage } : {}),
           };
@@ -310,6 +313,7 @@ export function createCommitSessionTool(ctx: TutorToolContext) {
             ],
             proposedConfirmedPatterns: res.proposedConfirmedPatterns,
             gitMessage,
+            ...(gitSha ? { gitSha } : {}),
             committedAt: provisional.committedAt,
           };
           ctx.onCommitted(finalResult);
