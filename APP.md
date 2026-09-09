@@ -67,7 +67,8 @@ selection into the chat. The session packet carries recall warm-up candidates pa
 to that track, scheduled by mastery: a comfortable topic comes due 14 days after it was
 last touched (`TUTOR_STALE_DAYS`), and each cleanly-recalled warm-up multiplies that
 interval by 2.5 (`TUTOR_RECALL_GROWTH`, capped at a year) — so a topic you keep nailing
-goes quiet for months. Past its interval a topic is *sampled* (seeded per day, so a
+goes quiet for months. Those are the defaults; `core/spacing.ts` owns the curve and
+every number in it. Past its interval a topic is *sampled* (seeded per day, so a
 refresh doesn't reshuffle) rather than offered outright, which adds variety near the due
 date.
 Note the sampling has little effect once a lane has a large overdue backlog: candidates

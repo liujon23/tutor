@@ -61,8 +61,10 @@ Key fields (see the shipped file for a live example):
   `{streak, reviews, last?: {date, result}}` with `result` = `clean|rusty|miss`.
   Written only by the patcher when a recall warm-up is graded; absent until then
   (code reads it via `getRecall()` in `core/spacing.ts`). `streak` counts consecutive
-  clean recalls and drives the review interval: base 14 days, ×2.5 per clean recall,
-  capped at a year. A `rusty`/`miss` resets it.
+  clean recalls and widens the review interval — each clean recall pushes the topic's
+  next appearance further out, up to a ceiling; a `rusty`/`miss` resets it. The curve
+  and its numbers live in `core/spacing.ts`, which owns them: they are per-run
+  configurable defaults, not part of this schema.
 - **Topic.assets** (optional): curated materials for future lessons —
   `{kind: image|text|link, url, title, note?}`. `image` URLs must be public-domain
   sources (embedded and cached by the app); `text`/`link` are navigational and may
