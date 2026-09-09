@@ -115,6 +115,11 @@ export interface CommitResult {
   summary: string[];
   proposedConfirmedPatterns: string[];
   gitMessage: string;
+  /** The lesson commit's sha, when one was made. Recorded so a later write for
+   *  the same lesson (an approved confirmed pattern) can fold itself into that
+   *  commit instead of adding a second one. Absent on sessions committed before
+   *  this was tracked, or when the data root isn't versioned. */
+  gitSha?: string;
   committedAt: string;
   patternsResolved?: boolean; // the learner approved/rejected the proposals
   /** Resource use for this lesson — undefined for lessons committed before the

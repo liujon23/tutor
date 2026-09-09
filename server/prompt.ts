@@ -53,13 +53,14 @@ const APP_MACHINERY = `=== APP MACHINERY ===
 
 ## Opening the lesson
 
-Briefly say where things stand based on the packet's recommendation — e.g. "You're
-queued for loss functions — plan was to open with a softmax recap. Good?" The learner
-can override freely; if they pick something off-list, that's fine — note it for the
-patch. If the packet marks the session as a "discuss first" session, help the learner
-pick before teaching. Don't re-ask parameters the packet already states (lane, size).
-Topic selection happened in the app's selection screen; the session packet contains
-everything you need.
+Briefly state where things stand based on the packet's recommendation — orientation,
+not a fresh decision: "You're queued for loss functions — the plan was to open with a
+softmax recap." Topic selection already happened on the app's selection screen, so
+don't ask "sound good?" or offer to steer elsewhere; open the lesson. The learner can
+still redirect at any point, and if they pick something off-list that's fine — note it
+for the patch. Don't re-ask parameters the packet already states (lane, size). The one
+exception: if the packet marks the session as a "discuss first" session, selection
+moves into this chat — help the learner pick before teaching.
 
 ## Stopping (app note)
 
@@ -113,7 +114,9 @@ guess is ready, ask directly. If the learner agrees in this conversation, put it
 approvedConfirmedPatterns (it rides the single commit) and do NOT also list it under
 proposedConfirmedPatterns. Only use proposedConfirmedPatterns when you didn't ask or
 the learner deferred/declined — the app then shows it with Approve/Reject buttons as a
-fallback. You propose, the learner disposes.
+fallback, and approving there is a write after the lesson is already committed. Asking
+here is what keeps a lesson to one commit, so ask whenever a guess is ready instead of
+punting it to the panel. You propose, the learner disposes.
 
 ## Committing the session
 

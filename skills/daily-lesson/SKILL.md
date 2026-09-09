@@ -3,13 +3,15 @@ name: daily-lesson
 description: Deliver a personalized, interactive tutoring lesson to the user, drawn from their learning documents via the repo's deterministic scripts. Use this whenever the user wants to learn, study, do today's lesson, continue a course, be taught or quizzed on a topic, or says things like "let's do a lesson", "teach me something", "what are we learning today", "start my lesson", "I want to study X", or names a topic they want to dig into. This is the user's standing daily-study system — reach for it for any "I want to learn / be tutored" moment, even when they don't say the word "lesson". Do NOT use it to create or restructure a course (that's the course-setup skill).
 ---
 
-# Daily Lesson (v2 — script-driven)
+# Daily Lesson
 
 This skill runs one tutoring lesson for the learner, end to end, in the terminal. All
-bookkeeping is done by the repo's scripts, not by you: you never read the three data
-files directly, never regenerate documents, and never hand-edit state. You run
+bookkeeping is done by the repo's scripts, not by you: you never read the learner's
+data files directly, never regenerate documents, and never hand-edit state. You run
 `start-lesson` to get everything you need, teach, then emit a structured patch and run
-`commit-session`. The scripts validate; git makes every session revertible.
+`commit-session`. The scripts validate; when the data root is its own git repository
+(`npm run init-data` makes it one), every session is a single commit that `git revert`
+can undo.
 
 ## Contract (read these once per session)
 
@@ -32,29 +34,34 @@ materials section is medium-conditional, use links, prose, and plain structured 
 Ask the learner, briefly and together, at most: **lane** (default: what's queued —
 name it), **size** (tight / standard / deep), and **"anything I should know before we
 start?"** (time, energy, mood — one open question, not a checklist). If they already
-said any of this, don't re-ask. If the repo's documents are missing, stop and point
-them to `course-setup`.
+said any of this, don't re-ask.
+
+A first run needs no setup from you: the scripts seed the data root from the starter
+courses themselves. If `start-lesson` instead exits complaining about the data root,
+`TUTOR_DATA_DIR` points somewhere wrong — relay the script's own instructions rather
+than improvising. `course-setup` is for building a lane, not for repairing paths.
 
 ## Step 1 — Load the packet
 
 Run:
 
 ```
-npm run start-lesson -- --lane <laneId> --size <tight|standard|deep> [--model opus|sonnet] [--history N]
+npm run start-lesson -- --lane <laneId> --size <tight|standard|deep> [--history N]
 ```
 
 Omit `--lane` only if the learner wants the default. Use `--history 5` (or more) when
 returning to a lane after a long gap. The packet contains: today's parameters, the
 deterministic recommendation (usually the queued `next up` with its carried plan),
-recall warm-up candidates, the full learner profile, the active-lane curriculum slice,
-and recent history. **This packet is your entire context. Do not open the data files.**
+recall warm-up candidates, the full learner profile, the active-lane curriculum slice
+(with any curated `assets` on its topics — prefer those over live search), the lane's
+`## Project` document verbatim when it has one, and recent history. **This packet is
+your entire context. Do not open the data files.**
 
 Briefly *state* where things stand — orientation, not a fresh decision: *"You're
 queued for loss functions; the plan was to open with a softmax recap."* The lane was
-already picked in Step 0 and the topic follows from what's queued, so **don't** ask
-"sound good?" or offer to steer elsewhere — that prompt is a leftover from before
-selection moved up front. The learner can still redirect at any point; if they pick
-something off-list, that's fine — note it for the patch.
+picked in Step 0 and the topic follows from what's queued, so **don't** ask "sound
+good?" or offer to steer elsewhere. The learner can still redirect at any point; if
+they pick something off-list, that's fine — note it for the patch.
 
 ## Steps 2–4 — Teach
 
@@ -93,6 +100,14 @@ example: `examples/session-patch.example.json`). Get the content right per the
 teaching contract's **Patch content** section — honest compact lesson entry, state
 changes for everything touched, `nextUp` always set, the profile gates, working-notes
 consolidation, and the `project` arm rules.
+
+**One thing the contract states for the app, not for here.** It keeps `whatHappened`
+to the load-bearing arc because "the transcript is the full record" — true in the app,
+which archives every lesson under `transcripts/`. The terminal archives nothing, so
+this lesson's history entry is its entire trace. Write `whatHappened` and
+`performanceSketch` to stand on their own for a reader with no conversation to fall
+back on: the arc, what the learner actually got right or wrong, and what the next
+lesson needs. Still compact, just not skeletal.
 
 Write the patch to `.session/patch.json` (create the dir if needed), then run this
 **once** (a lesson commits exactly once — don't split it into multiple commits):

@@ -144,7 +144,10 @@ as the per-message signal does the work.
 tutor to recap and wrap up; it then validates and applies the session patch through
 the same core patcher as the CLI and git-commits it. Proposed confirmed-pattern
 changes show up in the wrap-up panel with Approve/Reject buttons — nothing touches
-"How I learn best" without your explicit yes.
+"How I learn best" without your explicit yes. Approving there folds the change into
+the lesson's own commit (`git commit --amend`), keeping one lesson to one commit; if
+that commit has already been pushed, the approval takes a commit of its own rather
+than rewriting published history.
 
 Abandoning a lesson (or letting it idle >24h) writes nothing back — no partial
 entries.

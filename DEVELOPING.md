@@ -15,7 +15,7 @@ when it started — there's no hot reload. So most changes need a restart:
 | `server/prompt.ts` (how the tutor teaches) | Restart **and** start a *new* lesson — a lesson's instructions are fixed when it's created, so a running lesson keeps the old ones even after a restart |
 | `web/src/*` (the UI) | Rebuild + reload: `npm run build:web`, then reload the page. On the phone the installed app caches; reopen it twice (or pull-to-refresh) to pick up the new build |
 | `skills/references/teaching-contract.md` (how the tutor teaches, both media) | The single shared source: CLI lessons pick it up immediately; the app splices it into the prompt at server start, so restart **and** start a *new* lesson (same as `prompt.ts`). No more mirroring by hand. |
-| other `skills/**` | Nothing for the app — the skill files themselves are the *Claude Code CLI* flow, which the app never reads. They take effect on your next CLI lesson. |
+| other `skills/**` | Nothing for the app — these files are the *Claude Code CLI* flow, which the app never reads. **But they are not what Claude Code loads either:** `daily-lesson` and `course-setup` are account skills, kept as separate copies under `~/.claude/skills/synced/`, and Claude Code reads those. Editing them here changes nothing until you paste the new text into the skill in claude.ai; until you do, the two silently diverge. |
 | `data/*` (curriculum, profile) | Nothing to restart — each new lesson reads these fresh |
 
 The **one-click restart below does the first three at once**: it stops the server,
