@@ -16,9 +16,10 @@ can undo.
 ## Contract (read these once per session)
 
 - `skills/references/teaching-contract.md` — **how to teach**: the rigid-scaffolding /
-  fluid-teaching idea, recall warm-up, readiness check, the teaching defaults and
-  session-size anchors, materials & sourcing, primary-source-first, project-bearing
-  lanes, the synthesis capstone, stopping, and the patch-content rules. It is shared
+  fluid-teaching idea, recall warm-up, readiness check, the teaching defaults and the
+  failures that shadow them, session-size anchors, materials & sourcing,
+  primary-source-first, project-bearing lanes, the synthesis capstone, stopping, and the
+  patch-content rules. It is shared
   with the app so the tutor behaves identically in both media — this file only adds the
   terminal-specific flow around it.
 - `skills/references/document-formats.md` — the patch schema and update rules
