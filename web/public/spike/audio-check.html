@@ -7,55 +7,39 @@
 <link rel="manifest" href="spike.webmanifest" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="Spike" />
-<link rel="stylesheet" href="audio-check.css?v=1" />
+<link rel="stylesheet" href="audio-check.css?v=2" />
 </head>
 <body>
-<h1>Audio spike <span id="stamp"></span></h1>
 
-<section id="env" class="card">
-  <h2>Environment</h2>
+<header class="topbar">
+  <div class="topline">
+    <strong>Audio spike</strong>
+    <span id="stamp" class="stamp"></span>
+  </div>
+  <div id="verdict" class="verdict"></div>
+</header>
+
+<!-- The current step. Everything else on the page is reference; this is what
+     you act on. Built entirely by audio-check.js. -->
+<section id="stage" class="card stage"></section>
+
+<section id="progress" class="card"></section>
+
+<details class="card">
+  <summary>Environment</summary>
   <dl id="envlist"></dl>
-</section>
+</details>
 
-<section class="card">
-  <h2>1. Tag the audio route</h2>
-  <p class="hint">Tap before each run so the log says which route it describes.</p>
+<details class="card">
+  <summary>Log <span id="count">(0)</span></summary>
   <div class="row">
-    <button data-route="bluetooth" class="pill">Bluetooth</button>
-    <button data-route="speaker" class="pill">Phone speaker</button>
-    <button data-route="earbud" class="pill">Wired earbud</button>
+    <button id="b-copy" class="mini">Copy</button>
+    <button id="b-save" class="mini">Download JSON</button>
+    <button id="b-reset" class="mini danger">Reset everything</button>
   </div>
-</section>
-
-<section class="card">
-  <h2>2. Tests</h2>
-  <p class="hint">Run 1 first. Then 2 — that is the one that matters. During 3, count aloud steadily (one, two, three…) and compare the transcripts afterwards: missing numbers are the audio lost across restarts.</p>
-  <button id="b-speak" class="big">1. Speak only</button>
-  <button id="b-both" class="big warn">2. Mic ON, then speak</button>
-  <button id="b-listen" class="big">3. Recognition restart loop</button>
-  <button id="b-pnr" class="big alt">4. Hold play-and-record: <span id="pnr-state">off</span></button>
-  <button id="b-wake" class="big alt">5. Wake lock: <span id="wake-state">off</span></button>
-  <button id="b-stop" class="big stop">STOP EVERYTHING</button>
-
-  <h2>Mark what you actually heard</h2>
-  <div class="row">
-    <button data-mark="HEARD-CLEAR" class="pill good">Heard, clear</button>
-    <button data-mark="HEARD-QUIET" class="pill">Heard, too quiet</button>
-    <button data-mark="EARPIECE" class="pill">Came from earpiece</button>
-    <button data-mark="SILENT" class="pill bad">Heard nothing</button>
-    <button data-mark="CLIPPED-START" class="pill">First word clipped</button>
-    <button data-mark="CAR-SWITCHED-SOURCE" class="pill">Car switched source</button>
-  </div>
-</section>
-
-<section class="card">
-  <h2>Log <span id="count">(0)</span></h2>
-  <button id="b-copy">Copy</button>
-  <button id="b-save">Download JSON</button>
-  <button id="b-clear">Clear</button>
   <pre id="log"></pre>
-</section>
+</details>
 
-<script src="audio-check.js?v=1"></script>
+<script src="audio-check.js?v=2"></script>
 </body>
 </html>
