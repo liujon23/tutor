@@ -19,7 +19,7 @@ import {
 } from "./exposure.js";
 import { composeFeedbackHandoff, messageSnippet, validateFeedbackInput } from "./feedback.js";
 import { buildLessonSystemPrompt, kickoffMessage } from "./prompt.js";
-import { defaultModel, readBuildId } from "./params.js";
+import { END_TURN_TEXT, defaultModel, readBuildId } from "./params.js";
 import { buildReport } from "./report.js";
 import { LessonManager } from "./runner.js";
 import { buildStatus, laneExists } from "./status.js";
@@ -285,7 +285,12 @@ app.post<{ Params: { id: string } }>("/api/lesson/:id/end", async (req, reply) =
     "4. Only once this wrap-up conversation is done, build the patch and call " +
     "commit_session exactly once.";
   const handoff = composeFeedbackHandoff(session);
-  runner.send(endText, false, [], handoff ? `${endText}\n\n${handoff}` : undefined);
+  // The transcript keeps the short human line the client renders; the model
+  // gets the full ordered checklist (plus any ratings hand-off) as modelText.
+  // Storing the checklist itself as a visible user turn put six lines of
+  // machinery on screen after any reconcile, and would be read aloud verbatim
+  // by a spoken client.
+  runner.send(END_TURN_TEXT, false, [], handoff ? `${endText}\n\n${handoff}` : endText);
   return { ok: true };
 });
 

@@ -19,17 +19,25 @@ function emitBuildId(): Plugin {
   };
 }
 
-// web/public/demo/ (the recording + its two images) is a static folder Vite's
-// publicDir copy step includes unconditionally — the __DEMO__ compile-time
-// flag only eliminates JS. Delete it from a non-demo build's output so the
-// live artifact really does ship zero demo bytes, JS or otherwise.
-function stripDemoAssets(outDir: string, isDemo: boolean): Plugin {
+// Vite's publicDir copy step is unconditional — the __DEMO__ compile-time flag
+// only eliminates JS — so folders under web/public/ that belong to one build
+// have to be deleted from the other's output.
+//   demo/  the recording + its images: kept only in the demo build, so the live
+//          artifact really does ship zero demo bytes, JS or otherwise.
+//   spike/ the throwaway iOS audio diagnostic: kept only in the live build,
+//          which is served privately over the tailnet. The demo build is
+//          deployed to public GitHub Pages and has no business carrying it.
+//          Delete web/public/spike/ once Phase 0 is finished and this entry
+//          with it.
+function stripPublicDirs(outDir: string, isDemo: boolean): Plugin {
+  const drop = isDemo ? ["spike"] : ["demo"];
   return {
-    name: "strip-demo-assets",
+    name: "strip-public-dirs",
     apply: "build",
     async closeBundle() {
-      if (isDemo) return;
-      await rm(join(here, outDir, "demo"), { recursive: true, force: true });
+      for (const dir of drop) {
+        await rm(join(here, outDir, dir), { recursive: true, force: true });
+      }
     },
   };
 }
@@ -46,7 +54,7 @@ export default defineConfig(({ mode }) => {
       __BUILD_ID__: JSON.stringify(buildId),
       __DEMO__: JSON.stringify(isDemo),
     },
-    plugins: [emitBuildId(), stripDemoAssets(outDir, isDemo)],
+    plugins: [emitBuildId(), stripPublicDirs(outDir, isDemo)],
     build: {
       outDir,
       emptyOutDir: true,

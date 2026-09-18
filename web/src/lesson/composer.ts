@@ -2,7 +2,8 @@ import { h, clear } from "../dom.js";
 import { api } from "../api.js";
 import type { OutgoingImage } from "../api.js";
 import type { LessonCtx } from "./ctx.js";
-import { showBanner } from "./ctx.js";
+import { showBanner, rollbackLocalSend } from "./ctx.js";
+import type { PendingSend } from "./ctx.js";
 import { addBubble, scrollDown } from "./bubbles.js";
 // Demo-mode-only pre-fill wiring. Referenced only inside `if (__DEMO__)`
 // blocks below, so the live build's dead-code elimination drops both these
@@ -136,8 +137,11 @@ export function buildComposer(ctx: LessonCtx): ComposerEls {
     const images = pendingImages.splice(0, pendingImages.length);
     refreshChips();
     if (!trimmed && images.length === 0) return;
-    addBubble(ctx, "user", trimmed, images.map((p) => p.preview));
-    ctx.renderedCount++; // the server persists this user turn to the transcript
+    // Rendered now, confirmed later: the server assigns the id, and the
+    // matching `user` event (or a reconcile) adopts this bubble.
+    const el = addBubble(ctx, "user", trimmed, images.map((p) => p.preview));
+    const pending: PendingSend = { text: trimmed, imageCount: images.length, el };
+    ctx.pendingSends.push(pending);
     ctx.lesson.ending = false; // chatting on means we're no longer just wrapping up
     ctx.endingHint.classList.add("hidden");
     ctx.thinking.classList.remove("hidden");
@@ -145,10 +149,18 @@ export function buildComposer(ctx: LessonCtx): ComposerEls {
     try {
       await api.sendMessage(ctx.id, trimmed, images.map((p) => p.out));
     } catch (e) {
+      // Nothing was persisted, so take the bubble back off screen rather than
+      // leaving a message the tutor never saw looking delivered.
+      rollbackLocalSend(ctx, pending);
       ctx.thinking.classList.add("hidden");
       // The attachments weren't delivered — put them back in the composer.
       pendingImages.push(...images);
       refreshChips();
+      // Restore the text too, so the retry is a tap rather than a retype.
+      if (trimmed && !input.value.trim()) {
+        input.value = trimmed;
+        growInput();
+      }
       showBanner(ctx, `Couldn't send: ${(e as Error).message}`);
     }
   }

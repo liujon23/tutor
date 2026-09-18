@@ -1,0 +1,10 @@
+{
+  "name": "Audio spike",
+  "short_name": "Spike",
+  "description": "Throwaway iOS speech/audio-session diagnostic",
+  "start_url": "audio-check.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101014",
+  "theme_color": "#101014"
+}

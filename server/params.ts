@@ -31,3 +31,12 @@ export function readBuildId(distDir: string): string | null {
     return null;
   }
 }
+
+/**
+ * The visible user turn stored when the learner taps "End lesson". The full
+ * ordered wrap-up checklist rides along as `modelText` instead, so the model
+ * gets its instructions while the transcript keeps a line a human (or a
+ * text-to-speech client) can read. Kept byte-identical to the optimistic
+ * bubble the web client renders in web/src/lesson/screen.ts.
+ */
+export const END_TURN_TEXT = "Let's stop here \u2014 recap and wrap up.";

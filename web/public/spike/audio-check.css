@@ -1,0 +1,47 @@
+/* Throwaway diagnostic. High contrast, big targets, readable in a sunlit car. */
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  background: #101014; color: #f2f2f7;
+  font: 17px/1.45 -apple-system, system-ui, sans-serif;
+}
+h1 { font-size: 20px; margin: 4px 0 12px; }
+h1 span { font-size: 13px; color: #8e8e99; font-weight: 400; }
+h2 { font-size: 15px; margin: 0 0 8px; color: #b9b9c6; text-transform: uppercase; letter-spacing: .05em; }
+.card { background: #1c1c22; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+.hint { margin: 0 0 10px; color: #9a9aa6; font-size: 14px; }
+button.big {
+  display: block; width: 100%; margin: 0 0 10px;
+  padding: 18px 14px; font-size: 18px; font-weight: 600;
+  border: 0; border-radius: 12px; background: #2f6fd0; color: #fff;
+  -webkit-tap-highlight-color: transparent;
+}
+button.big.warn { background: #b85000; }
+button.big.alt  { background: #3a3a46; }
+button.big.stop { background: #a32020; }
+button.big:active { filter: brightness(1.3); }
+#b-copy, #b-save, #b-clear {
+  padding: 10px 14px; font-size: 15px; margin: 0 8px 10px 0;
+  border: 0; border-radius: 8px; background: #3a3a46; color: #fff;
+}
+dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 14px; }
+dt { color: #9a9aa6; }
+dd { margin: 0; font-variant-numeric: tabular-nums; }
+dd.yes { color: #4ccf7e; }
+dd.no  { color: #ff6b6b; font-weight: 700; }
+pre {
+  margin: 0; padding: 10px; background: #0a0a0d; border-radius: 8px;
+  font: 12px/1.35 ui-monospace, Menlo, monospace;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 55vh; overflow-y: auto;
+}
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+button.pill {
+  flex: 1 1 auto; padding: 14px 12px; font-size: 15px; font-weight: 600;
+  border: 2px solid #4a4a58; border-radius: 10px;
+  background: #22222a; color: #e8e8f0; -webkit-tap-highlight-color: transparent;
+}
+button.pill.sel { border-color: #4ccf7e; background: #1d3a28; }
+button.pill.good { border-color: #2f6b45; }
+button.pill.bad  { border-color: #7a2727; }
+button.pill:active { filter: brightness(1.4); }

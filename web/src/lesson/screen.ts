@@ -3,7 +3,7 @@ import { api } from "../api.js";
 import type { LessonModel, LessonState } from "../api.js";
 import { root, showSelect } from "../main.js";
 import type { LessonCtx } from "./ctx.js";
-import { showBanner } from "./ctx.js";
+import { showBanner, entryKey } from "./ctx.js";
 import { addBubble, addNote, photoUrls, scrollDown } from "./bubbles.js";
 import { closeRating } from "./rating.js";
 import { showWrapup, mapError, refreshEndingHint } from "./wrapup.js";
@@ -65,7 +65,8 @@ export async function showLesson(id: string): Promise<void> {
     endingHint,
     wrapup,
     modelBtn,
-    renderedCount: 0,
+    renderedIds: new Set<string>(),
+    pendingSends: [],
     streamEl: null,
     streamBuf: "",
     renderQueued: false,
@@ -91,9 +92,11 @@ export async function showLesson(id: string): Promise<void> {
       onclick: async () => {
         if (lesson.commit) return;
         endBtn.setAttribute("disabled", "");
-        addBubble(ctx, "user", "Let's stop here — recap and wrap up.");
+        // No optimistic bubble here, unlike the composer: the *server* authors
+        // this turn's text (server/params.ts END_TURN_TEXT), so echoing a
+        // client-side copy would mean two strings that must stay byte-identical
+        // forever or the turn renders twice. Let the `user` SSE event draw it.
         thinking.classList.remove("hidden");
-        ctx.renderedCount++; // server persists the wrap-up request to the transcript
         try {
           const res = await api.endLesson(id);
           lesson.ending = true;
@@ -153,7 +156,7 @@ export async function showLesson(id: string): Promise<void> {
 
   for (const t of lesson.transcript) {
     addBubble(ctx, t.role, t.text, photoUrls(t), t.id);
-    ctx.renderedCount++;
+    ctx.renderedIds.add(entryKey(t));
   }
   if (lesson.status === "abandoned") addNote(ctx, "This lesson was abandoned.");
   if (lesson.commit) showWrapup(ctx, lesson.commit);

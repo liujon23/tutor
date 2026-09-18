@@ -35,9 +35,14 @@ export function addBubble(
   return b;
 }
 
+/** One server-stored inbound photo name → its asset-route URL. */
+export function photoUrl(name: string): string {
+  return `/api/assets/local/${encodeURIComponent(name)}`;
+}
+
 /** Server-stored inbound photo names → asset-route URLs. */
 export function photoUrls(t: TranscriptEntry): string[] {
-  return (t.images ?? []).map((name) => `/api/assets/local/${encodeURIComponent(name)}`);
+  return (t.images ?? []).map(photoUrl);
 }
 
 export function addNote(ctx: LessonCtx, text: string): void {

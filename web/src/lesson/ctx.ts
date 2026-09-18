@@ -1,5 +1,8 @@
 import { h, clear } from "../dom.js";
 import type { LessonState, MessageFeedback } from "../api.js";
+import { findPendingSend } from "./reconcile.js";
+
+export { entryKey } from "./reconcile.js";
 
 // ---------------------------------------------------------------------------
 // Shared state for the lesson screen's modules. One instance is created per
@@ -8,6 +11,14 @@ import type { LessonState, MessageFeedback } from "../api.js";
 // be. Mutable fields here are exactly the variables that used to cross
 // function boundaries inside that closure.
 // ---------------------------------------------------------------------------
+
+/** A user bubble on screen that the server has not yet confirmed. */
+export interface PendingSend {
+  /** Exactly the text the server will store for this turn. */
+  text: string;
+  imageCount: number;
+  el: HTMLElement;
+}
 
 export interface LessonCtx {
   readonly id: string;
@@ -21,10 +32,17 @@ export interface LessonCtx {
   readonly wrapup: HTMLElement;
   readonly modelBtn: HTMLButtonElement;
 
-  // Count of transcript entries already on screen. SSE and reconcile both
-  // keep this in sync so a refetch appends only what was missed, never a
-  // duplicate.
-  renderedCount: number;
+  // Keys of transcript entries already on screen. SSE and reconcile both add
+  // to this so a refetch appends only what was missed, never a duplicate.
+  // A count cannot do this job: `user` events from another device are not
+  // rendered locally, so a counter silently falls behind and reconcile then
+  // re-renders the tail on every wake.
+  renderedIds: Set<string>;
+
+  // User bubbles rendered optimistically, before the server confirmed them and
+  // assigned an id. Held until the matching `user` event (or a reconcile)
+  // arrives so the turn is adopted rather than rendered a second time.
+  pendingSends: PendingSend[];
 
   // Streaming assistant-text buffer (delta events accumulate here).
   streamEl: HTMLElement | null;
@@ -62,4 +80,35 @@ export function showBanner(
     ctx.banner.append(h("button", { class: "banner-btn", onclick: action.run }, action.label));
   }
   ctx.banner.append(h("button", { class: "banner-x", onclick: () => ctx.banner.classList.add("hidden") }, "×"));
+}
+
+/**
+ * Claim a confirmed user turn as one we already rendered optimistically.
+ * Returns true when it was ours (the bubble is on screen and only needs its
+ * id recorded), false when it came from another device and still needs
+ * rendering. Matching on text plus attachment count rather than arrival order
+ * keeps two devices sending at once from stealing each other's bubbles.
+ */
+export function adoptLocalSend(
+  ctx: LessonCtx,
+  key: string | undefined,
+  text: string,
+  imageCount: number
+): boolean {
+  const i = findPendingSend(ctx.pendingSends, text, imageCount);
+  if (i === -1) return false;
+  ctx.pendingSends.splice(i, 1);
+  if (key) ctx.renderedIds.add(key);
+  return true;
+}
+
+/**
+ * Drop an optimistic bubble whose send failed. Nothing was persisted, so
+ * leaving it on screen strands a message the tutor never received — and in a
+ * spoken client the failure is otherwise inaudible.
+ */
+export function rollbackLocalSend(ctx: LessonCtx, pending: PendingSend): void {
+  const i = ctx.pendingSends.indexOf(pending);
+  if (i !== -1) ctx.pendingSends.splice(i, 1);
+  pending.el.remove();
 }

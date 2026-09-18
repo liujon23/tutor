@@ -8,5 +8,11 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["core/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "server/**/*.ts"]
+  "include": [
+    "core/**/*.ts",
+    "scripts/**/*.ts",
+    "tests/**/*.ts",
+    "server/**/*.ts",
+    "web/src/lesson/reconcile.ts"
+  ]
 }

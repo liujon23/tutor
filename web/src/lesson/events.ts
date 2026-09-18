@@ -1,8 +1,8 @@
 import { api } from "../api.js";
 import { renderInto } from "../markdown.js";
 import type { LessonCtx } from "./ctx.js";
-import { showBanner } from "./ctx.js";
-import { addBubble, photoUrls, renderStream, scrollDown, setCommitProgress } from "./bubbles.js";
+import { showBanner, adoptLocalSend, entryKey } from "./ctx.js";
+import { addBubble, photoUrl, photoUrls, renderStream, scrollDown, setCommitProgress } from "./bubbles.js";
 import { registerAssistantBubble, decorateFeedback, closeRating } from "./rating.js";
 import { showWrapup, mapError, refreshEndingHint } from "./wrapup.js";
 
@@ -33,11 +33,16 @@ export function subscribeEvents(ctx: LessonCtx): () => void {
         ctx.streamEl = null;
         ctx.streamBuf = "";
       }
-      for (let i = ctx.renderedCount; i < fresh.transcript.length; i++) {
-        const t = fresh.transcript[i];
+      for (const t of fresh.transcript) {
+        const key = entryKey(t);
+        if (ctx.renderedIds.has(key)) continue;
+        // A send still in flight when the refetch landed: the server already
+        // persisted it, but its `user` event hasn't arrived. Claim the bubble
+        // that's already on screen instead of drawing a second one.
+        if (t.role === "user" && adoptLocalSend(ctx, key, t.text, (t.images ?? []).length)) continue;
         addBubble(ctx, t.role, t.text, photoUrls(t), t.id);
+        ctx.renderedIds.add(key);
       }
-      ctx.renderedCount = Math.max(ctx.renderedCount, fresh.transcript.length);
       // Re-sync ratings (badges + flag notes) — covers changes from other devices.
       const staleIds = new Set(ctx.feedbackById.keys());
       ctx.feedbackById.clear();
@@ -63,9 +68,20 @@ export function subscribeEvents(ctx: LessonCtx): () => void {
     ctx.id,
     (ev) => {
       switch (ev.type) {
-        case "user":
-          // Echo of our own send is already rendered locally; ignore duplicates
+        case "user": {
+          // Our own send is already on screen, so adopt its id. Anything we
+          // can't claim came from another device on this session and must be
+          // rendered here — this used to be a bare `break`, which left such a
+          // client permanently behind the transcript so reconcile re-rendered
+          // the tail on every wake. Keyed by id alone: a text-derived fallback
+          // could suppress a genuinely repeated message later, and silently
+          // losing a turn is far worse than drawing one twice.
+          if (adoptLocalSend(ctx, ev.id, ev.text, ev.images?.length ?? 0)) break;
+          addBubble(ctx, "user", ev.text, (ev.images ?? []).map(photoUrl), ev.id);
+          if (ev.id) ctx.renderedIds.add(ev.id);
+          scrollDown(ctx);
           break;
+        }
         case "delta":
           if (!ctx.streamEl) {
             ctx.streamBuf = "";
@@ -87,7 +103,9 @@ export function subscribeEvents(ctx: LessonCtx): () => void {
           } else {
             addBubble(ctx, "assistant", ev.text, [], ev.id);
           }
-          ctx.renderedCount++; // the server persists this assistant turn to the transcript
+          // The server persisted this assistant turn; remember it so a later
+          // reconcile doesn't draw (or speak) it a second time.
+          if (ev.id) ctx.renderedIds.add(ev.id);
           scrollDown(ctx);
           break;
         case "tool_use":
@@ -148,7 +166,10 @@ export function subscribeEvents(ctx: LessonCtx): () => void {
           showBanner(ctx, mapError(ev.message));
           break;
         case "closed":
-          // Server-side runner wound down; EventSource will reconnect and revive it.
+          // The server-side runner wound down. NOTE: reconnecting does NOT
+          // revive it — manager.subscribe deliberately refuses to (see
+          // server/runner.ts), so only a POST (a new message, or End lesson)
+          // brings it back. Nothing to do here; the next send revives it.
           break;
         default:
           break;
