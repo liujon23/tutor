@@ -1,6 +1,6 @@
 // The app server: serves the PWA and the lesson API on one origin.
 // Runs on the host PC, reached over the tailnet (Tailscale serve terminates TLS).
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -448,6 +448,38 @@ app.delete<{ Params: { id: string } }>("/api/lesson/:id", async (req, reply) => 
   manager.abandon(req.params.id);
   return { ok: true };
 });
+
+// --- Phase 0 audio spike (THROWAWAY) ----------------------------------------
+// Receives a finished run from web/public/spike/ so the logs land in the data
+// root instead of being shuttled off the phone by hand. The page keeps its
+// JSON download as the fallback for when the tailnet isn't reachable from the
+// road, so a run is never lost either way.
+//
+// DELETE THIS ROUTE together with web/public/spike/ once Phase 0 has answered.
+//
+// The client never names the file: route and mode are matched against fixed
+// allowlists and everything else comes from the server's own clock, so a
+// hostile body cannot choose a path. The onRequest host guard above already
+// keeps this off any unexpected origin.
+const SPIKE_ROUTES = ["bluetooth", "speaker", "earbud"];
+const SPIKE_MODES = ["tab", "pwa"];
+
+app.post<{ Body: { route?: string; mode?: string } }>(
+  "/api/spike/run",
+  { bodyLimit: 4 * 1024 * 1024 },
+  async (req, reply) => {
+    const body = req.body ?? {};
+    if (!SPIKE_ROUTES.includes(body.route ?? "") || !SPIKE_MODES.includes(body.mode ?? "")) {
+      return reply.code(400).send({ error: "unknown route or mode" });
+    }
+    const dir = join(PATHS.appDir, "spike");
+    mkdirSync(dir, { recursive: true });
+    const name = `${body.route}-${body.mode}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+    writeFileSync(join(dir, name), JSON.stringify(body, null, 2), "utf8");
+    req.log.info(`audio spike run saved: ${name}`);
+    return { ok: true, saved: name };
+  }
+);
 
 // --- Startup ----------------------------------------------------------------
 

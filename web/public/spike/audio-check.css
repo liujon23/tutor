@@ -78,3 +78,8 @@ pre {
   max-height: 45vh; overflow-y: auto;
 }
 .big-readout { font-size: 15px; color: #d8a56a; margin: 0 0 12px; font-weight: 600; }
+
+.results { border: 1px solid #3a5a3a; }
+.verdict-line { margin: 6px 0; font-size: 15px; }
+.verdict-line.call { margin-top: 12px; padding: 10px; border-radius: 8px;
+  background: #1d2a3a; color: #cfe3ff; font-weight: 700; font-size: 16px; }

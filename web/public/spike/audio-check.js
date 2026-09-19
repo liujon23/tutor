@@ -12,8 +12,8 @@
 (function () {
   "use strict";
 
-  var BUILD = "spike-2";
-  var STORE_KEY = "tutor-audio-spike-v2";
+  var BUILD = "spike-3";
+  var STORE_KEY = "tutor-audio-spike-v3";
   var t0 = Date.now();
 
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -37,22 +37,38 @@
     stepIndex: 0,
     marked: null,      // mark recorded for the current step
     acted: false,      // the step's action has been run at least once
-    exported: false,
+    saved: false,      // this run survived — uploaded or downloaded
+    runMarks: {},      // stepId -> mark, for the run in progress
     running: false,    // a start/stop action is mid-flight
     log: [],
     done: {},          // "<route>|<mode>" -> ISO timestamp
   };
 
-  function loadDone() {
+  // Completed runs, so the verdict can reason ACROSS runs rather than just
+  // flagging them done. Storage can be unavailable (private mode) and iOS may
+  // not share it between Safari and a home-screen app, which is exactly why
+  // finishing a run also requires an upload or a download.
+  var STORE = { runs: [], highway: {} };
+
+  function loadStore() {
     try {
       var raw = localStorage.getItem(STORE_KEY);
-      if (raw) S.done = JSON.parse(raw).done || {};
-    } catch (e) { /* private mode / blocked storage — the JSON download covers us */ }
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        STORE.runs = parsed.runs || [];
+        STORE.highway = parsed.highway || {};
+      }
+    } catch (e) { /* blocked storage — the upload/download is the real record */ }
+    rebuildDone();
   }
-  function saveDone() {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({ done: S.done }));
-    } catch (e) { /* ignore — export is the source of truth */ }
+  function persist() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(STORE)); }
+    catch (e) { /* ignore — the saved run file is the source of truth */ }
+    rebuildDone();
+  }
+  function rebuildDone() {
+    S.done = {};
+    STORE.runs.forEach(function (r) { S.done[r.route + "|" + r.mode] = r.at; });
   }
 
   // --- log -----------------------------------------------------------------
@@ -225,6 +241,12 @@
     rec("loop stopped", { deafWindows: deafWindows, transcript: transcriptSoFar() });
   }
 
+  function deafStats() {
+    if (!deafWindows.length) return null;
+    var sorted = deafWindows.slice().sort(function (a, b) { return a - b; });
+    return { n: sorted.length, median: sorted[Math.floor(sorted.length / 2)], worst: sorted[sorted.length - 1] };
+  }
+
   function deafReadout() {
     if (!deafWindows.length) return "";
     var sorted = deafWindows.slice().sort(function (a, b) { return a - b; });
@@ -283,9 +305,9 @@
     },
     {
       id: "export", meta: "Finish", title: "Save this run",
-      doText: "Download the JSON now. iOS may not share storage between Safari and the home-screen app, so this file is the only thing guaranteed to survive switching modes.",
-      action: { label: "⬇ Download JSON", fn: saveRun },
-      requireExport: true,
+      doText: "Save the run. It uploads straight to the server if the tailnet is reachable; otherwise it downloads to Files. Do this before switching modes — iOS may not share storage between Safari and the home-screen app.",
+      action: { label: "⬆ Save this run", fn: saveRun },
+      requireSaved: true,
     },
   ];
 
@@ -304,7 +326,7 @@
 
   function canAdvance(step) {
     if (step.routePicker) return !!S.route;
-    if (step.requireExport) return S.exported;
+    if (step.requireSaved) return S.saved;
     if (step.marks) return S.marked !== null;
     return true;
   }
@@ -379,6 +401,7 @@
         b.textContent = m;
         b.onclick = function () {
           S.marked = m;
+          S.runMarks[step.id] = m;
           rec("MARK", m); // logged against this step — never ambiguous later
           render();
         };
@@ -392,7 +415,7 @@
     if (highwayMode) {
       nb.textContent = "Done — back to the checklist";
       nb.disabled = !canAdvance(step);
-      nb.onclick = function () { highwayMode = false; resetStep(); render(); };
+      nb.onclick = finishHighway;
     } else if (S.stepIndex === STEPS.length - 1) {
       nb.textContent = "Finish this run";
       nb.disabled = !canAdvance(step);
@@ -406,11 +429,12 @@
     if (nb.disabled) stage.appendChild(hint(disabledReason(step)));
 
     renderProgress();
+    renderResults();
   }
 
   function disabledReason(step) {
     if (step.routePicker) return "Pick a route first — every log line is tagged with it.";
-    if (step.requireExport) return "Download the file first; it is the only copy that survives switching modes.";
+    if (step.requireSaved) return "Save the run first — it uploads to the server, or downloads if that is unreachable.";
     if (S.running) return "Stop the run first.";
     if (!S.acted) return "Run the test above first.";
     return "Mark what you heard — an unmarked test tells us nothing later.";
@@ -436,7 +460,7 @@
     return id;
   }
 
-  function resetStep() { S.marked = null; S.acted = false; S.running = false; S.exported = false; }
+  function resetStep() { S.marked = null; S.acted = false; S.running = false; S.saved = false; }
 
   function renderProgress() {
     var p = el("progress");
@@ -479,30 +503,174 @@
     }
   }
 
+  // --- verdict -------------------------------------------------------------
+  function modeName(m) { return m === "pwa" ? "the home-screen app" : "a Safari tab"; }
+  function runLabel(r) { return routeName(r.route) + " / " + modeName(r.mode); }
+  function heardAt(marks, stepId) { return !!(marks && marks[stepId]) && /^Heard/.test(marks[stepId]); }
+
+  /** Plain-language reading of every completed run. This is the thing to act
+   *  on — the raw log is for fixtures, not for decisions. */
+  function buildVerdict() {
+    if (!STORE.runs.length) return null;
+    var lines = [];
+
+    var modes = {};
+    STORE.runs.forEach(function (r) { if (modes[r.mode] === undefined) modes[r.mode] = r.hasSR; });
+    Object.keys(modes).forEach(function (m) {
+      lines.push("Recognition " + (modes[m] ? "present" : "MISSING") + " in " + modeName(m) + ".");
+    });
+
+    var live = STORE.runs.filter(function (r) { return heardAt(r.marks, "miclive"); });
+    var held = STORE.runs.filter(function (r) {
+      return !heardAt(r.marks, "miclive") && heardAt(r.marks, "holdpnr");
+    });
+    lines.push(live.length
+      ? "Voice survived a live mic on: " + live.map(runLabel).join(", ") + "."
+      : "No route tested kept the voice audible with the mic live.");
+    if (held.length) {
+      lines.push("Holding play-and-record rescued: " + held.map(runLabel).join(", ") + ".");
+    }
+    // Name the failures explicitly — "survived on X" alone leaves the reader to
+    // infer what was tried and lost, which is the half that decides Phase 2.
+    var failed = STORE.runs.filter(function (r) {
+      return !heardAt(r.marks, "miclive") && !heardAt(r.marks, "holdpnr");
+    });
+    if (failed.length) {
+      lines.push("Voice did NOT survive on: " + failed.map(runLabel).join(", ") + ".");
+    }
+
+    STORE.runs.forEach(function (r) {
+      if (r.deaf) {
+        lines.push(runLabel(r) + " — deaf window median " + r.deaf.median +
+          "ms, worst " + r.deaf.worst + "ms over " + r.deaf.n + " restarts.");
+      }
+    });
+
+    Object.keys(STORE.highway).forEach(function (route) {
+      var h = STORE.highway[route];
+      lines.push("At speed on " + routeName(route) + ": " + (h.mark || "unmarked") +
+        (h.deaf ? " (deaf window median " + h.deaf.median + "ms)" : "") + ".");
+    });
+
+    var anySR = Object.keys(modes).some(function (m) { return modes[m]; });
+    var call;
+    if (!anySR) {
+      call = "CALL: recognition is unavailable — two-way is dead. Build the one-way listening mode.";
+    } else if (live.length) {
+      call = "CALL: browser-native two-way survives. Phase 2 can take the free path on " +
+        live.map(runLabel).join(" or ") + ".";
+    } else if (held.length) {
+      call = "CALL: only the held-session model works, which forces TTS onto AudioContext " +
+        "and therefore paid cloud bytes. Decide before building.";
+    } else {
+      call = "CALL: browser-native two-way failed on every route tested. The choice is " +
+        "paid cloud TTS through AudioContext, or one-way.";
+    }
+    lines.push(call);
+    return lines;
+  }
+
+  function renderResults() {
+    var box = el("results");
+    var lines = buildVerdict();
+    box.innerHTML = "";
+    if (!lines) { box.style.display = "none"; return; }
+    box.style.display = "";
+    var t = document.createElement("div");
+    t.className = "stepmeta"; t.textContent = "What the runs say so far";
+    box.appendChild(t);
+    lines.forEach(function (line) {
+      var p = document.createElement("p");
+      p.className = "verdict-line" + (/^CALL:/.test(line) ? " call" : "");
+      p.textContent = line;
+      box.appendChild(p);
+    });
+    var b = document.createElement("button");
+    b.className = "mini";
+    b.textContent = "Copy summary";
+    b.onclick = function () {
+      var text = "Audio spike — " + new Date().toISOString().slice(0, 10) + "\n" +
+        lines.map(function (l) { return "- " + l; }).join("\n");
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(
+        function () { b.textContent = "Copied"; },
+        function () { b.textContent = "Copy failed"; }
+      );
+    };
+    box.appendChild(b);
+  }
+
   // --- export / finish -----------------------------------------------------
-  function saveRun() {
-    var payload = {
+  function runPayload() {
+    return {
       build: BUILD, mode: MODE, route: S.route,
+      hasSR: !!SR,
       startedAt: new Date(t0).toISOString(),
+      marks: S.runMarks,
       deafWindows: deafWindows,
       events: S.log,
     };
+  }
+
+  function downloadRun(payload) {
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "audio-spike-" + (S.route || "unset") + "-" + MODE + ".json";
     a.click();
-    S.exported = true;
-    rec("exported");
-    setTimeout(render, 0);
+    S.saved = true;
+    rec("downloaded");
+    render();
+  }
+
+  /** Upload to the server so the log lands in the data root; fall back to a
+   *  download when the tailnet isn't reachable from the road. Either one
+   *  satisfies the step gate, so a finished run is never lost. */
+  function saveRun() {
+    var payload = runPayload();
+    rec("uploading…");
+    fetch("/api/spike/run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    }).then(function (j) {
+      S.saved = true;
+      rec("UPLOADED", j.saved || "ok");
+      render();
+    }).catch(function (e) {
+      rec("upload failed — downloading instead", String(e && e.message));
+      downloadRun(payload);
+    });
   }
 
   function finishRun() {
-    S.done[S.route + "|" + MODE] = new Date().toISOString();
-    saveDone();
+    // Replace any earlier attempt at the same route+mode rather than stacking.
+    STORE.runs = STORE.runs.filter(function (r) { return !(r.route === S.route && r.mode === MODE); });
+    STORE.runs.push({
+      route: S.route, mode: MODE, hasSR: !!SR,
+      marks: S.runMarks, deaf: deafStats(), at: new Date().toISOString(),
+    });
+    persist();
     rec("RUN COMPLETE", S.route + "|" + MODE);
     S.stepIndex = 0;
     S.route = null;
+    S.runMarks = {};
+    deafWindows = [];
+    resetStep();
+    render();
+  }
+
+  function finishHighway() {
+    saveRun(); // same upload-then-download path; the transcript is the payload
+    STORE.highway[S.route] = {
+      mark: S.marked, deaf: deafStats(), at: new Date().toISOString(),
+    };
+    persist();
+    highwayMode = false;
+    S.runMarks = {};
+    deafWindows = [];
     resetStep();
     render();
   }
@@ -530,14 +698,15 @@
   el("b-save").onclick = saveRun;
   el("b-reset").onclick = function () {
     if (!confirm("Clear the log and all recorded run progress?")) return;
-    S.log = []; S.done = {}; S.route = null; S.stepIndex = 0;
+    S.log = []; S.route = null; S.stepIndex = 0; S.runMarks = {};
+    STORE = { runs: [], highway: {} };
     deafWindows = []; resetStep();
     el("log").textContent = ""; el("count").textContent = "(0)";
-    saveDone(); render();
+    persist(); render();
   };
 
   // --- go ------------------------------------------------------------------
-  loadDone();
+  loadStore();
   describeEnv();
   if (window.speechSynthesis) rec("tts.voices at load", { count: speechSynthesis.getVoices().length });
   render();
