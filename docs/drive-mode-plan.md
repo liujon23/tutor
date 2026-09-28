@@ -78,6 +78,19 @@ feed (see Turn-taking).
 **Phase 0 — device measurement.** Results below. The spike itself is now dead
 weight; delete it.
 
+**The pure modules** — `web/src/lesson/audio/{text,endpoint,drive-state,diag}.ts`
+with `tests/audio.test.ts`. Built to the rules below; run over all 395 tutor
+messages in J's archive, `text.ts` leaves no sigil, and every message chunks
+identically fed whole or one character at a time. Behaviour decided while
+building them, beyond what this plan already said:
+- The endpointer promotes an interim left dangling when a recogniser session
+  ends (`onRecognizerEnd`), or the next session's first interim overwrites it.
+- An answer interrupted mid-sentence by a spoken system line is kept (its
+  interim promoted), and its silence clock restarts on the next `audiostart` —
+  otherwise the interruption itself counts as the learner going quiet.
+- A price range reads "5 dollars to 10 dollars".
+- Not wired to anything yet: no adapter, panel or server changes.
+
 **Audit.** A review of this plan's first draft against the code, the raw spike
 logs and the usage ledger found nine wrong claims and a set of gaps; the
 corrections are folded in throughout. The load-bearing finding: the draft treated
@@ -168,9 +181,12 @@ Keep the rule-bound logic pure and confine browser APIs to one file.
 
 `web/src/lesson/reconcile.ts` is the precedent: zero imports, listed in the root
 `tsconfig.json` `include` so `tests/` can reach it. Do the same for `text.ts`,
-`endpoint.ts`, `drive-state.ts` and `diag.ts`. **They must import nothing from
+`endpoint.ts`, `drive-state.ts` and `diag.ts`. **They may import each other
+(with `.js` specifiers, which both programs resolve) but nothing else under
 `web/src/`** — see Traps. `drive-state.ts` declares the slice of `LessonEvent`
-it consumes structurally rather than importing `api.ts`.
+it consumes structurally rather than importing `api.ts`, and reports through
+`diag` *actions* rather than importing `diag.ts`, so its invariants are
+assertable in tests.
 
 ### Turn-taking
 
@@ -290,11 +306,37 @@ markdown link text without the URL, em-dash → comma, abbreviations and decimal
 in the sentence splitter (`Dr.`, `e.g.`, `Fig. 3`, `0.5`, `v1.2.3`), stripped
 headings needing an appended period, and **currency** (see Traps).
 
+J's calls on the details (J's archive: of 395 tutor messages, 82 have inline
+math, 36 display math, 9 code fences, 5 tables, 3 nested lists):
+
+- **Inline math gets a light verbalizer**: Greek letters by name, `x_t` → "x sub
+  t", `x^2` → "x squared", `\frac{a}{b}` → "a over b", `\hat y` → "y hat",
+  `\text{…}` unwrapped. Anything it can't parse falls back to stripped symbols,
+  **recorded as a note** so the diag log shows it.
+- **Display math, code fences, mermaid and images get a short placeholder**, like
+  tables ("there's an equation here, it's in the app"). The spoken-turn rules
+  steer the tutor away from producing them in the first place.
+- **Nested lists**: sub-items follow their parent, introduced once per nested
+  run with "Under that:".
+- **Abbreviations are left to the voice** — no expansion. The sentence splitter
+  still must not break on them.
+- Nothing in the output may contain a markdown sigil. Anything stripped crudely
+  is reported alongside the text, never silently.
+
 ### Controls
 
 Prefer **one full-screen, state-dependent tap target** — speaking → skip,
 listening → done, paused → resume — with a small End in the corner. Four buttons
 plus End is too much target-finding on a mount.
+
+J's calls on the tap target:
+
+- **Skip drops everything received so far this turn** — the queue, and the rest
+  of the message still streaming in. Messages that arrive *later* in the same
+  turn (after a web search, say) are still spoken, so a closing question isn't
+  lost.
+- **A tap while the tutor is thinking speaks a status line** ("Still working,
+  about 40 seconds so far."). It changes nothing else.
 
 **Guard the state transitions.** A "skip" tap that lands just as speaking flips
 to listening becomes "done" and submits half an answer. Ignore taps for ~400ms
@@ -319,6 +361,12 @@ Also needed:
   cache-first, so the first load after `npm run restart` runs the *previous*
   bundle.
 - One line noting phone speaker is preferred, if Bluetooth is connected.
+- **A math-heavy warning on the select screen** (J's request): when Listen is on
+  and the picked topic is likely math-heavy, say so — "this is likely math-heavy,
+  so probably not the best suited for an audio lesson". A warning, not a block.
+  *How to judge "math-heavy" is still open* — decide with J when building the
+  select screen (candidates: the lane, or math density in that topic's past
+  transcripts).
 - Hide drive mode entirely in `__DEMO__` builds.
 
 ### Telling the model it's a spoken turn
@@ -376,7 +424,9 @@ The rules themselves, as J chose them:
   structure and intuition. When a derivation genuinely needs to be seen, say so
   and queue it in the patch's `nextUp` plan, so the next desk session opens on
   exactly that. This keeps the AI lane (weight 50) fully in play.
-- No markdown, headings, bullets, tables, code fences, images or mermaid.
+- No markdown, headings, bullets, tables, code fences, images or mermaid — and
+  **no display equations**. If one of these genuinely can't be avoided, say it's
+  waiting in the app rather than producing it.
 - **Never read a URL aloud** — name the source ("Mikolov's 2013 Word2Vec paper");
   `sourcesUsed` and the transcript keep the link.
 - **Questions must be answerable out loud with no scratch paper.** A medium
@@ -569,8 +619,8 @@ Each of these cost real time to find. Don't rediscover them.
   breaks the moment a module touches `web/src/markdown.ts` (which imports katex
   CSS) or `__DEMO__` (declared only in `vite-env.d.ts`). **`npm test` will not
   catch it** — `tsx --test` doesn't typecheck; only `npm run typecheck` does. Keep
-  the pure audio modules import-free and add them to the root `tsconfig.json`
-  `include`, as `web/src/lesson/reconcile.ts` already is.
+  the pure audio modules free of imports beyond each other, and list them in the
+  root `tsconfig.json` `include`, as `web/src/lesson/reconcile.ts` already is.
 - **Never set `navigator.audioSession.type`.** Measured: `"play-and-record"` made
   speaker output quieter and made the car switch Bluetooth source.
 - **`web/src/markdown.ts`'s `extractMath` eats currency.** If `text.ts` reuses

@@ -13,6 +13,10 @@
     "scripts/**/*.ts",
     "tests/**/*.ts",
     "server/**/*.ts",
-    "web/src/lesson/reconcile.ts"
+    "web/src/lesson/reconcile.ts",
+    "web/src/lesson/audio/text.ts",
+    "web/src/lesson/audio/endpoint.ts",
+    "web/src/lesson/audio/drive-state.ts",
+    "web/src/lesson/audio/diag.ts"
   ]
 }
