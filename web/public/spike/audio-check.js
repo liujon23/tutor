@@ -12,7 +12,7 @@
 (function () {
   "use strict";
 
-  var BUILD = "spike-3";
+  var BUILD = "spike-4";
   var STORE_KEY = "tutor-audio-spike-v3";
   var t0 = Date.now();
 
@@ -486,8 +486,9 @@
     });
     p.appendChild(grid);
     p.appendChild(hint(
-      "You only need all three routes in ONE mode. The other mode needs a single run, " +
-      "just to establish whether recognition exists there at all."
+      "Run whichever routes you actually have, in ONE mode. The other mode needs a " +
+      "single run, just to establish whether recognition exists there at all. " +
+      "Routes left as \u2014 are recorded as untested, not as failures."
     ));
 
     if (!highwayMode) {
@@ -552,6 +553,13 @@
         (h.deaf ? " (deaf window median " + h.deaf.median + "ms)" : "") + ".");
     });
 
+    var tried = {};
+    STORE.runs.forEach(function (r) { tried[r.route] = true; });
+    var untested = ROUTES.filter(function (r) { return !tried[r.id]; });
+    if (untested.length) {
+      lines.push("Not tested: " + untested.map(function (r) { return r.name; }).join(", ") + ".");
+    }
+
     var anySR = Object.keys(modes).some(function (m) { return modes[m]; });
     var call;
     if (!anySR) {
@@ -563,8 +571,12 @@
       call = "CALL: only the held-session model works, which forces TTS onto AudioContext " +
         "and therefore paid cloud bytes. Decide before building.";
     } else {
-      call = "CALL: browser-native two-way failed on every route tested. The choice is " +
-        "paid cloud TTS through AudioContext, or one-way.";
+      call = "CALL: browser-native two-way failed on every route tested." +
+        (untested.length
+          ? " Try " + untested.map(function (r) { return r.name; }).join(" or ") +
+            " before concluding — an untested route is not a failed one, and it is far " +
+            "cheaper than committing to a paid TTS vendor."
+          : " The choice is paid cloud TTS through AudioContext, or one-way.");
     }
     lines.push(call);
     return lines;
