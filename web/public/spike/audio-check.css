@@ -83,3 +83,10 @@ pre {
 .verdict-line { margin: 6px 0; font-size: 15px; }
 .verdict-line.call { margin-top: 12px; padding: 10px; border-radius: 8px;
   background: #1d2a3a; color: #cfe3ff; font-weight: 700; font-size: 16px; }
+.srerror {
+  margin: 0 0 12px; padding: 12px; border-radius: 10px;
+  background: #3a1616; border: 1px solid #7a2727; color: #ffd9d9; font-size: 15px;
+}
+.srerror.benign { background: #2a2416; border-color: #6b5a27; color: #f0e3bf; }
+.srerror strong { display: block; margin-bottom: 6px; font-size: 16px; }
+.srerror-raw { font: 12px/1.4 ui-monospace, Menlo, monospace; opacity: .8; margin: 4px 0; }

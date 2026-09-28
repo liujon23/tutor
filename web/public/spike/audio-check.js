@@ -12,11 +12,31 @@
 (function () {
   "use strict";
 
-  var BUILD = "spike-4";
-  var STORE_KEY = "tutor-audio-spike-v3";
+  var BUILD = "spike-6";
+  var STORE_KEY = "tutor-audio-spike-v4";
   var t0 = Date.now();
 
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  /* Which browser, not just which display mode.
+   *
+   * Every iOS browser is WebKit underneath, so a third-party one still EXPOSES
+   * webkitSpeechRecognition — `hasSR` is true — but lacks the speech-recognition
+   * entitlement, and start() fails ~10ms later with
+   * not-allowed / "Microphone permission check has failed", no prompt shown.
+   * The first real run hit exactly this in Chrome while the page cheerfully
+   * reported "Recognition available in a Safari tab", which is the opposite of
+   * the truth on the one question this page exists to answer. */
+  function detectBrowser() {
+    var ua = navigator.userAgent;
+    if (/CriOS\//.test(ua)) return { name: "Chrome for iOS", thirdParty: true };
+    if (/FxiOS\//.test(ua)) return { name: "Firefox for iOS", thirdParty: true };
+    if (/EdgiOS\//.test(ua)) return { name: "Edge for iOS", thirdParty: true };
+    if (/(OPiOS|OPT)\//.test(ua)) return { name: "Opera for iOS", thirdParty: true };
+    return { name: "Safari", thirdParty: false };
+  }
+  var BROWSER = detectBrowser();
+
   var MODE =
     window.navigator.standalone === true ||
     (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
@@ -39,6 +59,8 @@
     acted: false,      // the step's action has been run at least once
     saved: false,      // this run survived — uploaded or downloaded
     runMarks: {},      // stepId -> mark, for the run in progress
+    srError: null,     // last recognition error, shown on the step
+    micOpened: false,  // sr.audiostart fired at least once this run
     running: false,    // a start/stop action is mid-flight
     log: [],
     done: {},          // "<route>|<mode>" -> ISO timestamp
@@ -101,7 +123,8 @@
       if (good === false) dd.className = "no";
       dl.appendChild(dt); dl.appendChild(dd);
     }
-    row("app mode", MODE === "pwa" ? "home-screen app" : "Safari tab");
+    row("browser", BROWSER.name, !BROWSER.thirdParty);
+    row("app mode", MODE === "pwa" ? "home-screen app" : "tab");
     row("SpeechRecognition", SR ? "present" : "MISSING", !!SR);
     row("speechSynthesis", window.speechSynthesis ? "present" : "MISSING", !!window.speechSynthesis);
     row("audioSession", navigator.audioSession ? "present" : "missing", !!navigator.audioSession);
@@ -109,21 +132,27 @@
     row("secure context", window.isSecureContext ? "yes" : "NO", window.isSecureContext);
     row("UA", navigator.userAgent);
 
-    el("stamp").textContent = BUILD + " · " + (MODE === "pwa" ? "home-screen app" : "Safari tab");
+    var where = BROWSER.name + (MODE === "pwa" ? ", home-screen app" : ", tab");
+    el("stamp").textContent = BUILD + " · " + where;
     var v = el("verdict");
     if (!window.isSecureContext) {
       v.className = "verdict bad";
       v.textContent = "Not a secure context — open the https:// tailnet URL, not a LAN IP.";
+    } else if (BROWSER.thirdParty) {
+      // hasSR is true here and means nothing; never show green.
+      v.className = "verdict bad";
+      v.textContent = "This is " + BROWSER.name + ". Speech recognition does not work in " +
+        "third-party iOS browsers — it fails instantly with no prompt, however the " +
+        "settings are configured. Reopen this page in Safari.";
     } else if (SR) {
       v.className = "verdict ok";
-      v.textContent = "Recognition available in the " +
-        (MODE === "pwa" ? "home-screen app" : "Safari tab") + ".";
+      v.textContent = "Recognition available in " + where + ".";
     } else {
       v.className = "verdict bad";
-      v.textContent = "Recognition MISSING in the " +
-        (MODE === "pwa" ? "home-screen app" : "Safari tab") + " — that is a finding. Record it and try the other mode.";
+      v.textContent = "Recognition MISSING in " + where +
+        " — that is a finding. Record it and try the other mode.";
     }
-    rec("env", { mode: MODE, hasSR: !!SR, hasAudioSession: !!navigator.audioSession,
+    rec("env", { browser: BROWSER.name, thirdParty: BROWSER.thirdParty, mode: MODE, hasSR: !!SR, hasAudioSession: !!navigator.audioSession,
       hasWakeLock: !!navigator.wakeLock, secure: window.isSecureContext, ua: navigator.userAgent });
   }
 
@@ -152,6 +181,28 @@
     }, 2500);
   }
 
+  /* What each recognition error actually means, in the operator's terms. The
+   * reason used to sit only in a collapsed log nobody had cause to open, which
+   * is indefensible for a page whose whole job is "does the mic work". */
+  var SR_ERROR_HELP = {
+    "not-allowed":
+      "The microphone was refused before iOS even asked. In a third-party browser " +
+      "(Chrome, Firefox, Edge) this is permanent — use Safari. In Safari, check aA → " +
+      "Website Settings → Microphone, and Settings → Safari → Microphone.",
+    "service-not-allowed":
+      "iOS refused the speech service itself. Check Settings → General → Keyboard → " +
+      "Enable Dictation. Home-screen web apps also often cannot use recognition at all — " +
+      "if this is the installed app, try a Safari tab.",
+    "audio-capture":
+      "No microphone available, or another app is holding it. Close other audio apps and retry.",
+    "network":
+      "Recognition needs the network and could not reach it. Expected in a dead zone.",
+    "no-speech":
+      "The mic worked and simply heard nothing — that is a PASS for opening the mic. " +
+      "Speak sooner or louder and run it again.",
+    "aborted": "Stopped deliberately — normal when a test ends.",
+  };
+
   // --- recognition ---------------------------------------------------------
   var recog = null, looping = false, lastEndAt = null, deafWindows = [];
 
@@ -163,6 +214,7 @@
     r.lang = "en-US";
     ["audiostart", "soundstart", "speechstart", "speechend", "soundend", "audioend"].forEach(function (name) {
       r["on" + name] = function () {
+        if (name === "audiostart") S.micOpened = true; // the mic genuinely opened
         if (name === "audiostart" && lastEndAt !== null) {
           var gap = Date.now() - lastEndAt;
           deafWindows.push(gap);
@@ -184,8 +236,10 @@
     };
     r.onerror = function (ev) {
       // no-speech and aborted are the NORMAL path with continuous=false.
-      rec("sr." + (ev.error === "no-speech" || ev.error === "aborted" ? "end-reason" : "ERROR"),
-        { error: ev.error, message: ev.message || "" });
+      var benign = ev.error === "no-speech" || ev.error === "aborted";
+      rec("sr." + (benign ? "end-reason" : "ERROR"), { error: ev.error, message: ev.message || "" });
+      S.srError = { error: ev.error, message: ev.message || "", benign: benign };
+      render();
     };
     r.onend = function () {
       lastEndAt = Date.now();
@@ -224,6 +278,9 @@
   var wake = null;
   function requestWake() {
     if (!navigator.wakeLock) { rec("wakeLock UNSUPPORTED"); return; }
+    // Releasing first: a second request used to overwrite `wake`, leaking the
+    // previous lock (visible as two simultaneous "RELEASED by system" lines).
+    if (wake) { wake.release().catch(function () {}); wake = null; }
     navigator.wakeLock.request("screen").then(function (w) {
       wake = w; rec("wakeLock acquired");
       w.addEventListener("release", function () { rec("wakeLock RELEASED by system"); wake = null; });
@@ -235,6 +292,15 @@
   function micThenPlay() { looping = false; startRecog(); speak("with-mic-live"); }
   function holdThenPlay() { holdPlayAndRecord(); looping = false; startRecog(); speak("session-held"); }
   function startLoop() { deafWindows = []; looping = true; startRecog(); }
+  /** One recognition session, no restart loop, and crucially no audio played
+   *  first. iOS has a documented bug where mic input stops working after media
+   *  playback, so a mic test that runs AFTER the speak test cannot distinguish
+   *  "mic is broken" from "mic was broken by the playback". This is the control. */
+  function startMicOnly() { deafWindows = []; looping = false; S.micOpened = false; startRecog(); }
+  function stopMicOnly() {
+    if (recog) { try { recog.abort(); } catch (e) { /* already stopped */ } }
+    rec("mic-only stopped", { micOpened: S.micOpened, transcript: transcriptSoFar() });
+  }
   function stopLoop() {
     looping = false;
     if (recog) { try { recog.abort(); } catch (e) { /* already stopped */ } }
@@ -255,6 +321,13 @@
       " · deaf window median " + med + "ms, worst " + sorted[sorted.length - 1] + "ms";
   }
 
+  function micOnlyReadout() {
+    if (!S.acted) return "";
+    return S.micOpened
+      ? "The microphone OPENED. " + (transcriptSoFar() ? "Heard: " + transcriptSoFar() : "No words recognised yet.")
+      : "The microphone has NOT opened yet — no audiostart event.";
+  }
+
   function loopTranscriptReadout() {
     var t = transcriptSoFar();
     return t ? "Heard: " + t : "Nothing recognised yet.";
@@ -268,28 +341,41 @@
       routePicker: true,
     },
     {
-      id: "baseline", meta: "Test 1 of 4", title: "Baseline — speak only",
+      id: "miconly", meta: "Test 1 of 5 — the control", title: "Microphone alone",
+      doText: "Nothing has played yet — that is the point. Tap Start, say \u201cone two three four five\u201d, then tap Stop.",
+      listenText: "Does the mic work on a clean audio session, before any audio has played? " +
+        "iOS can break recognition once media has played, so if this is not tested first, a " +
+        "later failure cannot be told apart from that bug. If this step fails, nothing after it means much.",
+      action: { label: "\u25B6 Start mic", fn: startMicOnly, stopLabel: "\u25A0 Stop mic", stopFn: stopMicOnly },
+      readouts: [micOnlyReadout],
+      marks: ["Recognised my words", "Mic opened, heard nothing", "Mic never opened"],
+    },
+    {
+      id: "baseline", meta: "Test 2 of 5", title: "Baseline — speak only",
       doText: "Tap Play and listen to the whole paragraph. No microphone is involved yet.",
       listenText: "Did you hear the words “marker one” at the very start? Is it loud enough over the engine?",
       action: { label: "▶ Play paragraph", fn: playParagraph },
       marks: ["Heard, clear", "Heard, too quiet", "First word clipped", "Heard nothing"],
     },
     {
-      id: "miclive", meta: "Test 2 of 4 — the decisive one", title: "Microphone on, then speak",
+      id: "miclive", meta: "Test 3 of 5 — the decisive one", title: "Microphone on, then speak",
       doText: "Tap Start. The microphone turns on first, then the same paragraph plays — the order the real lesson loop uses.",
-      listenText: "Is the voice still audible now the mic is live? Quieter than test 1? Coming from the earpiece instead of the speaker? On Bluetooth: did the car switch source or show a call?",
+      listenText: "Two things at once. Is the voice still audible now the mic is live — quieter, " +
+        "or coming from the earpiece? On Bluetooth, did the car switch source or show a call? " +
+        "And separately: audio has now played, so if the mic opened in test 1 but not here, " +
+        "that is the after-playback bug rather than anything about routing.",
       action: { label: "▶ Mic on, then play", fn: micThenPlay },
       marks: ["Heard, same as test 1", "Heard, but quieter", "Came from earpiece", "Heard nothing", "Car switched source"],
     },
     {
-      id: "holdpnr", meta: "Test 3 of 4", title: "Hold the session, then speak",
+      id: "holdpnr", meta: "Test 4 of 5", title: "Hold the session, then speak",
       doText: "Tap Start. This pins the audio session to play-and-record before speaking — the “treat it as a phone call” mitigation.",
       listenText: "Same question as test 2. If this one is audible but test 2 was not, holding the session is the fix and Phase 2 has a path.",
       action: { label: "▶ Hold session, then play", fn: holdThenPlay },
       marks: ["Heard, clear", "Heard, but quieter", "Came from earpiece", "Heard nothing", "Car switched source"],
     },
     {
-      id: "loop", meta: "Test 4 of 4", title: "Recognition restart loop",
+      id: "loop", meta: "Test 5 of 5", title: "Recognition restart loop",
       doText: "Tap Start, then count aloud steadily — one, two, three … up to twenty. Then tap Stop.",
       listenText: "Missing numbers in the transcript are words lost while the recogniser was restarting. The deaf window below measures that directly.",
       action: { label: "▶ Start loop", fn: startLoop, stopLabel: "■ Stop loop", stopFn: stopLoop },
@@ -374,6 +460,30 @@
       stage.appendChild(p);
     });
 
+    if (S.srError) {
+      var box = document.createElement("div");
+      box.className = "srerror" + (S.srError.benign ? " benign" : "");
+      var h2 = document.createElement("strong");
+      h2.textContent = (S.srError.benign ? "Microphone: " : "Microphone failed: ") + S.srError.error;
+      box.appendChild(h2);
+      if (S.srError.message) {
+        var m = document.createElement("div");
+        m.className = "srerror-raw";
+        m.textContent = S.srError.message;
+        box.appendChild(m);
+      }
+      var help = document.createElement("div");
+      help.textContent = SR_ERROR_HELP[S.srError.error] || "Unrecognised error code.";
+      box.appendChild(help);
+      if (BROWSER.thirdParty) {
+        var bb = document.createElement("div");
+        bb.className = "srerror-raw";
+        bb.textContent = "You are in " + BROWSER.name + ". Reopen this page in Safari.";
+        box.appendChild(bb);
+      }
+      stage.appendChild(box);
+    }
+
     if (step.action) {
       var ab = document.createElement("button");
       ab.className = "big " + (S.running ? "stop" : "go");
@@ -383,6 +493,7 @@
           step.action.stopFn();
           S.running = false;
         } else {
+          S.srError = null;          // a fresh attempt gets a fresh verdict
           step.action.fn();          // synchronous — keeps the gesture chain alive
           S.acted = true;
           if (step.action.stopFn) S.running = true;
@@ -505,8 +616,10 @@
   }
 
   // --- verdict -------------------------------------------------------------
-  function modeName(m) { return m === "pwa" ? "the home-screen app" : "a Safari tab"; }
-  function runLabel(r) { return routeName(r.route) + " / " + modeName(r.mode); }
+  function modeName(m) { return m === "pwa" ? "home-screen app" : "tab"; }
+  function runLabel(r) {
+    return routeName(r.route) + " / " + (r.browser || "unknown browser") + ", " + modeName(r.mode);
+  }
   function heardAt(marks, stepId) { return !!(marks && marks[stepId]) && /^Heard/.test(marks[stepId]); }
 
   /** Plain-language reading of every completed run. This is the thing to act
@@ -515,11 +628,28 @@
     if (!STORE.runs.length) return null;
     var lines = [];
 
+    // Keyed by browser AND mode: "recognition present in a tab" is meaningless
+    // without saying which browser's tab.
     var modes = {};
-    STORE.runs.forEach(function (r) { if (modes[r.mode] === undefined) modes[r.mode] = r.hasSR; });
-    Object.keys(modes).forEach(function (m) {
-      lines.push("Recognition " + (modes[m] ? "present" : "MISSING") + " in " + modeName(m) + ".");
+    STORE.runs.forEach(function (r) {
+      var k = (r.browser || "unknown browser") + ", " + modeName(r.mode);
+      if (modes[k] === undefined) modes[k] = r.hasSR;
     });
+    Object.keys(modes).forEach(function (k) {
+      lines.push("Recognition interface " + (modes[k] ? "present" : "MISSING") + " in " + k +
+        (/Chrome|Firefox|Edge|Opera/.test(k) ? " (but unusable there — see below)" : "") + ".");
+    });
+
+    var invalid = STORE.runs.filter(function (r) { return r.thirdPartyBrowser; });
+    if (invalid.length) {
+      lines.push(invalid.length + " run(s) were recorded in a third-party iOS browser, " +
+        "where recognition cannot work — their microphone results are not evidence.");
+    }
+
+    var opened = STORE.runs.filter(function (r) { return r.micOpened; });
+    lines.push(opened.length
+      ? "Microphone opened on: " + opened.map(runLabel).join(", ") + "."
+      : "The microphone never opened on any run (no audiostart event).");
 
     var live = STORE.runs.filter(function (r) { return heardAt(r.marks, "miclive"); });
     var held = STORE.runs.filter(function (r) {
@@ -562,7 +692,10 @@
 
     var anySR = Object.keys(modes).some(function (m) { return modes[m]; });
     var call;
-    if (!anySR) {
+    if (BROWSER.thirdParty || (invalid.length && invalid.length === STORE.runs.length)) {
+      call = "CALL: none of this settles anything about recognition — it was all recorded in a " +
+        "browser that cannot use it. Reopen in Safari and re-run. The audio results above still stand.";
+    } else if (!anySR) {
       call = "CALL: recognition is unavailable — two-way is dead. Build the one-way listening mode.";
     } else if (live.length) {
       call = "CALL: browser-native two-way survives. Phase 2 can take the free path on " +
@@ -615,7 +748,8 @@
   function runPayload() {
     return {
       build: BUILD, mode: MODE, route: S.route,
-      hasSR: !!SR,
+      browser: BROWSER.name, thirdParty: BROWSER.thirdParty,
+      hasSR: !!SR, micOpened: S.micOpened,
       startedAt: new Date(t0).toISOString(),
       marks: S.runMarks,
       deafWindows: deafWindows,
@@ -662,13 +796,16 @@
     STORE.runs = STORE.runs.filter(function (r) { return !(r.route === S.route && r.mode === MODE); });
     STORE.runs.push({
       route: S.route, mode: MODE, hasSR: !!SR,
-      marks: S.runMarks, deaf: deafStats(), at: new Date().toISOString(),
+      marks: S.runMarks, deaf: deafStats(), micOpened: S.micOpened,
+      browser: BROWSER.name, thirdPartyBrowser: BROWSER.thirdParty,
+      at: new Date().toISOString(),
     });
     persist();
     rec("RUN COMPLETE", S.route + "|" + MODE);
     S.stepIndex = 0;
     S.route = null;
     S.runMarks = {};
+    S.micOpened = false;
     deafWindows = [];
     resetStep();
     render();
