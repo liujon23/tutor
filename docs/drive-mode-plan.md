@@ -115,7 +115,50 @@ will show them in the diag log. Decided while building:
 - "Keep going" sits on the ending hint as an outline button; the In-progress
   card reads "expires in N days".
 - **Still open**: how the curriculum viewer shows spoken turns. The counts reach
-  `CurriculumUnitLesson` but nothing renders them yet — decide with J.
+  `CurriculumUnitLesson` but nothing renders them yet — decide with J **once a
+  real drive shows the feature works**. Same for the math-heavy select-screen
+  warning (J, 2026-10-06).
+- A failed API request (any assistant error but `max_output_tokens`) is no
+  longer stored as a tutor turn — found live, when an expired login made every
+  turn's "Failed to authenticate…" text a tutor bubble that drive mode would
+  have read aloud. It is saved as `lastError` instead.
+
+**J's calls for the browser side** (2026-10-06):
+- **Overlay**: a big state word with a hint ("LISTENING · tap when you're
+  done"); while listening, what the mic has heard so far in large text. Small
+  Again / End / Exit in the corners; a collapsed debug strip at the bottom.
+- **In-lesson toggle**: a headphones button in the composer row, beside "+".
+  (Plus the Listen toggle on the select screen, per Controls.)
+- **Voice**: auto-pick the best installed English voice (iOS Premium/Enhanced
+  first) at normal speed; a voice + speed picker in the overlay, remembered per
+  device.
+
+**The browser side** — `adapter.ts`, `panel.ts`, `controller.ts` (the glue the
+plan's module table didn't name: machine ↔ adapter ↔ overlay ↔ diag ↔ lesson
+screen), `send.ts`, and the wiring in `screen`/`events`/`composer`/`main`.
+Exercised in the desktop browser pane (Chromium, where the mic is blocked and
+speech output fails — so it proved the wiring and the error paths, not
+audio): restore-after-reload opens paused; a tap resumes; a blocked mic says so
+once and pauses with no retry loop; the expired login is announced once;
+client diag batches reach `.app/diag/`; ✕ exits and forgets the drive.
+**Not yet run on the iPhone** — the next step is the parked preflight.
+Decided while building:
+- **Drive mode starts assuming a turn is running**; the server's health answer
+  (a `turn_state` input) opens the mic. Found in the browser run: guessing
+  "idle" from the screen opened the mic while a spoken start's opening turn was
+  still running.
+- **Listen applies to the In-progress and Needs-attention rows too**, not just
+  Start: Listen on means "I'm in the car". (Flag to J — easy to narrow.)
+- The overlay is always dark (glare), whatever the app theme.
+- The pre-drive check lives in the expanded debug strip ("Run pre-drive
+  check"), with the phone-speaker note. It pauses the drive and speaks results.
+- Tones: short sine figures per cue; with tones off, "Okay." / "Still
+  working." are spoken instead and the listening cue is silent (it fires with
+  the mic live). A lead-in tone precedes speech after ≥1.5s of quiet, except
+  inside a tap (a delay there would break iOS's gesture rule).
+- Diag uploads every 15s, beacons on hide/pagehide, and keeps unsent batches in
+  localStorage (capped ~2 MB) — adopted on the next drive, or sent straight up
+  if they belong to another lesson.
 
 **Audit.** A review of this plan's first draft against the code, the raw spike
 logs and the usage ledger found nine wrong claims and a set of gaps; the

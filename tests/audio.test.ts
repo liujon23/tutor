@@ -724,6 +724,24 @@ test("a failed request is announced once, then the mic reopens", () => {
   assert.equal(h.started(), 1, "listening again, so the learner can retry by voice");
 });
 
+test("drive mode starts assuming a turn is running; the server's answer opens the mic", () => {
+  // Seen in the first browser run: guessing "idle" at a spoken start opened
+  // the mic while the opening turn was still running.
+  const h = new Harness();
+  h.enable({ turnInFlight: true, fromGesture: true });
+  h.finishSpeech();
+  assert.equal(h.started(), 0, "no mic until the server says the turn is over");
+  h.run({ type: "turn_state", now: h.now, turnInFlight: false, source: "health-at-start" });
+  assert.equal(h.started(), 1);
+  assert.equal(h.actions.filter((a) => a.type === "diag" && a.level !== "info").length, 0, "a correction, not an anomaly");
+
+  const busy = new Harness();
+  busy.enable({ turnInFlight: true });
+  busy.finishSpeech();
+  busy.run({ type: "turn_state", now: busy.now, turnInFlight: true, source: "health-at-start" });
+  assert.equal(busy.started(), 0, "a running turn keeps the mic closed");
+});
+
 test("commit ends the drive once the close-out is spoken", () => {
   const h = new Harness();
   h.enable();

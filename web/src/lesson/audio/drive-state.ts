@@ -140,7 +140,20 @@ export interface HealthReport {
 }
 
 export type DriveInput =
-  | { type: "enable"; now: number; fromGesture: boolean; knownIds: string[]; turnInFlight: boolean }
+  | {
+      type: "enable";
+      now: number;
+      /** Audio is unlocked (a tap is on the stack, or already unlocked one): go live. */
+      fromGesture: boolean;
+      knownIds: string[];
+      turnInFlight: boolean;
+      /** Say "Starting." (default). False when the tap that unlocked audio already said it. */
+      announce?: boolean;
+    }
+  /** Stop and wait for a tap — e.g. while the pre-drive check uses the mic and speaker. */
+  | { type: "pause"; now: number; reason: string }
+  /** The server's word on whether a turn is running (asked when drive mode starts). */
+  | { type: "turn_state"; now: number; turnInFlight: boolean; source: string }
   | { type: "disable"; now: number }
   | { type: "tap"; now: number }
   | { type: "again"; now: number }
@@ -303,7 +316,22 @@ export class DriveMachine {
     const now = input.now;
     switch (input.type) {
       case "enable":
-        this.enable(input.fromGesture, input.knownIds, input.turnInFlight, now);
+        this.enable(input.fromGesture, input.knownIds, input.turnInFlight, input.announce ?? true, now);
+        break;
+      case "pause":
+        this.pause(input.reason);
+        break;
+      case "turn_state":
+        // Not an anomaly when it disagrees: drive mode starts out assuming a
+        // turn is running (safer than opening the mic mid-turn) and this is
+        // the answer to that assumption.
+        this.diag("turn-state", { source: input.source, server: input.turnInFlight, assumed: this.turnInFlight });
+        if (input.turnInFlight) {
+          this.turnInFlight = true;
+          this.startTurnClock(now);
+        } else if (this.turnInFlight) {
+          this.onTurnDone(false, undefined, now);
+        }
         break;
       case "disable":
         this.disable(now);
@@ -410,20 +438,33 @@ export class DriveMachine {
 
   // --- lifecycle -------------------------------------------------------------------
 
-  private enable(fromGesture: boolean, knownIds: string[], turnInFlight: boolean, now: number): void {
+  private enable(fromGesture: boolean, knownIds: string[], turnInFlight: boolean, announce: boolean, now: number): void {
     // Everything already on screen when audio came on is history, not news.
     for (const id of knownIds) this.doneIds.add(id);
     this.turnInFlight = turnInFlight;
     if (turnInFlight) this.startTurnClock(now);
     this.lastServerEventAt = now;
-    this.diag("enable", { fromGesture, known: knownIds.length, turnInFlight });
+    this.diag("enable", { fromGesture, known: knownIds.length, turnInFlight, announce });
     if (fromGesture) {
       this.mode = "live";
       // Spoken synchronously inside the tap: this is what unlocks iOS speech.
-      this.speakNow({ text: LINES.starting, kind: "system" }, now);
+      if (announce) this.speakNow({ text: LINES.starting, kind: "system" }, now);
     } else {
       this.mode = "paused";
     }
+  }
+
+  /** Stop speaking and listening and wait for a tap, keeping the queue (like backgrounding). */
+  private pause(reason: string): void {
+    this.diag("pause", { reason });
+    if (this.mode !== "live") return;
+    if (this.speaking) {
+      const { text, kind, msgId, md } = this.speaking;
+      this.queue.unshift({ text, kind, msgId, md });
+    }
+    this.cancelSpeech();
+    this.stopListening();
+    this.mode = "paused";
   }
 
   private disable(now: number): void {
@@ -441,13 +482,7 @@ export class DriveMachine {
     if (!hidden || this.mode !== "live") return;
     // No auto-resume: a phone call breaks the gesture chain and kills speech,
     // so coming back needs one tap. Re-speak the interrupted chunk on resume.
-    if (this.speaking) {
-      const { text, kind, msgId, md } = this.speaking;
-      this.queue.unshift({ text, kind, msgId, md });
-    }
-    this.cancelSpeech();
-    this.stopListening();
-    this.mode = "paused";
+    this.pause("hidden");
     void now;
   }
 

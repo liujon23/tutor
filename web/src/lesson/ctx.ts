@@ -1,6 +1,7 @@
 import { h, clear } from "../dom.js";
 import type { LessonState, MessageFeedback } from "../api.js";
 import { findPendingSend } from "./reconcile.js";
+import type { AudioController } from "./audio/controller.js";
 
 export { entryKey } from "./reconcile.js";
 
@@ -63,6 +64,10 @@ export interface LessonCtx {
   popFor: string | null;
   popDocDown: ((e: Event) => void) | null;
   popDocKey: ((e: KeyboardEvent) => void) | null;
+
+  // Drive mode, when on — one opaque field (see audio/controller.ts). The SSE
+  // subscription and reconcile feed it; everything else lives behind it.
+  audio: AudioController | null;
 
   /** Tear down the lesson screen's subscriptions and go back to select. */
   leaveLesson(): void;

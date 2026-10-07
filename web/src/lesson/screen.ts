@@ -7,20 +7,33 @@ import { showBanner, entryKey } from "./ctx.js";
 import { addBubble, addNote, photoUrls, scrollDown } from "./bubbles.js";
 import { closeRating } from "./rating.js";
 import { showWrapup, mapError, refreshEndingHint } from "./wrapup.js";
-import { subscribeEvents } from "./events.js";
+import { subscribeEvents, type EventSubscription } from "./events.js";
 import { buildComposer } from "./composer.js";
+import { DriveController, clearPendingDrive, type DriveStart } from "./audio/controller.js";
 
 // ---------------------------------------------------------------------------
 // Lesson screen
 // ---------------------------------------------------------------------------
 
-export async function showLesson(id: string): Promise<void> {
+export interface ShowLessonOptions {
+  /** Open straight into drive mode: after the select screen's Start (audio
+   *  already unlocked), or restoring after a reload (paused until a tap). */
+  drive?: Exclude<DriveStart, "tap">;
+}
+
+export async function showLesson(id: string, opts: ShowLessonOptions = {}): Promise<void> {
   clear(root);
   root.append(h("div", { class: "loading" }, "Loading lesson…"));
   let lesson: LessonState;
   try {
     lesson = await api.lesson(id);
   } catch (e) {
+    if (opts.drive === "restore") {
+      // The remembered drive lesson is gone; don't strand the reload on an error.
+      clearPendingDrive();
+      void showSelect();
+      return;
+    }
     clear(root);
     root.append(h("div", { class: "error-box" }, (e as Error).message));
     return;
@@ -55,7 +68,7 @@ export async function showLesson(id: string): Promise<void> {
 
   // Streaming/rating/feedback state shared across bubbles/rating/wrapup/events/
   // composer, in place of the single closure the screen used to be.
-  let closeEventsAndVisibility: (() => void) | null = null;
+  let subscription: EventSubscription | null = null;
   const ctx: LessonCtx = {
     id,
     lesson,
@@ -77,11 +90,30 @@ export async function showLesson(id: string): Promise<void> {
     popFor: null,
     popDocDown: null,
     popDocKey: null,
+    audio: null,
     leaveLesson: () => {
-      closeEventsAndVisibility?.();
+      ctx.audio?.stop();
+      ctx.audio = null;
+      subscription?.close();
       closeRating(ctx);
       void showSelect();
     },
+  };
+
+  // Drive mode: created on demand. For "tap" this runs inside the tap handler,
+  // which is what lets the first speech play on iOS.
+  const startDrive = (how: DriveStart): void => {
+    if (ctx.audio || __DEMO__ || !subscription) return;
+    const events = subscription;
+    const drive = new DriveController(ctx, {
+      reconnect: () => events.reconnect(),
+      reconcile: () => events.reconcile(),
+      onExit: () => {
+        ctx.audio = null;
+      },
+    });
+    ctx.audio = drive;
+    drive.start(how);
   };
   for (const f of lesson.feedback ?? []) ctx.feedbackById.set(f.messageId, f);
 
@@ -148,7 +180,7 @@ export async function showLesson(id: string): Promise<void> {
   if (__DEMO__ && lesson.note) showBanner(ctx, lesson.note);
 
   // Composer
-  const { chipRow, composer } = buildComposer(ctx);
+  const { chipRow, composer } = buildComposer(ctx, { onListen: () => startDrive("tap") });
   screen.append(chipRow, composer);
   root.append(screen);
 
@@ -165,7 +197,9 @@ export async function showLesson(id: string): Promise<void> {
 
   // --- events -----------------------------------------------------------------
 
-  closeEventsAndVisibility = subscribeEvents(ctx);
+  subscription = subscribeEvents(ctx);
 
   scrollDown(ctx, true);
+
+  if (opts.drive) startDrive(opts.drive);
 }

@@ -393,8 +393,16 @@ export interface Api {
   clearFeedback(id: string, messageId: string): Promise<{ ok: boolean }>;
   approvePatterns(id: string, approve: string[]): Promise<{ ok: boolean; applied: number }>;
   abandon(id: string): Promise<{ ok: boolean }>;
-  events(id: string, onEvent: (ev: LessonEvent) => void, onReopen?: () => void): () => void;
+  events(
+    id: string,
+    onEvent: (ev: LessonEvent) => void,
+    onReopen?: () => void,
+    onStatus?: (status: StreamStatus, detail?: { retryInMs?: number }) => void
+  ): () => void;
 }
+
+/** What the event stream is doing, for drive mode's diagnostics. */
+export type StreamStatus = "open" | "error" | "retrying";
 
 const liveApi: Api = {
   status: (): Promise<Status> => fetch("/api/status").then((r) => j<Status>(r)),
@@ -503,30 +511,56 @@ const liveApi: Api = {
   events: (
     id: string,
     onEvent: (ev: LessonEvent) => void,
-    onReopen?: () => void
+    onReopen?: () => void,
+    onStatus?: (status: StreamStatus, detail?: { retryInMs?: number }) => void
   ): (() => void) => {
-    const es = new EventSource(`/api/lesson/${id}/events`);
+    let es: EventSource | null = null;
+    let stopped = false;
     let hadError = false;
-    es.onmessage = (m) => {
-      try {
-        onEvent(JSON.parse(m.data) as LessonEvent);
-      } catch {
-        /* ignore malformed frames */
-      }
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let backoffMs = 1000;
+    const open = () => {
+      const source = new EventSource(`/api/lesson/${id}/events`);
+      es = source;
+      source.onmessage = (m) => {
+        try {
+          onEvent(JSON.parse(m.data) as LessonEvent);
+        } catch {
+          /* ignore malformed frames */
+        }
+      };
+      // SSE has no replay: after any drop, the reconnect starts from "now" and any
+      // events emitted in the gap are lost. Signal reopen-after-error so the caller
+      // can refetch and reconcile the full lesson state.
+      source.onerror = () => {
+        hadError = true;
+        onStatus?.("error");
+        // While CONNECTING the browser retries by itself. CLOSED means it gave
+        // up for good — any non-200 reconnect does that, e.g. a 502 from
+        // `tailscale serve` while the PC restarts — and the screen would
+        // otherwise stay silently dead. Recreate it, backing off.
+        if (source.readyState === EventSource.CLOSED && !stopped) {
+          source.close();
+          onStatus?.("retrying", { retryInMs: backoffMs });
+          retryTimer = setTimeout(open, backoffMs);
+          backoffMs = Math.min(backoffMs * 2, 30_000);
+        }
+      };
+      source.onopen = () => {
+        backoffMs = 1000;
+        onStatus?.("open");
+        if (hadError) {
+          hadError = false;
+          onReopen?.();
+        }
+      };
     };
-    // SSE has no replay: after any drop, the reconnect starts from "now" and any
-    // events emitted in the gap are lost. Signal reopen-after-error so the caller
-    // can refetch and reconcile the full lesson state.
-    es.onerror = () => {
-      hadError = true;
+    open();
+    return () => {
+      stopped = true;
+      clearTimeout(retryTimer);
+      es?.close();
     };
-    es.onopen = () => {
-      if (hadError) {
-        hadError = false;
-        onReopen?.();
-      }
-    };
-    return () => es.close();
   },
 };
 
