@@ -339,4 +339,9 @@ export const demoApi: Api = {
   approvePatterns,
   abandon,
   events,
+  // Drive mode is hidden in demo builds; these only keep the Api shape whole.
+  keepGoing: async () => ({ ok: true }),
+  health: async () => ({ alive: true, turnInFlight: false, queueLength: 0, msSinceLastMessage: 0, listeners: 1 }),
+  kick: async () => ({ ok: true, requeued: null }),
+  sendDiag: async (_id, batch) => ({ ok: true, id: batch.id }),
 };

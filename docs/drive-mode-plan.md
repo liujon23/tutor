@@ -89,7 +89,33 @@ building them, beyond what this plan already said:
   interim promoted), and its silence clock restarts on the next `audiostart` —
   otherwise the interruption itself counts as the learner going quiet.
 - A price range reads "5 dollars to 10 dollars".
-- Not wired to anything yet: no adapter, panel or server changes.
+
+**The server changes** (everything under "Server changes, collected", with
+`tests/drive-server.test.ts`). Checked against a live server without spending
+tokens: heartbeats every 15s, `modelText` never served, `turnInFlight` on GET,
+health/kick/keep-going/diag routes and their refusals, connect/disconnect and
+client batches landing in `.app/diag/<id>.jsonl`. **Not yet exercised against
+the real SDK**: delta ids, the turn counter, `api_retry` /
+`session_state_changed` handling and a real kick — the first real lesson turn
+will show them in the diag log. Decided while building:
+- **Typed turns are tagged only on the first one after a spoken turn** (J's
+  call). The prompt says the mode holds until the next tag.
+- `via` and the exact `modelText` are stored on every user entry, so a kick can
+  re-send a turn verbatim (`modelText` is stripped from GET).
+- `turnInFlight` = sends the SDK hasn't answered: reset on each `result` to the
+  sends it hasn't been handed yet (a turn can absorb several queued sends). The
+  SDK's own `session_state_changed` is logged beside it to check the rule.
+- A kick closes the old runner *quietly*: nothing it emits afterwards, including
+  `closed`, reaches clients. `api_retry` counts as progress, so a retrying turn
+  is never kicked.
+- Deltas are logged only when nobody received them (summarised on the next
+  event); every other dispatched event is logged with its listener count.
+- Server diag writes nothing under the node test runner (tests run against the
+  real data root); diag files cap at 25 MB each.
+- "Keep going" sits on the ending hint as an outline button; the In-progress
+  card reads "expires in N days".
+- **Still open**: how the curriculum viewer shows spoken turns. The counts reach
+  `CurriculumUnitLesson` but nothing renders them yet — decide with J.
 
 **Audit.** A review of this plan's first draft against the code, the raw spike
 logs and the usage ledger found nine wrong claims and a set of gaps; the

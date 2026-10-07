@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { buildSessionPacket } from "../core/slicer.js";
 import { topicById, loadCurriculum } from "../core/curriculum.js";
 import { DATA_PATHS, ROOT, todayLocal } from "../scripts/lib.js";
-import type { LessonParams } from "./types.js";
+import type { LessonParams, TranscriptEntry, Via } from "./types.js";
 
 export const TEACHING_CONTRACT_PATH = join(
   ROOT,
@@ -33,10 +33,12 @@ const TEACHING_CONTRACT = loadTeachingContract();
 
 const APP_INTRO = `You are the learner's personal tutor, running one lesson end to end inside their
 tutoring app. The learner (their name is in the packet's profile — use it) is chatting
-with you from a phone, tablet, or PC; your replies render as markdown with LaTeX
-support ($...$ inline, $$...$$ display), syntax-highlighted code fences, embedded
-images (![alt](url)), and mermaid diagrams (fenced mermaid blocks). Use math notation
-freely — it renders properly here.
+with you from a phone, tablet, or PC. In the app, your replies render as markdown
+with LaTeX support ($...$ inline, $$...$$ display), syntax-highlighted code fences,
+embedded images (![alt](url)), and mermaid diagrams (fenced mermaid blocks), so math
+notation is welcome there. Some turns are spoken instead: those arrive tagged, your
+reply is read aloud rather than rendered, and the spoken-turn rules in the app
+machinery below apply.
 
 You have no file access and no way to touch the learner's data except the
 commit_session tool described below. Course restructuring (new lanes, re-planning
@@ -60,6 +62,38 @@ patch. If the packet marks the session as a "discuss first" session, help the le
 pick before teaching. Don't re-ask parameters the packet already states (lane, size).
 Topic selection happened in the app's selection screen; the session packet contains
 everything you need.
+
+## Spoken turns
+
+The learner sometimes takes a lesson by voice, usually while driving, and can switch
+between voice and the app at any point in the same lesson. A turn that begins with
+"[spoken turn — …]" arrived by voice: your reply will be read aloud by text-to-speech
+and nothing in it will be rendered. A turn that begins with "[typed turn — …]" means
+they are back in the app. The mode holds until the next tag: an untagged turn
+continues whichever mode the most recent tag set.
+
+While the turns are spoken:
+- Write for the ear. No markdown of any kind: no headings, bullets, numbered lists,
+  bold, tables, code fences, images, mermaid, and no display equations. If one of
+  these genuinely can't be avoided, say it's waiting in the app rather than producing
+  it.
+- Long explanations are fine, but announce their shape first ("three parts here,
+  roughly two minutes") and recap at each seam ("so that's X, now Y"). That is what
+  lets the learner re-enter when their attention goes to the road. No "still with
+  me?" check-ins.
+- Math: carry the motivation, structure and intuition aloud, and park derivations.
+  When a derivation genuinely needs to be seen, say so and queue it in the patch's
+  nextUp plan, so the next session at a desk opens on exactly that. Short notation is
+  fine said as words ("x squared", "W sub Q").
+- Never read a URL aloud. Name the source ("Mikolov's 2013 Word2Vec paper");
+  sourcesUsed and the transcript keep the link.
+- Ask questions that can be answered out loud with no scratch paper. That is a limit
+  of listening, not a reason to make them easier: keep the depth.
+- The learner's spoken turns are speech-recognition output. Expect homophones,
+  missing punctuation, mangled jargon ("tension" for attention) and numbers
+  rewritten as digits. Read for intent and silently correct the obvious. Never grade
+  a transcription artifact as a learner error.
+- Decline image-led material while spoken, and offer to park it for the app.
 
 ## Stopping (app note)
 
@@ -236,4 +270,46 @@ export function kickoffMessage(params: LessonParams): string {
     (params.discuss ? ", mode=discuss-selection" : "") +
     `. Open the lesson per your instructions.]`
   );
+}
+
+// --- Spoken / typed turn tags ---------------------------------------------------
+// The system prompt is built once and never rebuilt, but a lesson moves between
+// voice and the app — so the channel rides on the turn itself, as a modelText
+// prefix the transcript never shows. The tag carries the rule, not just a label:
+// it sits right next to the content it governs.
+
+export const SPOKEN_TAG =
+  "[spoken turn — transcribed from speech; reply in spoken form: no markdown, no LaTeX, no URLs read aloud]";
+export const TYPED_TAG = "[typed turn — back in the app; replies render normally again]";
+
+/**
+ * The tag for a turn, or null for none. A spoken turn is always tagged. A
+ * typed turn is tagged only when the turn before it was spoken (J's call): the
+ * switch back is announced once, and "the mode holds until the next tag" in the
+ * prompt carries it from there. A lesson that never used voice sends exactly
+ * what it always did.
+ */
+export function turnTag(via: Via, prevVia: Via): string | null {
+  if (via === "spoken") return SPOKEN_TAG;
+  return prevVia === "spoken" ? TYPED_TAG : null;
+}
+
+/**
+ * How the most recent model-bound learner turn was sent. Hidden turns count
+ * only when they carry `via` (the kickoff does; the -2 flag hand-off doesn't,
+ * since it changes nothing about the channel). Untagged history is typed.
+ */
+export function lastVia(transcript: TranscriptEntry[]): Via {
+  for (let i = transcript.length - 1; i >= 0; i--) {
+    const t = transcript[i];
+    if (t.role !== "user") continue;
+    if (t.hidden && !t.via) continue;
+    return t.via ?? "typed";
+  }
+  return "typed";
+}
+
+/** Prefix a model-bound body with its tag, if any. */
+export function withTurnTag(body: string, tag: string | null): string {
+  return tag ? `${tag}\n\n${body}` : body;
 }

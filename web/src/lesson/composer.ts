@@ -142,8 +142,9 @@ export function buildComposer(ctx: LessonCtx): ComposerEls {
     const el = addBubble(ctx, "user", trimmed, images.map((p) => p.preview));
     const pending: PendingSend = { text: trimmed, imageCount: images.length, el };
     ctx.pendingSends.push(pending);
-    ctx.lesson.ending = false; // chatting on means we're no longer just wrapping up
-    ctx.endingHint.classList.add("hidden");
+    // `ending` stays set while chatting: answering the wrap-up's own questions
+    // must not drop an uncommitted lesson out of "Needs your attention". Only
+    // a commit or the hint's "Keep going" clears it.
     ctx.thinking.classList.remove("hidden");
     scrollDown(ctx, true);
     try {

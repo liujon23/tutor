@@ -10,7 +10,7 @@ import { basename, join } from "node:path";
 import { learnerName } from "../core/profile.js";
 import { PATHS } from "../scripts/lib.js";
 import { ASSETS_DIR, cachedAssetFile } from "./assets.js";
-import { usageHeadline } from "./usage.js";
+import { countLearnerTurns, usageHeadline } from "./usage.js";
 import type { SessionPatch } from "../core/types.js";
 import type { LessonUsage, StoredSession } from "./types.js";
 
@@ -77,12 +77,19 @@ export function renderTranscript(
         timings.composeMs + timings.validateMs + timings.writeMs + timings.archiveMs
       )})`
     : "";
+  // Spoken answers came through speech recognition — say so, so the data
+  // quality of the lesson (and of each marked turn below) can be read later.
+  const { spokenTurns, typedTurns } = countLearnerTurns(session.transcript);
+  const spokenLine = spokenTurns
+    ? `${spokenTurns} of ${spokenTurns + typedTurns} ${learner} turns spoken (speech recognition)`
+    : "";
   const header = [
     `# Lesson ${lessonNumber} — ${L.date}`,
     ``,
     `- **Lane / Unit:** ${L.laneId} / ${L.unitId}`,
     `- **Topics:** ${L.topicsFreeform ?? L.topicIds.join(", ")}`,
     `- **Size / model:** ${session.params.size} / ${session.params.model}`,
+    ...(spokenLine ? [`- **Spoken:** ${spokenLine}`] : []),
     ...(usage ? [`- **Usage:** ${usageHeadline(usage)}`] : []),
     ...(timingLine ? [`- **Commit timing:** ${timingLine}`] : []),
     `- **Committed:** ${new Date().toISOString()}`,
@@ -115,7 +122,7 @@ export function renderTranscript(
       const flag = t.id ? flaggedById.get(t.id) : undefined;
       const flagNote = flag ? `\n\n> *⏬ ${learner} flagged this: "${flag.note}"*` : "";
       return (
-        `### ${t.role === "user" ? learner : "Tutor"}\n\n` +
+        `### ${t.role === "user" ? (t.via === "spoken" ? `${learner} (spoken)` : learner) : "Tutor"}\n\n` +
         photos +
         rewriteArchivedImages(t.text.trim(), assetMap) +
         flagNote

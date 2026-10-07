@@ -26,6 +26,12 @@ function pickLane(lanes: StatusLane[]): StatusLane | undefined {
   return lanes[lanes.length - 1];
 }
 
+/** "expires in 6 days" — an untouched in-progress lesson is auto-abandoned. */
+function expiresIn(iso: string): string {
+  const days = Math.max(1, Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000));
+  return `expires in ${days} day${days === 1 ? "" : "s"}`;
+}
+
 // ---------------------------------------------------------------------------
 // Select screen
 // ---------------------------------------------------------------------------
@@ -104,7 +110,11 @@ export async function showSelect(): Promise<void> {
           "button",
           { class: "resume-row", onclick: () => showLesson(s.id) },
           h("span", { class: "resume-title" }, s.title || "Lesson"),
-          h("span", { class: "resume-meta" }, `${s.params.size} · started ${s.createdAt.slice(0, 10)}`)
+          h(
+            "span",
+            { class: "resume-meta" },
+            `${s.params.size} · started ${s.createdAt.slice(0, 10)}${s.expiresAt ? ` · ${expiresIn(s.expiresAt)}` : ""}`
+          )
         )
       );
     }

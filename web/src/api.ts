@@ -1,8 +1,11 @@
 // Typed client for the app server's API.
 import { demoApi } from "./demo/replay.js";
+import type { DiagBatch } from "./lesson/audio/diag.js";
 
 export type SessionSize = "tight" | "standard" | "deep";
 export type LessonModel = "opus" | "sonnet";
+/** How a learner turn was sent — mirrors server/types.ts. Absent means typed. */
+export type Via = "typed" | "spoken";
 
 export interface StatusLane {
   id: string;
@@ -51,6 +54,8 @@ export interface ActiveSession {
   params: { laneId?: string; size: SessionSize; model: LessonModel };
   createdAt: string;
   lastActivityAt: string;
+  /** When it will be auto-abandoned for inactivity (absent from older servers). */
+  expiresAt?: string;
 }
 
 export interface AttentionItem {
@@ -198,6 +203,9 @@ export interface CurriculumUnitLesson {
   topicsLabel: string;
   topicsFull: string;
   hasTranscript: boolean;
+  /** Learner turns spoken in drive mode; absent for lessons before it. */
+  spokenTurns?: number;
+  typedTurns?: number;
 }
 
 export interface CurriculumUnit {
@@ -239,6 +247,7 @@ export interface TranscriptEntry {
   text: string;
   at: string;
   images?: string[]; // inbound photo filenames — served via /api/assets/local/<name>
+  via?: Via; // spoken turns came through speech recognition
 }
 
 /** Per-message rating: ⏫ +2 · 👍 +1 · 👎 -1 · ⏬ -2. Only -2 acts live. */
@@ -296,24 +305,39 @@ export interface LessonState {
   ending?: boolean;
   lastError?: string;
   feedback?: MessageFeedback[];
+  /** A live runner is working on a turn right now. */
+  turnInFlight?: boolean;
   /** Demo mode only: the recording's blurb, shown as a dismissible banner. */
   note?: string;
+}
+
+/** GET /api/lesson/:id/health — mirrors RunnerHealth in server/runner.ts. */
+export interface RunnerHealth {
+  alive: boolean;
+  turnInFlight: boolean;
+  queueLength: number;
+  /** -1 when there is no live runner. */
+  msSinceLastMessage: number;
+  listeners: number;
 }
 
 export type LessonEvent =
   | { type: "ready"; model: string }
   | { type: "user"; id?: string; text: string; images?: string[] }
-  | { type: "delta"; text: string }
+  // `id` is the transcript id the finished message will carry.
+  | { type: "delta"; id?: string; text: string }
   | { type: "assistant"; id?: string; text: string }
   | { type: "tool_use"; name: string }
   | { type: "feedback_flag"; messageId: string; note: string }
   | { type: "committed"; commit: CommitResult }
   // costUsd here is the lesson-so-far total, not the cost of this one turn.
   | { type: "turn_done"; costUsd: number; isError: boolean; errors?: string[]; tokens?: TokenCounts }
-  | { type: "rate_limit"; status: string; resetsAt?: number }
+  | { type: "rate_limit"; status: string; resetsAt?: number; info?: Record<string, unknown> }
   | { type: "api_error"; error: string }
   | { type: "error"; message: string }
-  | { type: "closed" };
+  | { type: "closed" }
+  // Every ~15s on each stream, so a dead stream can be told from a thinking model.
+  | { type: "heartbeat" };
 
 /** lesson-007.md — mirrors transcriptRelPath() in server/transcript.ts. */
 export function transcriptName(lessonNumber: number): string {
@@ -349,10 +373,18 @@ export interface Api {
     discuss?: boolean;
     size: SessionSize;
     model: LessonModel;
+    via?: Via;
   }): Promise<{ sessionId: string; title: string }>;
   lesson(id: string): Promise<LessonState>;
-  sendMessage(id: string, text: string, images?: OutgoingImage[]): Promise<{ ok: boolean }>;
-  endLesson(id: string): Promise<{ ok: boolean; alreadyCommitted?: boolean }>;
+  sendMessage(id: string, text: string, images?: OutgoingImage[], via?: Via): Promise<{ ok: boolean }>;
+  endLesson(id: string, via?: Via): Promise<{ ok: boolean; alreadyCommitted?: boolean }>;
+  /** Undo a tapped End: `ending` is otherwise sticky until the commit. */
+  keepGoing(id: string): Promise<{ ok: boolean }>;
+  health(id: string): Promise<RunnerHealth>;
+  /** Replace a runner that stopped making progress (drive-mode watchdog). */
+  kick(id: string): Promise<{ ok: boolean; requeued: string | null }>;
+  /** Upload a drive-mode diagnostics batch. */
+  sendDiag(id: string, batch: DiagBatch): Promise<{ ok: boolean; id: string }>;
   setModel(id: string, model: LessonModel): Promise<{ ok: boolean }>;
   setFeedback(
     id: string,
@@ -394,6 +426,7 @@ const liveApi: Api = {
     discuss?: boolean;
     size: SessionSize;
     model: LessonModel;
+    via?: Via;
   }): Promise<{ sessionId: string; title: string }> =>
     fetch("/api/lesson", {
       method: "POST",
@@ -404,15 +437,36 @@ const liveApi: Api = {
   lesson: (id: string): Promise<LessonState> =>
     fetch(`/api/lesson/${id}`).then((r) => j<LessonState>(r)),
 
-  sendMessage: (id: string, text: string, images?: OutgoingImage[]): Promise<{ ok: boolean }> =>
+  sendMessage: (id: string, text: string, images?: OutgoingImage[], via?: Via): Promise<{ ok: boolean }> =>
     fetch(`/api/lesson/${id}/message`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(images?.length ? { text, images } : { text }),
+      body: JSON.stringify({ text, ...(images?.length ? { images } : {}), ...(via ? { via } : {}) }),
     }).then((r) => j(r)),
 
-  endLesson: (id: string): Promise<{ ok: boolean; alreadyCommitted?: boolean }> =>
-    fetch(`/api/lesson/${id}/end`, { method: "POST" }).then((r) => j(r)),
+  endLesson: (id: string, via?: Via): Promise<{ ok: boolean; alreadyCommitted?: boolean }> =>
+    fetch(
+      `/api/lesson/${id}/end`,
+      via
+        ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ via }) }
+        : { method: "POST" }
+    ).then((r) => j(r)),
+
+  keepGoing: (id: string): Promise<{ ok: boolean }> =>
+    fetch(`/api/lesson/${id}/keep-going`, { method: "POST" }).then((r) => j(r)),
+
+  health: (id: string): Promise<RunnerHealth> =>
+    fetch(`/api/lesson/${id}/health`).then((r) => j<RunnerHealth>(r)),
+
+  kick: (id: string): Promise<{ ok: boolean; requeued: string | null }> =>
+    fetch(`/api/lesson/${id}/kick`, { method: "POST" }).then((r) => j(r)),
+
+  sendDiag: (id: string, batch: DiagBatch): Promise<{ ok: boolean; id: string }> =>
+    fetch(`/api/diag/${id}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(batch),
+    }).then((r) => j(r)),
 
   setModel: (id: string, model: LessonModel): Promise<{ ok: boolean }> =>
     fetch(`/api/lesson/${id}/model`, {

@@ -52,6 +52,9 @@ export interface LessonIndexEntry {
   topicsFull: string; // untruncated, for a title tooltip
   hasTranscript: boolean;
   source: "ledger" | "transcript" | "history";
+  /** Learner turns by how they were sent — ledger lessons since drive mode only. */
+  spokenTurns?: number;
+  typedTurns?: number;
 }
 
 // --- Source 2: transcript headers -------------------------------------------
@@ -196,6 +199,9 @@ export function buildLessonIndex(
       topicsFull: full,
       hasTranscript: transcripts.has(e.lessonNumber),
       source: "ledger",
+      // Only ledger lines written since drive mode carry these.
+      ...(typeof e.spokenTurns === "number" ? { spokenTurns: e.spokenTurns } : {}),
+      ...(typeof e.typedTurns === "number" ? { typedTurns: e.typedTurns } : {}),
     });
   }
 

@@ -174,6 +174,22 @@ export function refreshEndingHint(ctx: LessonCtx): void {
           },
         },
         "Ask the tutor to commit"
+      ),
+      h(
+        "button",
+        {
+          class: "ending-btn outline",
+          onclick: async () => {
+            try {
+              await api.keepGoing(ctx.id);
+              ctx.lesson.ending = false;
+              refreshEndingHint(ctx);
+            } catch (e) {
+              showBanner(ctx, (e as Error).message);
+            }
+          },
+        },
+        "Keep going"
       )
     );
   } else {
