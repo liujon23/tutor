@@ -240,6 +240,8 @@ export class DriveMachine {
   private lastProgressAt = 0;
   private lastStillWorkingAt: number | null = null;
   private kickedThisTurn = false;
+  /** An api_error was already spoken this turn — its turn_done needn't say it again. */
+  private errorSaidThisTurn = false;
   private healthPending = false;
   private committed = false;
   private finishedSent = false;
@@ -576,6 +578,7 @@ export class DriveMachine {
         this.lastRateStatus = ev.status;
         return;
       case "api_error":
+        this.errorSaidThisTurn = true;
         this.say(`The tutor hit an error: ${spokenError(ev.error)}.`, "api_error");
         return;
       case "error":
@@ -694,7 +697,10 @@ export class DriveMachine {
       this.enqueue(this.tracks.get(key)!.chunker.flush(), key);
       this.tracks.delete(key);
     }
-    if (isError) this.say(`That turn failed: ${spokenError(errors?.[0] ?? "unknown error")}.`, "turn-error");
+    // A failed request already said why (api_error); one line per failure.
+    if (isError && !this.errorSaidThisTurn) {
+      this.say(`That turn failed: ${spokenError(errors?.[0] ?? "unknown error")}.`, "turn-error");
+    }
     this.endTurn(now, "turn_done");
   }
 
@@ -706,6 +712,7 @@ export class DriveMachine {
     this.turnStartedAt = null;
     this.lastStillWorkingAt = null;
     this.kickedThisTurn = false;
+    this.errorSaidThisTurn = false;
     this.healthPending = false;
     this.skippedIds.clear();
   }

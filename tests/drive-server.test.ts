@@ -19,7 +19,7 @@ import {
   turnTag,
   withTurnTag,
 } from "../server/prompt.js";
-import { StreamIds, lastUnansweredUser } from "../server/runner.js";
+import { StreamIds, isFailedRequest, lastUnansweredUser } from "../server/runner.js";
 import { countLearnerTurns, usageFromResult } from "../server/usage.js";
 import { renderTranscript } from "../server/transcript.js";
 import {
@@ -151,6 +151,16 @@ test("a second text message for one API id, or an unknown one, gets a fresh id a
   const stray = ids.claim("never_started");
   assert.equal(stray.unknown, true);
   assert.equal(ids.claim(undefined).unknown, true);
+});
+
+test("a failed request is not a tutor turn; a reply cut short by max tokens still is", () => {
+  // Seen live (2026-10-06): an expired login made every turn come back as a
+  // synthetic assistant message reading "Failed to authenticate: …".
+  assert.equal(isFailedRequest("authentication_failed"), true);
+  assert.equal(isFailedRequest("rate_limit"), true);
+  assert.equal(isFailedRequest("unknown"), true);
+  assert.equal(isFailedRequest("max_output_tokens"), false);
+  assert.equal(isFailedRequest(undefined), false);
 });
 
 // ---------------------------------------------------------------------------

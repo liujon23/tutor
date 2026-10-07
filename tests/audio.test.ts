@@ -711,6 +711,19 @@ test("not-allowed (Chrome on iOS) pauses with a spoken explanation, no retry loo
   assert.equal(h.started(), 1);
 });
 
+test("a failed request is announced once, then the mic reopens", () => {
+  // The live failure (expired login): api_error, then an error turn_done.
+  const h = new Harness();
+  h.enable({ turnInFlight: true });
+  h.finishSpeech();
+  h.ev({ type: "api_error", error: "authentication_failed" });
+  h.ev({ type: "turn_done", isError: true });
+  h.finishSpeech();
+  const errorLines = h.spoken.filter((t) => /error|failed/i.test(t));
+  assert.deepEqual(errorLines, ["The tutor hit an error: authentication failed on the host PC."]);
+  assert.equal(h.started(), 1, "listening again, so the learner can retry by voice");
+});
+
 test("commit ends the drive once the close-out is spoken", () => {
   const h = new Harness();
   h.enable();

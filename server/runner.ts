@@ -113,6 +113,15 @@ export class StreamIds {
   }
 }
 
+/**
+ * Whether an assistant message's error means the request failed outright, so
+ * its text is just the error. `max_output_tokens` is the exception: that
+ * message is a genuine reply that ran out of room, and stays a tutor turn.
+ */
+export function isFailedRequest(error: string | undefined): boolean {
+  return !!error && error !== "max_output_tokens";
+}
+
 /** The most recent user turn with no assistant reply after it — what a kick re-sends. */
 export function lastUnansweredUser(transcript: TranscriptEntry[]): TranscriptEntry | null {
   for (let i = transcript.length - 1; i >= 0; i--) {
@@ -473,16 +482,32 @@ export class LessonRunner {
         break;
       }
       case "assistant": {
-        if (msg.error) {
-          this.diag("api-error", { error: msg.error }, "anomaly");
-          this.emit({ type: "api_error", error: msg.error });
-        } else this.clearError(); // a clean assistant turn means we recovered
         // The model that actually produced this turn (survives a mid-lesson switch).
         const model = (msg.message as { model?: string }).model;
         if (model) this.turnModel = model;
         const text = msg.message.content
           .map((b: { type: string; text?: string }) => (b.type === "text" ? b.text ?? "" : ""))
           .join("");
+        if (isFailedRequest(msg.error)) {
+          // A failed request comes back as a synthetic assistant message whose
+          // text is the error itself ("Failed to authenticate: …"). It is not
+          // tutor speech: storing it put it in the transcript as a tutor turn,
+          // and a spoken client would have read it aloud as one. The
+          // api_error event is how clients hear about it.
+          this.diag("api-error", { error: msg.error, model: model ?? null, text: text.slice(0, 300) }, "anomaly");
+          // Persisted (not just emitted) so a client that reconnects later still
+          // sees it — it used to survive as a transcript bubble. Cleared by the
+          // next clean reply.
+          this.session.lastError = msg.error!;
+          saveSession(this.session);
+          this.emit({ type: "api_error", error: msg.error! });
+          break;
+        }
+        if (msg.error) {
+          // max_output_tokens: a real reply, cut short. Kept as a tutor turn.
+          this.diag("api-error", { error: msg.error, model: model ?? null, kept: true }, "anomaly");
+          this.emit({ type: "api_error", error: msg.error });
+        } else this.clearError(); // a clean assistant turn means we recovered
         if (text.trim()) {
           const claim = this.streamIds.claim((msg.message as { id?: string }).id);
           if (claim.reused || claim.unknown) {
