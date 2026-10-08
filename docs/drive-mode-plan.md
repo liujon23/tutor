@@ -732,8 +732,14 @@ Each of these cost real time to find. Don't rediscover them.
   the Agent SDK caches, and the ledger shows cache reads dominating every
   lesson. Don't let "byte-stability" drive a design decision; do read
   `cacheRead`/`cacheCreation` when reasoning about cost.
-- **The service worker is cache-first** (`web/public/sw.js`): the first load
-  after a rebuild runs the old bundle. Check the build id before trusting a test.
+- **The service worker used to be cache-first for pages** (`web/public/sw.js`):
+  the first load after a rebuild ran the old index.html, whose hashed assets
+  the rebuild had deleted — a broken page on the phone (seen in J's log,
+  2026-10-08). Pages are now network-first (cache only offline / after 4s),
+  `/assets/` cache-first; `tests/sw.test.ts` locks it in. A phone still on the
+  old worker gets one more stale load before the new one takes over. Check the
+  build id in the debug strip before trusting a test. (The desktop browser pane
+  refuses service-worker scripts, so it can't exercise this.)
 - The web client always sends an explicit model, so `defaultModel()` in
   `server/params.ts` never fires from the PWA (`web/src/main.ts:51,297,332`).
 - Stale comment to fix in passing: `END_TURN_TEXT` in `server/params.ts` still
