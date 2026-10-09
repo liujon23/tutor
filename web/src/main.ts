@@ -401,6 +401,9 @@ export async function showSelect(): Promise<void> {
   // The element still exists (start() toggles its disabled state); it just
   // never enters the DOM.
   screen.append(h("div", { class: "start-row" }, startBtn, __DEMO__ ? null : discussBtn));
+  // Which bundle this page is running — to check a rebuild reached the phone
+  // without opening a lesson (the drive overlay's debug strip shows it too).
+  if (!__DEMO__) screen.append(h("div", { class: "build-id" }, `build ${__BUILD_ID__}`));
 
   refreshSelection();
   root.append(screen);
