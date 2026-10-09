@@ -8,10 +8,16 @@
 //
 //   - Nothing heard yet → wait indefinitely. Thinking time is free; the
 //     recogniser cycles silently underneath. An empty buffer NEVER submits.
-//   - Something heard → submit after `silenceMs` with no new interim or final.
-//     The clock follows interims, not finals: finals land 1.2–2.1s after the
-//     learner stops (measured on J's phone), so a finals-only clock adds ~2s
-//     of dead air to every answer.
+//   - Something heard → submit after `silenceMs` with no new interim or final,
+//     or `midSentenceMs` when the last word can't end a sentence ("the", "to",
+//     "which"…). The clock follows interims, not finals: finals land 1.2–2.1s
+//     after the learner stops (measured on J's phone), so a finals-only clock
+//     adds ~2s of dead air to every answer.
+//
+//     History: 2.5s flat cut off two of four answers on the first real run
+//     ("…automatically backs the", "…the criteria by which that you"); J
+//     thinks aloud with pauses of 1–2.7s. J would rather wait than feel
+//     rushed, so both clocks went up.
 //
 // Plus a hard cap from the first sound, and a Done tap. When the newest words
 // exist only as an interim, submitting first asks the adapter to stop the
@@ -23,12 +29,15 @@
 
 export interface EndpointConfig {
   silenceMs: number;
+  /** The silence clock when the heard text ends on a word that can't end a sentence. */
+  midSentenceMs: number;
   capMs: number;
   flushMs: number;
 }
 
 export const DEFAULT_ENDPOINT: EndpointConfig = {
-  silenceMs: 2500,
+  silenceMs: 4000,
+  midSentenceMs: 7000,
   capMs: 90_000,
   flushMs: 1000,
 };
@@ -57,6 +66,9 @@ export interface SubmitTrace {
   finals: number;
   /** The last words were only ever an interim (their final never came). */
   usedInterim: boolean;
+  /** For a silence submit: the clock that applied, and whether it was the mid-sentence one. */
+  waitMs?: number;
+  midSentence?: boolean;
 }
 
 export type EndpointAction =
@@ -80,6 +92,27 @@ export function initialEndpoint(): EndpointState {
   };
 }
 
+// Words that almost never end a spoken sentence: articles, prepositions,
+// conjunctions, auxiliaries, subject pronouns, fillers. A false positive
+// costs a few seconds of extra wait; a false negative cuts J off.
+const DANGLING = new Set(
+  (
+    "a an the to of in on at by for with from into onto about as than and or but nor " +
+    "because if whether that which who whom whose where when while although though since " +
+    "is are was were be been being am has have had do does did will would can could " +
+    "should shall may might must i we they he she you my your our their his her its " +
+    "it's that's there's what's this these those very more most less like um uh er erm " +
+    "just also then so"
+  ).split(" ")
+);
+
+/** Whether this text stops on a word that can't end a sentence. */
+export function endsMidSentence(text: string): boolean {
+  const words = text.toLowerCase().replace(/[’]/g, "'").match(/[a-z']+/g);
+  if (!words) return false;
+  return DANGLING.has(words[words.length - 1]);
+}
+
 /** Text the learner has said so far (finals plus any newer interim). */
 export function heardText(s: EndpointState): string {
   return [...s.finals, s.interim].map((t) => t.trim()).filter(Boolean).join(" ");
@@ -98,7 +131,8 @@ function submit(
   s: EndpointState,
   reason: SubmitReason,
   now: number,
-  usedInterim = s.interim.trim() !== ""
+  usedInterim = s.interim.trim() !== "",
+  wait?: { waitMs: number; midSentence: boolean }
 ): EndpointStep {
   const text = heardText(s);
   return {
@@ -112,14 +146,21 @@ function submit(
         silenceMs: now - (s.lastActivityAt ?? now),
         finals: s.finals.length,
         usedInterim,
+        ...(wait ?? {}),
       },
     },
   };
 }
 
 /** Submit now if every word is final; otherwise flush first. */
-function finish(s: EndpointState, reason: SubmitReason, now: number, cfg: EndpointConfig): EndpointStep {
-  if (s.interim.trim() === "") return submit(s, reason, now);
+function finish(
+  s: EndpointState,
+  reason: SubmitReason,
+  now: number,
+  cfg: EndpointConfig,
+  wait?: { waitMs: number; midSentence: boolean }
+): EndpointStep {
+  if (s.interim.trim() === "") return submit(s, reason, now, undefined, wait);
   return {
     state: { ...s, phase: "flushing", flushDeadline: now + cfg.flushMs, pendingReason: reason },
     action: { type: "flush" },
@@ -174,8 +215,10 @@ export function onTick(s: EndpointState, now: number, cfg: EndpointConfig = DEFA
       return { state: s, action: null };
     case "hearing":
       if (s.firstSoundAt !== null && now - s.firstSoundAt >= cfg.capMs) return finish(s, "cap", now, cfg);
-      if (s.lastActivityAt !== null && now - s.lastActivityAt >= cfg.silenceMs) {
-        return finish(s, "silence", now, cfg);
+      if (s.lastActivityAt !== null) {
+        const midSentence = endsMidSentence(heardText(s));
+        const waitMs = midSentence ? cfg.midSentenceMs : cfg.silenceMs;
+        if (now - s.lastActivityAt >= waitMs) return finish(s, "silence", now, cfg, { waitMs, midSentence });
       }
       return { state: s, action: null };
   }

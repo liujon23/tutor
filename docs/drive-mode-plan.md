@@ -151,12 +151,13 @@ Found:
 **J's calls for the browser side** (2026-10-06):
 - **Overlay**: a big state word with a hint ("LISTENING · tap when you're
   done"); while listening, what the mic has heard so far in large text. Small
-  Again / End / Exit in the corners; a collapsed debug strip at the bottom.
+  Again / Exit in the corners (End was dropped after the first iPhone run —
+  see below); a collapsed debug strip at the bottom.
 - **In-lesson toggle**: a headphones button in the composer row, beside "+".
   (Plus the Listen toggle on the select screen, per Controls.)
 - **Voice**: auto-pick the best installed English voice (iOS Premium/Enhanced
   first) at normal speed; a voice + speed picker in the overlay, remembered per
-  device.
+  device. (Since the first iPhone run: Samantha by default, tones on.)
 
 **The browser side** — `adapter.ts`, `panel.ts`, `controller.ts` (the glue the
 plan's module table didn't name: machine ↔ adapter ↔ overlay ↔ diag ↔ lesson
@@ -184,6 +185,32 @@ Decided while building:
 - Diag uploads every 15s, beacons on hide/pagehide, and keeps unsent batches in
   localStorage (capped ~2 MB) — adopted on the next drive, or sent straight up
   if they belong to another lesson.
+
+**First iPhone run** (2026-10-09, parked, STS/Opus, two lessons: one
+abandoned after the pre-drive check and a voice tour, one committed as Lesson
+28 after a four-answer recall warm-up; ≈ $1.10 API-equivalent together,
+≈ $0.04 per ordinary Opus turn once cached). Worked: the pre-drive check
+passed every line; no sigil leaked into speech; the mic never opened before
+`turn_done`; hide → pause → "Resuming." on tap; 8–13s from the end of an answer
+to the tutor's first word. Found, and J's calls:
+- **End was sent twice in both lessons** (taps 0.5s and 1.4s apart — End gave
+  no feedback and the tutor kept talking), then ✕ — so the wrap-up ran to
+  nobody. End and ✕ read as the same thing. **J: drop End from the overlay**;
+  on the road the move is "stop here, carry on later". The one corner exit is
+  labelled "✕ Exit drive mode"; ending is a text-mode action. The server also
+  drops a second End the tutor hasn't answered yet (`endAlreadyPending`).
+- **Two of four answers were cut off mid-sentence** ("…automatically backs
+  the", "…the criteria by which that you"): J thinks aloud with pauses up to
+  ~2.7s and the clock was 2.5s. **J: wait longer, both flat and mid-sentence** —
+  waiting is fine while driving, feeling rushed isn't. Now 4s, or 7s when the
+  last word can't end a sentence (`endsMidSentence`); the submit trace logs
+  which clock applied.
+- **Voice: Samantha (en-US) by default, tones on** — the automatic pick had
+  been Eloquence's Reed, and most other voices are novelties. The saved-settings
+  key moved to `tutor.voice.v2` so the tour's leftovers (tones off) reset.
+- Not acted on: the first recogniser start in each lesson failed ~1s in with
+  `audio-capture` ("Source is muted" / "Source is stopped") and retried fine
+  1s later — words in that second would be lost. Watch for it in the car.
 
 **Audit.** A review of this plan's first draft against the code, the raw spike
 logs and the usage ledger found nine wrong claims and a set of gaps; the
@@ -307,7 +334,7 @@ space). Then:
 | Situation | Rule |
 |---|---|
 | **Buffer empty and no interim seen** — J hasn't started talking | **Wait indefinitely.** Never submit. J can think for two minutes while the recogniser silently cycles underneath. |
-| **J has spoken, then gone quiet** | Submit after **~2.5s with no new interim or final**. |
+| **J has spoken, then gone quiet** | Submit after **4s with no new interim or final** — **7s when the last word can't end a sentence** ("the", "to", "which"…). Was 2.5s flat until the first iPhone run cut off two answers. |
 
 **Time the silence clock from interim activity, not finals** — finals land
 1.2–2.1s after J stops, so a finals-only clock means ~4s of dead air per answer.
@@ -420,8 +447,10 @@ math, 36 display math, 9 code fences, 5 tables, 3 nested lists):
 ### Controls
 
 Prefer **one full-screen, state-dependent tap target** — speaking → skip,
-listening → done, paused → resume — with a small End in the corner. Four buttons
-plus End is too much target-finding on a mount.
+listening → done, paused → resume — with a small Again and "✕ Exit drive
+mode" in the corners. Four buttons is too much target-finding on a mount. (There
+was an End corner too; it was dropped after the first iPhone run — ending is a
+text-mode action.)
 
 J's calls on the tap target:
 
@@ -852,10 +881,10 @@ The spike's findings are recorded above; its raw logs are in J's data root under
 - **Cost is sized per turn, not yet per lesson.** `via` on `UsageRecord` will
   show spoken vs typed cost after the first few drives. Look at it and tell J
   before this becomes a habit.
-- **Wrap-up by voice is the hardest interaction.** `server/prompt.ts:83-117` is an
-  ordered multi-turn pass with the commit at its end, and arriving at the office
-  will routinely cut it off. Sticky `ending` keeps it in "Needs your attention";
-  verify that on a real drive.
+- **Wrap-up by voice is the hardest interaction** — and is now out of drive
+  mode: the overlay has no End, so a drive ends with "Exit drive mode" and the
+  lesson stays in progress for a text wrap-up later. Revisit only if that gets
+  annoying.
 - **Standalone-PWA mode is untested.** Every measurement was a Safari tab, which
   works. Only matters if a home-screen icon is wanted later; recognition is
   reported to fail there.

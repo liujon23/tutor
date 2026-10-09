@@ -2,10 +2,12 @@
 // The drive overlay (J's design, docs/drive-mode-plan.md): the whole screen is
 // one tap target whose meaning follows the phase — speaking → skip,
 // listening → done, paused → resume, thinking → a spoken status line. A big
-// state word and hint; while listening, the words heard so far. Again / End /
-// Exit in the corners. A collapsed debug strip at the bottom holds the build
-// id, the wake-lock dot, voice and speed, the pre-drive check, and the live
-// diag tail — for use while parked.
+// state word and hint; while listening, the words heard so far. Again and
+// Exit in the corners — no End: on the road the move is "stop here, carry on
+// later", and an End beside an ✕ read as the same thing (two End taps, then
+// ✕, on the first real run). Ending stays a text-mode action. A collapsed
+// debug strip at the bottom holds the build id, the wake-lock dot, voice and
+// speed, the pre-drive check, and the live diag tail — for use while parked.
 //
 // DOM only: every decision is the controller's (and the state machine's).
 // ---------------------------------------------------------------------------
@@ -18,7 +20,6 @@ import type { SpeechSettings } from "./adapter.js";
 export interface PanelHandlers {
   tap(): void;
   again(): void;
-  end(): void;
   exit(): void;
   check(): void;
   settings(s: SpeechSettings): void;
@@ -37,7 +38,7 @@ const LABELS: Record<Phase, [string, string]> = {
   waiting: ["THINKING", "tap for status"],
   paused: ["PAUSED", "tap to resume"],
   stuck: ["STUCK", "tap to retry"],
-  done: ["COMMITTED", "lesson saved · ✕ to close"],
+  done: ["COMMITTED", "lesson saved · Exit to close"],
 };
 
 const RATES = [0.9, 1, 1.1, 1.2];
@@ -127,8 +128,7 @@ export class DrivePanel {
         { class: "drive-top" },
         corner("↺ Again", "left", () => this.handlers.again()),
         h("span", { class: "drive-spacer" }),
-        corner("End", "", () => this.handlers.end()),
-        corner("✕", "", () => this.handlers.exit())
+        corner("✕ Exit drive mode", "", () => this.handlers.exit())
       ),
       h("div", { class: "drive-center" }, this.state, this.hint, this.heard),
       strip,

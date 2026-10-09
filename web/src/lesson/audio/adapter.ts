@@ -516,12 +516,16 @@ export class AudioAdapter {
 }
 
 /**
- * The best English voice installed: iOS's Premium, then Enhanced, then any
- * local en-US, then any English. Falls back to the browser default.
+ * The default voice: Samantha (en-US) — J's pick after trying the lot on the
+ * first real run; the automatic choice before that landed on Eloquence's
+ * Reed, and most of the rest are novelty voices. Then iOS's Premium, then
+ * Enhanced, then any local en-US, then any English. Falls back to the browser
+ * default.
  */
 export function bestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
   const english = voices.filter((v) => /^en(-|_|$)/i.test(v.lang));
   const score = (v: SpeechSynthesisVoice): number =>
+    (/^samantha/i.test(v.name) && /^en[-_]US$/i.test(v.lang) ? 100 : 0) +
     (/premium/i.test(v.name) ? 40 : 0) +
     (/enhanced/i.test(v.name) ? 20 : 0) +
     (/^en[-_]US$/i.test(v.lang) ? 5 : 0) +

@@ -9,7 +9,7 @@ import { ROOT } from "../scripts/lib.js";
 import { saveInboundImage } from "./assets.js";
 import { KICK_NUDGE, lastVia, turnTag, withTurnTag } from "./prompt.js";
 import { serverDiag } from "./diag.js";
-import { SESSION_EXPIRY_MS } from "./params.js";
+import { END_TURN_TEXT, SESSION_EXPIRY_MS } from "./params.js";
 import { createTutorServer, COMMIT_TOOL_NAME } from "./tutor-tool.js";
 import { appendTranscript, listSessions, loadSession, newMessageId, saveSession, touchSession } from "./store.js";
 import { costDelta, usageFromResult } from "./usage.js";
@@ -128,6 +128,16 @@ export function lastUnansweredUser(transcript: TranscriptEntry[]): TranscriptEnt
     if (transcript[i].role === "user") return transcript[i];
   }
   return null;
+}
+
+/**
+ * An End the tutor hasn't answered yet. A second End now would queue the
+ * whole wrap-up checklist twice (two taps 0.5–1.4s apart on the first real
+ * run cost a whole extra turn). An End after the tutor replied — say to its
+ * "any last questions?" — is a real second request.
+ */
+export function endAlreadyPending(transcript: TranscriptEntry[]): boolean {
+  return lastUnansweredUser(transcript)?.text === END_TURN_TEXT;
 }
 
 /** What GET /api/lesson/:id/health reports — the client watchdog asks this before acting. */

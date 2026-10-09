@@ -19,6 +19,7 @@ import {
 } from "../web/src/lesson/audio/text.js";
 import {
   DEFAULT_ENDPOINT,
+  endsMidSentence,
   initialEndpoint,
   onDone,
   onFinal,
@@ -275,11 +276,11 @@ test("the silence clock follows interims, not finals", () => {
   let s = initialEndpoint();
   s = onInterim(s, "the", 1000).state;
   s = onInterim(s, "the gradient", 2000).state;
-  // 2.5s after the last interim — not after a final (none has arrived).
-  assert.equal(onTick(s, 4499).action, null);
-  const r = onTick(s, 4500);
+  // 4s after the last interim — not after a final (none has arrived).
+  assert.equal(onTick(s, 5999).action, null);
+  const r = onTick(s, 6000);
   assert.deepEqual(r.action, { type: "flush" }, "newest words are only interim: stop and wait for the final");
-  const f = onFinal(r.state, "the gradient vanishes", 5200);
+  const f = onFinal(r.state, "the gradient vanishes", 6700);
   assert.equal(f.action?.type, "submit");
   if (f.action?.type === "submit") {
     assert.equal(f.action.text, "the gradient vanishes");
@@ -298,6 +299,33 @@ test("a flush with no final falls back to the interim at the deadline", () => {
     assert.equal(r.action.text, "half a thought");
     assert.equal(r.action.trace.usedInterim, true);
   }
+});
+
+test("a pause after an unfinished clause waits longer than one after a finished one", () => {
+  const { silenceMs, midSentenceMs } = DEFAULT_ENDPOINT;
+  assert.ok(midSentenceMs > silenceMs);
+  // The first real run's two cut-offs, verbatim.
+  assert.equal(endsMidSentence("the science automatically backs the"), true);
+  assert.equal(endsMidSentence("the criteria by which that you"), true);
+  // A false positive — that answer was finished. It costs 3s of wait, not a cut-off.
+  assert.equal(endsMidSentence("and maintain whatever the current explanation is"), true);
+  assert.equal(endsMidSentence("Let's do the warm-up"), false);
+  assert.equal(endsMidSentence("it’s"), true, "curly apostrophe");
+  assert.equal(endsMidSentence(""), false);
+
+  let s = onFinal(onInterim(initialEndpoint(), "a refusal", 0).state, "a refusal to", 500).state;
+  assert.equal(onTick(s, 500 + silenceMs).action, null, "mid-sentence: the short clock doesn't fire");
+  const r = onTick(s, 500 + midSentenceMs);
+  assert.equal(r.action?.type, "submit");
+  if (r.action?.type === "submit") {
+    assert.equal(r.action.trace.midSentence, true);
+    assert.equal(r.action.trace.waitMs, midSentenceMs);
+  }
+  // Finishing the clause puts the short clock back.
+  s = onFinal(s, "accept the winner", 3000).state;
+  const done = onTick(s, 3000 + silenceMs);
+  assert.equal(done.action?.type, "submit");
+  if (done.action?.type === "submit") assert.equal(done.action.trace.midSentence, false);
 });
 
 test("finals accumulate across recogniser sessions; a dangling interim is promoted", () => {
@@ -588,7 +616,7 @@ test("a spoken answer is submitted once, cues the turn, and awaits its echo", ()
   h.run({ type: "rec_final", now: h.now + 500, text: "attention weights" });
   h.run({ type: "rec_end", now: h.now + 520 }); // the recogniser gives up; it restarts
   assert.equal(h.started(), 2);
-  h.at(13_100).tick();
+  h.at(14_600).tick(); // 4s after the final
   assert.deepEqual(h.submitted, ["attention weights"]);
   assert.ok(h.actions.some((a) => a.type === "cue" && a.cue === "turn-start"));
   // Late final after submit goes to the log, not the next answer.
@@ -716,7 +744,7 @@ test("a system line mid-answer keeps the half-said answer, and its clock restart
   assert.deepEqual(h.submitted, [], "the interruption is not the learner going quiet");
   h.run({ type: "rec_interim", now: h.now, text: "the value vector" });
   h.run({ type: "rec_final", now: h.now + 400, text: "the value vector" });
-  h.at(20_000).tick();
+  h.at(21_500).tick(); // 4s after the final
   assert.deepEqual(h.submitted, ["the key is the value vector"]);
 });
 
@@ -790,7 +818,7 @@ test("a scripted lesson never starts the recogniser while it's running or while 
     h.run({ type: "rec_end", now: h.now + 1500 }); // recogniser gives up, restarts
     h.recStarted();
     h.run({ type: "rec_final", now: h.now + 1800, text: `answer ${turn}` });
-    h.at(h.now + 5000).tick();
+    h.at(h.now + 7000).tick(); // 5.2s after the final
     h.ev({ type: "user", id: `u${turn}`, text: `my answer ${turn}` });
   }
   assert.equal(h.submitted.length, 5);

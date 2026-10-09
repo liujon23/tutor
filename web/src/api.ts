@@ -377,7 +377,7 @@ export interface Api {
   }): Promise<{ sessionId: string; title: string }>;
   lesson(id: string): Promise<LessonState>;
   sendMessage(id: string, text: string, images?: OutgoingImage[], via?: Via): Promise<{ ok: boolean }>;
-  endLesson(id: string, via?: Via): Promise<{ ok: boolean; alreadyCommitted?: boolean }>;
+  endLesson(id: string, via?: Via): Promise<{ ok: boolean; alreadyCommitted?: boolean; alreadyEnding?: boolean }>;
   /** Undo a tapped End: `ending` is otherwise sticky until the commit. */
   keepGoing(id: string): Promise<{ ok: boolean }>;
   health(id: string): Promise<RunnerHealth>;
@@ -452,7 +452,7 @@ const liveApi: Api = {
       body: JSON.stringify({ text, ...(images?.length ? { images } : {}), ...(via ? { via } : {}) }),
     }).then((r) => j(r)),
 
-  endLesson: (id: string, via?: Via): Promise<{ ok: boolean; alreadyCommitted?: boolean }> =>
+  endLesson: (id: string, via?: Via): Promise<{ ok: boolean; alreadyCommitted?: boolean; alreadyEnding?: boolean }> =>
     fetch(
       `/api/lesson/${id}/end`,
       via

@@ -22,7 +22,7 @@ import { isSessionId, parseClientBatch, serverDiag, writeClientBatch } from "./d
 import { buildLessonSystemPrompt, kickoffMessage, lastVia, turnTag, withTurnTag } from "./prompt.js";
 import { END_TURN_TEXT, defaultModel, readBuildId } from "./params.js";
 import { buildReport } from "./report.js";
-import { LessonManager } from "./runner.js";
+import { LessonManager, endAlreadyPending } from "./runner.js";
 import { buildStatus, laneExists } from "./status.js";
 import { newSessionId, saveSession } from "./store.js";
 import { INBOUND_MEDIA_TYPES } from "./types.js";
@@ -295,6 +295,10 @@ app.post<{ Params: { id: string }; Body: { via?: Via } | undefined }>("/api/less
   // live record — a stale copy would clobber its transcript writes.
   const session = manager.sessionFor(req.params.id)!;
   if (session.commit) return { ok: true, alreadyCommitted: true };
+  if (endAlreadyPending(session.transcript)) {
+    serverDiag(session.id, "end-duplicate", { via });
+    return { ok: true, alreadyEnding: true };
+  }
   session.ending = true;
   saveSession(session);
   serverDiag(session.id, "ending-set", { via });

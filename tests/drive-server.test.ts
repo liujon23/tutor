@@ -20,7 +20,7 @@ import {
   turnTag,
   withTurnTag,
 } from "../server/prompt.js";
-import { StreamIds, isFailedRequest, lastUnansweredUser } from "../server/runner.js";
+import { StreamIds, endAlreadyPending, isFailedRequest, lastUnansweredUser } from "../server/runner.js";
 import { countLearnerTurns, usageFromResult } from "../server/usage.js";
 import { renderTranscript } from "../server/transcript.js";
 import {
@@ -30,7 +30,7 @@ import {
   parseClientBatch,
 } from "../server/diag.js";
 import { readSessionFiles, writeJsonAtomic } from "../server/store.js";
-import { SESSION_EXPIRY_MS, sessionExpiresAt } from "../server/params.js";
+import { END_TURN_TEXT, SESSION_EXPIRY_MS, sessionExpiresAt } from "../server/params.js";
 import { buildLessonIndex } from "../server/lesson-index.js";
 import type { StoredSession, TranscriptEntry } from "../server/types.js";
 
@@ -162,6 +162,18 @@ test("a failed request is not a tutor turn; a reply cut short by max tokens stil
   assert.equal(isFailedRequest("unknown"), true);
   assert.equal(isFailedRequest("max_output_tokens"), false);
   assert.equal(isFailedRequest(undefined), false);
+});
+
+// ---------------------------------------------------------------------------
+// End
+// ---------------------------------------------------------------------------
+
+test("a second End before the tutor answers the first is a duplicate; after a reply it is not", () => {
+  const t = [u("q1"), a("r1"), u(END_TURN_TEXT, { via: "spoken" })];
+  assert.equal(endAlreadyPending(t), true, "double tap: drop the second");
+  assert.equal(endAlreadyPending([...t, a("recap — any last questions?")]), false, "a real second End");
+  assert.equal(endAlreadyPending([u("q1"), a("r1")]), false);
+  assert.equal(endAlreadyPending([]), false);
 });
 
 // ---------------------------------------------------------------------------

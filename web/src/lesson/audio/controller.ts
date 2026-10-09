@@ -35,14 +35,16 @@ export type DriveStart = "tap" | "after-select" | "restore";
 export interface DriveDeps {
   reconnect(): void;
   reconcile(): Promise<void>;
-  /** The overlay's ✕ closed drive mode. */
+  /** The overlay's "Exit drive mode" closed it; the lesson stays open in text. */
   onExit(): void;
 }
 
 // --- per-device storage (every access guarded: private mode and the like throw) --------
 
 const DRIVE_KEY = "tutor.drive";
-const SETTINGS_KEY = "tutor.voice";
+// v2: a fresh start when the defaults changed to Samantha with tones on, so
+// the settings saved during the first run's voice tour (tones off) don't stick.
+const SETTINGS_KEY = "tutor.voice.v2";
 const LISTEN_KEY = "tutor.listen";
 const DIAG_PREFIX = "tutor.diag.";
 /** Unsent diag held on the phone is capped; the oldest batches go first. */
@@ -90,6 +92,7 @@ export function clearPendingDrive(): void {
 }
 
 function loadSettings(): SpeechSettings {
+  writeStore("tutor.voice", null); // the v1 key — see SETTINGS_KEY
   try {
     const v = JSON.parse(readStore(SETTINGS_KEY) ?? "{}") as Partial<SpeechSettings>;
     return {
@@ -145,7 +148,6 @@ export class DriveController implements AudioController {
       {
         tap: () => this.tap(),
         again: () => this.withTap(() => this.dispatch({ type: "again", now: now() })),
-        end: () => void this.end(),
         exit: () => this.exit(),
         check: () => void this.check(),
         settings: (s) => this.applySettings(s),
@@ -375,18 +377,6 @@ export class DriveController implements AudioController {
       void audioAdapter.acquireWakeLock();
     }
     this.withTap(() => this.dispatch({ type: "tap", now: now() }));
-  }
-
-  private async end(): Promise<void> {
-    this.diag.log("end-tapped");
-    try {
-      const r = await api.endLesson(this.ctx.id, "spoken");
-      this.ctx.lesson.ending = true;
-      this.diag.log("end-sent", r);
-    } catch (e) {
-      this.diag.anomaly("end-failed", { error: (e as Error).message });
-      void audioAdapter.speakOnce(`Couldn't end the lesson: ${(e as Error).message}.`);
-    }
   }
 
   private applySettings(s: SpeechSettings): void {
