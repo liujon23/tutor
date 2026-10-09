@@ -526,6 +526,7 @@ export class DriveMachine {
         this.mode = "live";
         this.kickedThisTurn = false;
         this.lastProgressAt = now;
+        this.dropCutOffMessages();
         this.emit({ type: "kick" });
         this.diag("kick", { by: "tap" });
         return;
@@ -548,6 +549,24 @@ export class DriveMachine {
     if (this.speaking?.kind !== "system") this.cancelSpeech();
     this.diag("skip", { dropped, messages: ids });
     void now;
+  }
+
+  /**
+   * A kick replaces the runner mid-reply: the message it was streaming will
+   * never finish (seen live — its deltas' id never reached the transcript),
+   * and the new runner answers from the start. Drop what's left of it, or its
+   * buffered tail would be spoken at turn_done ahead of the fresh reply.
+   */
+  private dropCutOffMessages(): void {
+    const ids = [...this.tracks.keys()];
+    if (!ids.length) return;
+    for (const id of ids) {
+      this.skippedIds.add(id);
+      this.doneIds.add(id);
+    }
+    this.tracks.clear();
+    this.queue = this.queue.filter((u) => !(u.msgId && ids.includes(u.msgId)));
+    this.diag("cut-off-dropped", { messages: ids });
   }
 
   private again(now: number): void {
@@ -1004,6 +1023,7 @@ export class DriveMachine {
     if (!this.kickedThisTurn) {
       this.kickedThisTurn = true;
       this.lastProgressAt = now;
+      this.dropCutOffMessages();
       this.say(LINES.kicking, "kick");
       this.emit({ type: "kick" });
       this.diag("kick", { by: "watchdog", report });

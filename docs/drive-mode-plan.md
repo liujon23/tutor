@@ -123,6 +123,26 @@ will show them in the diag log. Decided while building:
   turn's "Failed to authenticate…" text a tutor bubble that drive mode would
   have read aloud. It is saved as `lastError` instead.
 
+**First live run against the real SDK** (2026-10-08, tight/Sonnet, 4 turns +
+a deliberate mid-turn kick, ≈ $0.47 API-equivalent). Confirmed: delta ids match
+their finished messages exactly (text and id, all 4); `turnInFlight` and the
+turn counter tracked every turn; tags landed (the spoken opening began "Quick
+status check since you're on voice", the typed-after-spoken turn got its
+markdown list back); the kicked runner's `closed` was muted; full
+`rate_limit_info` arrives (five-hour window — but **no utilization figure**, so
+subscription share still can't be read as a number). Measured:
+- **First word 8–18s after an answer** (first delta, Sonnet) — far longer than
+  the 3–6s the draft assumed for Opus. That's the dead air the turn-start tone
+  and the 20s "still working" cue cover.
+- **Cost shape**: the first two turns each paid ~30k tokens of cache creation
+  (≈ $0.18–0.21 on Sonnet); later turns read the cache (≈ $0.04 each).
+Found:
+- **A kick makes the model see the answer twice** ("Looks like that one may have
+  come through twice"): the hung SDK session had already recorded it, as it will
+  for nearly any mid-reply hang. Open — see J's call below.
+- **A kicked reply's buffered tail would have been spoken** at turn_done ahead
+  of the fresh reply. Fixed: a kick drops the cut-off message.
+
 **J's calls for the browser side** (2026-10-06):
 - **Overlay**: a big state word with a hint ("LISTENING · tap when you're
   done"); while listening, what the mic has heard so far in large text. Small

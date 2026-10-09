@@ -638,6 +638,25 @@ test("a hung turn: health check first, one automatic kick, then ask for a tap", 
   assert.equal(h.actions.filter((a) => a.type === "kick").length, 2, "the tap retries");
 });
 
+test("a kick drops the cut-off reply instead of speaking its tail before the fresh one", () => {
+  // Seen live (2026-10-08): the kicked runner's half-streamed message never
+  // reaches the transcript; the new runner answers from the start.
+  const h = new Harness();
+  h.enable({ turnInFlight: true });
+  h.finishSpeech();
+  h.ev({ type: "delta", id: "m-cut", text: "A reply that stalls half way thro" });
+  h.at(121_000).tick();
+  h.run({ type: "health", now: h.now, report: { alive: true, turnInFlight: true, msSinceLastMessage: 121_000 } });
+  h.finishSpeech(); // "The tutor seems stuck. Restarting it."
+  h.ev({ type: "delta", id: "m-new", text: "Here is the full answer." });
+  h.ev({ type: "assistant", id: "m-new", text: "Here is the full answer." });
+  h.ev({ type: "turn_done", isError: false });
+  h.finishSpeech();
+  assert.ok(!h.spoken.some((t) => t.includes("half way")), "the cut-off tail is never spoken");
+  assert.ok(h.spoken.includes("Here is the full answer."));
+  assert.equal(h.diags("unflushed-at-turn-done").length, 0);
+});
+
 test("health showing the turn finished recovers a lost turn_done", () => {
   const h = new Harness();
   h.enable({ turnInFlight: true });
