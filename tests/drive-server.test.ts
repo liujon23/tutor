@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { DEFAULT_SPACING } from "../core/spacing.js";
 import type { SessionPatch } from "../core/types.js";
 import {
+  KICK_NUDGE,
   SPOKEN_TAG,
   TYPED_TAG,
   buildLessonSystemPrompt,
@@ -173,6 +174,18 @@ test("a kick re-sends the last unanswered user turn, and nothing when the tutor 
   assert.equal(lastUnansweredUser([...t, a("r2")]), null);
   assert.equal(lastUnansweredUser([u("kickoff", { hidden: true, id: "k" })])?.id, "k", "a hung kickoff counts");
   assert.equal(lastUnansweredUser([]), null);
+});
+
+test("a kick's nudge keeps the spoken channel, even after an earlier nudge", () => {
+  // resumeAfterKick takes the channel from lastVia: a hidden nudge carries no
+  // via, so a second kick still finds the learner's spoken turn.
+  const t = [
+    u("why does that matter", { via: "spoken" }),
+    u(KICK_NUDGE, { hidden: true, modelText: `${SPOKEN_TAG}\n\n${KICK_NUDGE}` }),
+  ];
+  assert.equal(lastVia(t), "spoken");
+  assert.equal(lastUnansweredUser(t)?.text, KICK_NUDGE, "the second kick answers the same turn");
+  assert.doesNotMatch(KICK_NUDGE, /why does that matter/, "the learner's words are not re-sent");
 });
 
 // ---------------------------------------------------------------------------

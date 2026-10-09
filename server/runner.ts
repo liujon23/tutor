@@ -3,11 +3,11 @@
 // input queue (user messages in) and a listener set (SSE events out). If the
 // server restarts mid-lesson, the manager revives the runner with `resume` on
 // the stored SDK session id — the transcript in the store covers the UI side.
-import { readFileSync } from "node:fs";
 import { query, type Options, type Query, type SDKMessage, type SDKUserMessage, type SyncHookJSONOutput } from "@anthropic-ai/claude-agent-sdk";
 import { checkFetchUrl, urlFromWebFetchInput } from "../core/url-guard.js";
 import { ROOT } from "../scripts/lib.js";
-import { contentTypeForFile, inboundAssetFile, saveInboundImage } from "./assets.js";
+import { saveInboundImage } from "./assets.js";
+import { KICK_NUDGE, lastVia, turnTag, withTurnTag } from "./prompt.js";
 import { serverDiag } from "./diag.js";
 import { SESSION_EXPIRY_MS } from "./params.js";
 import { createTutorServer, COMMIT_TOOL_NAME } from "./tutor-tool.js";
@@ -16,7 +16,6 @@ import { costDelta, usageFromResult } from "./usage.js";
 import type {
   CommitResult,
   InboundImage,
-  InboundMediaType,
   LessonEvent,
   StoredSession,
   TranscriptEntry,
@@ -281,30 +280,19 @@ export class LessonRunner {
   }
 
   /**
-   * Re-send a turn the transcript already holds, to the model only — no new
-   * transcript entry, no `user` event. Used after a kick, when the previous
-   * runner hung on this turn. If the hung SDK session had already recorded
-   * it, the model sees it twice; the diag log notes every requeue so that
-   * case can be spotted.
+   * After a kick: ask for the cut-off reply again, without re-sending the
+   * learner's turn (`pending`, which the stuck session had almost certainly
+   * recorded — re-sending it showed the model a duplicate). A hidden nudge,
+   * tagged spoken when that turn was spoken so the reply stays spoken-form;
+   * the turn keeps its channel for the transcript and usage records.
    */
-  requeue(entry: TranscriptEntry): void {
-    if (this.closed) throw new Error("lesson session is closed");
-    const images: InboundImage[] = [];
-    for (const name of entry.images ?? []) {
-      const file = inboundAssetFile(name);
-      if (!file) {
-        this.diag("requeue-image-missing", { name }, "anomaly");
-        continue;
-      }
-      images.push({
-        media_type: contentTypeForFile(file) as InboundMediaType,
-        data: readFileSync(file).toString("base64"),
-      });
-    }
-    if (entry.via) this.turnVia = entry.via;
-    if (images.length) this.turnHadImage = true;
-    this.enqueue(entry.modelText ?? entry.text, images);
-    this.diag("requeue", { id: entry.id, hidden: !!entry.hidden, via: entry.via ?? null, images: images.length });
+  resumeAfterKick(pending: TranscriptEntry): void {
+    // The channel of the last real learner turn — not `pending`'s: after a
+    // second kick, `pending` is the first kick's nudge, which carries none.
+    const via = lastVia(this.session.transcript);
+    this.turnVia = via;
+    this.send(KICK_NUDGE, true, [], withTurnTag(KICK_NUDGE, turnTag(via, "typed")));
+    this.diag("kick-nudge", { answering: pending.id ?? null, via });
   }
 
   private enqueue(text: string, images: InboundImage[]): void {
@@ -728,10 +716,11 @@ export class LessonManager {
   /**
    * Replace a runner that has stopped making progress: close the old one
    * quietly (nothing it emits afterwards reaches clients), start a fresh one
-   * on the same SDK session, and re-send the turn it was stuck on — to the
-   * model only, so the transcript doesn't gain a duplicate.
+   * on the same SDK session, and nudge it to answer the turn it was stuck on
+   * (see resumeAfterKick — the turn itself is not re-sent). `answering` is
+   * that turn's id, or null when the tutor had the last word.
    */
-  kick(id: string): { requeued: string | null } {
+  kick(id: string): { answering: string | null } {
     const old = this.runners.get(id);
     const before = old?.health(this.listenerCount(id)) ?? null;
     old?.close("kick", true);
@@ -742,9 +731,9 @@ export class LessonManager {
     const runner = new LessonRunner(session, (ev) => this.dispatch(id, ev), "kick");
     this.runners.set(id, runner);
     const pending = lastUnansweredUser(session.transcript);
-    if (pending) runner.requeue(pending);
-    serverDiag(id, "kick", { before, requeued: pending?.id ?? null }, "anomaly");
-    return { requeued: pending?.id ?? null };
+    if (pending) runner.resumeAfterKick(pending);
+    serverDiag(id, "kick", { before, answering: pending?.id ?? null }, "anomaly");
+    return { answering: pending?.id ?? null };
   }
 
   abandon(id: string, reason = "learner"): void {

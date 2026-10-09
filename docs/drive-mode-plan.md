@@ -137,9 +137,14 @@ subscription share still can't be read as a number). Measured:
 - **Cost shape**: the first two turns each paid ~30k tokens of cache creation
   (≈ $0.18–0.21 on Sonnet); later turns read the cache (≈ $0.04 each).
 Found:
-- **A kick makes the model see the answer twice** ("Looks like that one may have
+- **A kick made the model see the answer twice** ("Looks like that one may have
   come through twice"): the hung SDK session had already recorded it, as it will
-  for nearly any mid-reply hang. Open — see J's call below.
+  for nearly any mid-reply hang. **J's call: a kick now sends a hidden nudge**
+  (`KICK_NUDGE`, tagged spoken when the turn was) instead of re-sending the
+  turn. Re-run live: the fresh session answered the stuck turn naturally, in
+  spoken form, with no mention of a duplicate.
+- **"Still working" stays at 20s** (J's call): most replies start inside it, so
+  it marks the genuinely slow turns.
 - **A kicked reply's buffered tail would have been spoken** at turn_done ahead
   of the fresh reply. Fixed: a kick drops the cut-off message.
 

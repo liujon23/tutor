@@ -382,7 +382,7 @@ export interface Api {
   keepGoing(id: string): Promise<{ ok: boolean }>;
   health(id: string): Promise<RunnerHealth>;
   /** Replace a runner that stopped making progress (drive-mode watchdog). */
-  kick(id: string): Promise<{ ok: boolean; requeued: string | null }>;
+  kick(id: string): Promise<{ ok: boolean; answering: string | null }>;
   /** Upload a drive-mode diagnostics batch. */
   sendDiag(id: string, batch: DiagBatch): Promise<{ ok: boolean; id: string }>;
   setModel(id: string, model: LessonModel): Promise<{ ok: boolean }>;
@@ -466,7 +466,7 @@ const liveApi: Api = {
   health: (id: string): Promise<RunnerHealth> =>
     fetch(`/api/lesson/${id}/health`).then((r) => j<RunnerHealth>(r)),
 
-  kick: (id: string): Promise<{ ok: boolean; requeued: string | null }> =>
+  kick: (id: string): Promise<{ ok: boolean; answering: string | null }> =>
     fetch(`/api/lesson/${id}/kick`, { method: "POST" }).then((r) => j(r)),
 
   sendDiag: (id: string, batch: DiagBatch): Promise<{ ok: boolean; id: string }> =>

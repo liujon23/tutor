@@ -309,6 +309,15 @@ export function lastVia(transcript: TranscriptEntry[]): Via {
   return "typed";
 }
 
+/**
+ * What a kicked runner's fresh session is told. The learner's turn is NOT
+ * re-sent: the stuck session had almost always recorded it already, and the
+ * first live kick (2026-10-08) showed the model seeing it twice ("looks like
+ * that one may have come through twice"). Hidden; J's wording.
+ */
+export const KICK_NUDGE =
+  "[Your previous reply was cut off by a connection problem. Answer the learner's last message again from the start.]";
+
 /** Prefix a model-bound body with its tag, if any. */
 export function withTurnTag(body: string, tag: string | null): string {
   return tag ? `${tag}\n\n${body}` : body;
