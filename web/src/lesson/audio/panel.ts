@@ -15,7 +15,7 @@
 import { h, clear } from "../../dom.js";
 import type { DriveSnapshot, Phase } from "./drive-state.js";
 import type { DiagRecord } from "./diag.js";
-import type { SpeechSettings } from "./adapter.js";
+import { defaultVoice, type SpeechSettings } from "./adapter.js";
 
 export interface PanelHandlers {
   tap(): void;
@@ -47,7 +47,11 @@ export class DrivePanel {
   readonly el: HTMLElement;
   private state = h("div", { class: "drive-state" });
   private hint = h("div", { class: "drive-hint" });
-  private heard = h("div", { class: "drive-heard" });
+  // The newest words stay in view: the box is bottom-anchored and clips the
+  // oldest lines off the top (a long answer used to push the newest words
+  // off the screen while J was still saying them).
+  private heardText = h("span", {});
+  private heard = h("div", { class: "drive-heard" }, this.heardText);
   private stripLabel = h("span", {});
   private debug = h("div", { class: "drive-debug hidden" });
   private debugBody = h("pre", { class: "drive-debug-body" });
@@ -55,6 +59,7 @@ export class DrivePanel {
   private voiceSel = h("select", { class: "drive-select" }) as HTMLSelectElement;
   private rateSel = h("select", { class: "drive-select" }) as HTMLSelectElement;
   private tonesBox = h("input", { type: "checkbox" }) as HTMLInputElement;
+  private playbackBox = h("input", { type: "checkbox" }) as HTMLInputElement;
   private expanded = false;
 
   constructor(
@@ -75,17 +80,20 @@ export class DrivePanel {
     }
     this.rateSel.value = String(settings.rate);
     this.tonesBox.checked = settings.tones;
+    this.playbackBox.checked = settings.sessionPlayback;
     const emitSettings = () => {
       this.settings = {
         voiceURI: this.voiceSel.value || null,
         rate: Number(this.rateSel.value),
         tones: this.tonesBox.checked,
+        sessionPlayback: this.playbackBox.checked,
       };
       this.handlers.settings(this.settings);
     };
     this.voiceSel.addEventListener("change", emitSettings);
     this.rateSel.addEventListener("change", emitSettings);
     this.tonesBox.addEventListener("change", emitSettings);
+    this.playbackBox.addEventListener("change", emitSettings);
 
     this.debug.append(
       h(
@@ -94,6 +102,12 @@ export class DrivePanel {
         h("label", {}, "Voice ", this.voiceSel),
         h("label", {}, "Speed ", this.rateSel),
         h("label", {}, this.tonesBox, " Tones (off: short spoken cues)"),
+        h(
+          "label",
+          {},
+          this.playbackBox,
+          " Playback mode while speaking (experiment: steadier volume; on Bluetooth, music audio instead of call audio)"
+        ),
         h("button", { class: "drive-check-btn", onclick: own(() => this.handlers.check()) }, "Run pre-drive check"),
         h(
           "div",
@@ -145,14 +159,22 @@ export class DrivePanel {
     this.el.remove();
   }
 
-  /** Fill the voice picker once voices are known (they may load late). */
+  /**
+   * Fill the voice picker once voices are known (they may load late). The
+   * first entry is the default voice (Samantha) by name — there is no
+   * "automatic" entry: the automatic pick kept landing on novelty voices.
+   */
   setVoices(voices: SpeechSynthesisVoice[], chosen: string | null): void {
     clear(this.voiceSel);
-    this.voiceSel.append(h("option", { value: "" }, "Best available (automatic)"));
-    for (const v of voices.filter((x) => /^en(-|_|$)/i.test(x.lang))) {
+    const def = defaultVoice(voices);
+    this.voiceSel.append(h("option", { value: "" }, def ? `${def.name} (${def.lang}) — default` : "Browser default"));
+    for (const v of voices.filter((x) => /^en(-|_|$)/i.test(x.lang) && x !== def)) {
       this.voiceSel.append(h("option", { value: v.voiceURI }, `${v.name} (${v.lang})`));
     }
-    this.voiceSel.value = chosen ?? "";
+    // A saved choice of the default voice itself shows as the default entry.
+    this.voiceSel.value = chosen && chosen !== def?.voiceURI ? chosen : "";
+    // A saved voice that's no longer installed: show the default actually used.
+    if (this.voiceSel.selectedIndex === -1) this.voiceSel.value = "";
   }
 
   render(snap: DriveSnapshot, extras: PanelExtras): void {
@@ -166,7 +188,12 @@ export class DrivePanel {
       this.state.textContent = phase === "waiting" && !snap.turnInFlight ? "GETTING READY" : word;
       this.hint.textContent = hint;
     }
-    this.heard.textContent = phase === "listening" && snap.heard ? `“${snap.heard}”` : "";
+    const heard = phase === "listening" && snap.heard ? `“${snap.heard}”` : "";
+    if (this.heardText.textContent !== heard) {
+      this.heardText.textContent = heard;
+      // Fade the top edge only once the oldest words are actually clipped.
+      this.heard.classList.toggle("clipped", this.heardText.offsetHeight > this.heard.clientHeight + 1);
+    }
     this.stripLabel.textContent = `${this.expanded ? "▾" : "▸"} debug · ${this.build} · wake ${extras.wakeLock ? "●" : "○"}`;
     clear(this.checkOut);
     for (const line of extras.checkLines) this.checkOut.append(h("div", {}, line));

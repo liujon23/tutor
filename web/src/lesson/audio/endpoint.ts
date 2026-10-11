@@ -19,7 +19,13 @@
 //     thinks aloud with pauses of 1–2.7s. J would rather wait than feel
 //     rushed, so both clocks went up.
 //
-// Plus a hard cap from the first sound, and a Done tap. When the newest words
+// Plus a cap from the first sound, and a Done tap. The cap ends an answer at
+// its next brief pause (`capPauseMs`), never mid-word: at 90s and hard, it cut
+// J off mid-sentence once ("…so I think there is attention", 2026-10-10), so it
+// went to 3 minutes and soft. Only `capHardMs` cuts regardless — the backstop
+// for speech that never pauses at all (a radio, a passenger).
+//
+// When the newest words
 // exist only as an interim, submitting first asks the adapter to stop the
 // recogniser and waits up to `flushMs` for their final.
 //
@@ -31,14 +37,20 @@ export interface EndpointConfig {
   silenceMs: number;
   /** The silence clock when the heard text ends on a word that can't end a sentence. */
   midSentenceMs: number;
+  /** From the first sound: past this, the next pause of `capPauseMs` ends the answer. */
   capMs: number;
+  capPauseMs: number;
+  /** From the first sound: past this, the answer ends even mid-word. */
+  capHardMs: number;
   flushMs: number;
 }
 
 export const DEFAULT_ENDPOINT: EndpointConfig = {
   silenceMs: 4000,
   midSentenceMs: 7000,
-  capMs: 90_000,
+  capMs: 180_000,
+  capPauseMs: 1500,
+  capHardMs: 240_000,
   flushMs: 1000,
 };
 
@@ -214,7 +226,11 @@ export function onTick(s: EndpointState, now: number, cfg: EndpointConfig = DEFA
       }
       return { state: s, action: null };
     case "hearing":
-      if (s.firstSoundAt !== null && now - s.firstSoundAt >= cfg.capMs) return finish(s, "cap", now, cfg);
+      if (s.firstSoundAt !== null && now - s.firstSoundAt >= cfg.capMs) {
+        const paused = s.lastActivityAt !== null && now - s.lastActivityAt >= cfg.capPauseMs;
+        if (paused) return finish(s, "cap", now, cfg, { waitMs: cfg.capPauseMs, midSentence: false });
+        if (now - s.firstSoundAt >= cfg.capHardMs) return finish(s, "cap", now, cfg);
+      }
       if (s.lastActivityAt !== null) {
         const midSentence = endsMidSentence(heardText(s));
         const waitMs = midSentence ? cfg.midSentenceMs : cfg.silenceMs;

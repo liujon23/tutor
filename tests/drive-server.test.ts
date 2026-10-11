@@ -32,6 +32,7 @@ import {
 import { readSessionFiles, writeJsonAtomic } from "../server/store.js";
 import { END_TURN_TEXT, SESSION_EXPIRY_MS, sessionExpiresAt } from "../server/params.js";
 import { buildLessonIndex } from "../server/lesson-index.js";
+import { CLEANUP_SYSTEM, acceptCleanup, cleanTranscript, cleanupPrompt, tidyCleanup, withHeard } from "../server/cleanup.js";
 import type { StoredSession, TranscriptEntry } from "../server/types.js";
 
 const SID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
@@ -376,4 +377,57 @@ test("one torn session file no longer hides every other lesson", () => {
 test("an idle lesson expires after seven days, not one", () => {
   assert.equal(SESSION_EXPIRY_MS, 7 * 24 * 60 * 60 * 1000);
   assert.equal(sessionExpiresAt("2026-10-02T17:00:00.000Z"), "2026-10-09T17:00:00.000Z");
+});
+
+// ---------------------------------------------------------------------------
+// Spoken-answer cleanup
+// ---------------------------------------------------------------------------
+
+test("a repair of about the same length is accepted; an answer or a summary is not", () => {
+  const raw = "the tension mechanism lets each token look at the other tokens and wait them by relevance";
+  assert.equal(acceptCleanup(raw, "The attention mechanism lets each token look at the other tokens and weight them by relevance."), true);
+  // Haiku answering the learner instead of transcribing them.
+  assert.equal(
+    acceptCleanup("Oh God I don't know gradient descent", "That's okay! BERT is trained with masked language modelling, which predicts hidden words from both sides of the context."),
+    false
+  );
+  // Summarising a long ramble.
+  const ramble = Array.from({ length: 80 }, (_, i) => `word${i}`).join(" ");
+  assert.equal(acceptCleanup(ramble, "The learner thinks embeddings come from co-occurrence."), false);
+  // Short answers get slack for a merged or split word.
+  assert.equal(acceptCleanup("no go ahead", "No, go ahead."), true);
+  assert.equal(acceptCleanup("anything", ""), false);
+  assert.equal(acceptCleanup("hi there", "<transcript>hi there</transcript>"), false);
+  assert.equal(tidyCleanup('Repaired transcript: "No, go ahead."'), "No, go ahead.");
+});
+
+test("cleanup falls back to the raw text on a timeout, an error, or a rejected repair", async () => {
+  const raw = "  the tension heads  ";
+  const ok = await cleanTranscript(raw, "Transformers lesson.", async () => ({ text: "The attention heads." }));
+  assert.deepEqual([ok.text, ok.cleaned], ["The attention heads.", true]);
+
+  const slow = await cleanTranscript(raw, "", (_p, abort) => new Promise((_, reject) => abort.signal.addEventListener("abort", () => reject(new Error("aborted")))), 20);
+  assert.deepEqual([slow.text, slow.cleaned, slow.fallback], ["the tension heads", false, "timeout"]);
+
+  const broken = await cleanTranscript(raw, "", async () => {
+    throw new Error("login expired");
+  });
+  assert.deepEqual([broken.text, broken.fallback], ["the tension heads", "error"]);
+
+  const chatty = await cleanTranscript(raw, "", async () => ({ text: "Great question! Attention heads are parallel attention computations, each with its own projections." }));
+  assert.deepEqual([chatty.text, chatty.fallback], ["the tension heads", "rejected"]);
+});
+
+test("the cleanup prompt carries the tutor's message and the transcript, and stays bounded", () => {
+  const p = cleanupPrompt("the tension heads", "x".repeat(5000) + " What do the attention heads do?");
+  assert.match(p, /<transcript>\nthe tension heads\n<\/transcript>/);
+  assert.match(p, /What do the attention heads do\?/, "the end of a long message is kept");
+  assert.ok(p.length < 2_300);
+  assert.match(CLEANUP_SYSTEM, /Never answer/);
+});
+
+test("the tutor gets the repaired text with the raw recognition beside it", () => {
+  assert.equal(withHeard("The attention heads.", "the tension heads"), 'The attention heads.\n\n[raw speech recognition, before cleanup: "the tension heads"]');
+  assert.equal(withHeard("Yes.", undefined), "Yes.");
+  assert.equal(withHeard("yes", " yes "), "yes", "nothing to add when cleanup changed nothing");
 });

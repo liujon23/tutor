@@ -89,10 +89,14 @@ While the turns are spoken:
   sourcesUsed and the transcript keep the link.
 - Ask questions that can be answered out loud with no scratch paper. That is a limit
   of listening, not a reason to make them easier: keep the depth.
-- The learner's spoken turns are speech-recognition output. Expect homophones,
-  missing punctuation, mangled jargon ("tension" for attention) and numbers
-  rewritten as digits. Read for intent and silently correct the obvious. Never grade
-  a transcription artifact as a learner error.
+- The learner's spoken turns are speech-recognition output. Usually a smaller model
+  has already repaired the transcription, and the raw recognition follows it in
+  brackets ("[raw speech recognition, before cleanup: …]"). Read the repaired text,
+  but where the meaning hinges on a word, check it against the raw: the repair is
+  a guess and can be wrong. Either way, expect homophones, mangled jargon
+  ("tension" for attention) and numbers rewritten as digits. Read for intent and
+  silently correct the obvious. Never grade a transcription artifact as a learner
+  error, and never mention the bracketed raw text.
 - Decline image-led material while spoken, and offer to park it for the app.
 
 ## Stopping (app note)

@@ -252,8 +252,9 @@ export class LessonRunner {
    *  `modelText`, when given, is what the model receives — the transcript
    *  still persists `text` (used to ride machinery like the feedback hand-off
    *  along a short human-readable message). `via` records how the learner
-   *  sent it; omitted for server-made turns that don't change the channel. */
-  send(text: string, hidden = false, images: InboundImage[] = [], modelText?: string, via?: Via): void {
+   *  sent it; omitted for server-made turns that don't change the channel.
+   *  `heard` is a cleaned spoken turn's raw speech recognition (server/cleanup.ts). */
+  send(text: string, hidden = false, images: InboundImage[] = [], modelText?: string, via?: Via, heard?: string): void {
     if (this.closed) throw new Error("lesson session is closed");
     // Image bytes go to .app/assets/, never into the session JSON — the
     // transcript entry carries only the filenames.
@@ -266,6 +267,7 @@ export class LessonRunner {
       hidden,
       ...(names.length ? { images: names } : {}),
       ...(via ? { via } : {}),
+      ...(heard ? { heard } : {}),
       // Kept so a kick can re-send exactly what the model was given.
       ...(modelText !== undefined && modelText !== text ? { modelText } : {}),
     };

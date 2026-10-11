@@ -11,8 +11,14 @@
 // - Keep a strong reference to the speaking utterance (it can be garbage
 //   collected before onend), and tag each with the machine's generation so a
 //   cancelled one's late onend/onerror is recognisably stale.
-// - Never set navigator.audioSession.type: "play-and-record" made the speaker
-//   quieter and switched the car's Bluetooth source.
+// - Never set navigator.audioSession.type to "play-and-record": it made the
+//   speaker quieter and switched the car's Bluetooth source. What IS set, when
+//   the sessionPlayback setting is on (the default since 2026-10-10), is
+//   "playback" while the tutor speaks and "auto" again before the mic opens:
+//   J heard the tutor come out quieter on some drives and not others, which
+//   fits iOS keeping the session in its record mode after the mic closes. On
+//   Bluetooth it also keeps the tutor's voice out of the car's phone-call
+//   audio (only the mic needs that). An experiment: every switch is logged.
 // - Tones come from an oscillator (the CSP blocks data: audio). The
 //   AudioContext must be created inside a tap.
 // ---------------------------------------------------------------------------
@@ -65,9 +71,21 @@ export interface AdapterSink {
 }
 
 export interface SpeechSettings {
+  /** null: the default voice, Samantha (see defaultVoice). */
   voiceURI: string | null;
   rate: number;
   tones: boolean;
+  /** Mark the audio session "playback" while speaking (see the header). */
+  sessionPlayback: boolean;
+}
+
+/** navigator.audioSession — Safari only, not in lib.dom yet. */
+interface AudioSessionLike extends EventTarget {
+  type: string;
+  readonly state?: string;
+}
+function audioSession(): AudioSessionLike | null {
+  return (navigator as unknown as { audioSession?: AudioSessionLike }).audioSession ?? null;
 }
 
 export interface Probes {
@@ -141,11 +159,39 @@ export class AudioAdapter {
   private leadInTimer: ReturnType<typeof setTimeout> | undefined;
   private ac: AudioContext | null = null;
   private wake: WakeLockSentinel | null = null;
-  private settings: SpeechSettings = { voiceURI: null, rate: 1, tones: true };
+  private settings: SpeechSettings = { voiceURI: null, rate: 1, tones: true, sessionPlayback: true };
+  private sessionWatched = false;
+  /** Bumped on every speak/cancel, so a lead-in waiting on a resume can tell it was superseded. */
+  private speakToken = 0;
   private voice: SpeechSynthesisVoice | null = null;
 
   bind(sink: AdapterSink): void {
     this.sink = sink;
+    const as = audioSession();
+    if (as && !this.sessionWatched) {
+      // Interruptions (navigation prompts, calls) show up here, if anywhere.
+      this.sessionWatched = true;
+      as.addEventListener("statechange", () => this.log("audiosession-state", this.sessionInfo()));
+    }
+  }
+
+  private sessionInfo(): { type: string; state: string | null } | null {
+    const as = audioSession();
+    return as ? { type: as.type, state: as.state ?? null } : null;
+  }
+
+  /** Switch the audio session type (see the header). Logged; never throws. */
+  private sessionFor(use: "speech" | "mic"): void {
+    const as = audioSession();
+    if (!as) return;
+    const want = use === "speech" && this.settings.sessionPlayback ? "playback" : "auto";
+    if (as.type === want) return;
+    try {
+      as.type = want;
+      this.log("audiosession-set", { type: want, for: use, state: as.state ?? null });
+    } catch (e) {
+      this.log("audiosession-set-failed", { type: want, error: (e as Error).message }, "anomaly");
+    }
   }
 
   private input(i: DriveInput): void {
@@ -184,6 +230,7 @@ export class AudioAdapter {
   configure(settings: SpeechSettings): void {
     this.settings = settings;
     this.voice = null; // re-picked on the next speak
+    if (!settings.sessionPlayback) this.sessionFor("mic"); // switched off: back to "auto" now
   }
 
   /** Voices, waiting for voiceschanged only if none are loaded yet (it may never fire). */
@@ -204,10 +251,19 @@ export class AudioAdapter {
   private pickVoice(): SpeechSynthesisVoice | null {
     if (this.voice) return this.voice;
     const all = speechSynthesis.getVoices();
-    const chosen =
-      (this.settings.voiceURI && all.find((v) => v.voiceURI === this.settings.voiceURI)) || bestVoice(all);
+    const saved = this.settings.voiceURI ? all.find((v) => v.voiceURI === this.settings.voiceURI) : undefined;
+    const chosen = saved ?? defaultVoice(all);
     this.voice = chosen ?? null;
-    if (chosen) this.log("voice", { name: chosen.name, lang: chosen.lang, uri: chosen.voiceURI, of: all.length });
+    if (chosen) {
+      this.log("voice", {
+        name: chosen.name,
+        lang: chosen.lang,
+        uri: chosen.voiceURI,
+        of: all.length,
+        // "saved-missing": the saved voice isn't installed (any more).
+        why: saved ? "saved" : this.settings.voiceURI ? "saved-missing" : "default",
+      });
+    }
     return this.voice;
   }
 
@@ -229,10 +285,13 @@ export class AudioAdapter {
    */
   speak(gen: number, text: string, leadIn: boolean, inGesture: boolean): void {
     clearTimeout(this.leadInTimer);
+    const token = ++this.speakToken;
+    this.sessionFor("speech");
     const u = this.utterance(text);
     this.current = u; // strong ref until it ends
     const startedAt = now();
-    u.onstart = () => this.log("tts-start", { gen, delayMs: Math.round(now() - startedAt) });
+    u.onstart = () =>
+      this.log("tts-start", { gen, delayMs: Math.round(now() - startedAt), session: this.sessionInfo(), ac: this.ac?.state ?? null });
     u.onend = () => {
       if (this.current === u) this.current = null;
       this.input({ type: "utterance_end", now: now(), gen });
@@ -250,8 +309,11 @@ export class AudioAdapter {
       }
     };
     if (leadIn && !inGesture && this.settings.tones && this.ac) {
-      this.tone("lead-in");
-      this.leadInTimer = setTimeout(go, LEAD_IN_MS);
+      // The tone may first wait for a suspended context to resume; the speech
+      // follows the tone, not this call, or the two overlap.
+      void this.tone("lead-in").then(() => {
+        if (token === this.speakToken) this.leadInTimer = setTimeout(go, LEAD_IN_MS);
+      });
     } else {
       go();
     }
@@ -264,6 +326,7 @@ export class AudioAdapter {
 
   cancelSpeech(): void {
     clearTimeout(this.leadInTimer);
+    this.speakToken++;
     this.current = null;
     speechSynthesis.cancel();
   }
@@ -271,6 +334,7 @@ export class AudioAdapter {
   /** Speak outside the machine (pre-drive check, select-screen "Starting."). Resolves on end. */
   speakOnce(text: string, timeoutMs = 20_000): Promise<void> {
     return new Promise((resolve) => {
+      this.sessionFor("speech");
       const u = this.utterance(text);
       this.current = u;
       const done = () => {
@@ -292,30 +356,44 @@ export class AudioAdapter {
 
   cue(kind: Cue): void {
     if (this.settings.tones && this.ac) {
-      this.tone(kind);
+      void this.tone(kind);
       return;
     }
     const line = SPOKEN_CUES[kind];
     if (line) {
       // Not tracked by the machine — its own utterances carry generations.
+      this.sessionFor("speech");
       const u = this.utterance(line);
       speechSynthesis.speak(u);
     }
     this.log("cue", { kind, as: line ? "speech" : "none" });
   }
 
-  tone(kind: Cue | "lead-in"): void {
+  /** Play a cue tone. Resolves once it is scheduled (after any resume), so speech can follow it. */
+  tone(kind: Cue | "lead-in"): Promise<void> {
     const ac = this.ac;
     if (!ac) {
       this.log("tone-no-audiocontext", { kind }, "anomaly");
-      return;
+      return Promise.resolve();
     }
-    if (ac.state !== "running") {
-      // iOS suspends/interrupts the context (calls, Siri); a resume outside a
-      // tap may be refused. Logged so a silent cue is explainable.
-      this.log("tone-context-not-running", { kind, state: ac.state }, "anomaly");
-      void ac.resume().catch(() => undefined);
+    if (ac.state === "running") {
+      this.playTone(ac, kind);
+      return Promise.resolve();
     }
+    // iOS suspends an idle context ~8s after its last sound (seen on every
+    // drive, 2026-10-10) and interrupts it for calls and Siri. Scheduling on a
+    // suspended context's frozen clock played the tone late, over the speech
+    // it was meant to precede: resume first. A refused resume is given up on
+    // after 500ms — a late tone beats a stalled utterance.
+    const started = now();
+    const state = ac.state;
+    return Promise.race([ac.resume().catch(() => undefined), new Promise<void>((r) => setTimeout(r, 500))]).then(() => {
+      this.log("tone-context-resumed", { kind, from: state, to: ac.state, ms: Math.round(now() - started) });
+      this.playTone(ac, kind);
+    });
+  }
+
+  private playTone(ac: AudioContext, kind: Cue | "lead-in"): void {
     let t = ac.currentTime + 0.01;
     for (const [freq, dur, peak] of TONES[kind]) {
       const osc = ac.createOscillator();
@@ -423,6 +501,7 @@ export class AudioAdapter {
       this.input({ type: "rec_error", now: now(), error: "not-allowed", message: "no SpeechRecognition in this browser" });
       return;
     }
+    this.sessionFor("mic");
     this.recSession++;
     this.finalsThisSession.clear();
     // Reset per session, or the first audiostart measures from an earlier
@@ -475,6 +554,7 @@ export class AudioAdapter {
       this.recSession++;
       this.finalsThisSession.clear();
       this.recStartedAt = now();
+      this.sessionFor("mic");
       try {
         r.start();
       } catch (e) {
@@ -516,11 +596,23 @@ export class AudioAdapter {
 }
 
 /**
- * The default voice: Samantha (en-US) — J's pick after trying the lot on the
- * first real run; the automatic choice before that landed on Eloquence's
- * Reed, and most of the rest are novelty voices. Then iOS's Premium, then
- * Enhanced, then any local en-US, then any English. Falls back to the browser
- * default.
+ * The default voice: Samantha (en-US), always, when she's installed — J's pick
+ * after trying the lot on the first real run. Only a phone without her falls
+ * through to bestVoice. (The automatic pick has twice landed on an Eloquence
+ * novelty voice — Reed on the first run, Flo on 2026-10-10 — so the picker no
+ * longer offers an "automatic" option at all.)
+ */
+export function defaultVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
+  const samantha = voices.filter((v) => /^samantha\b/i.test(v.name.trim()) && /^en[-_]US$/i.test(v.lang));
+  // Prefer a richer Samantha if iOS has one installed.
+  const rank = (v: SpeechSynthesisVoice) =>
+    /premium/i.test(v.voiceURI + v.name) ? 2 : /enhanced/i.test(v.voiceURI + v.name) ? 1 : 0;
+  return samantha.sort((a, b) => rank(b) - rank(a))[0] ?? bestVoice(voices);
+}
+
+/**
+ * The fallback when Samantha isn't installed: iOS's Premium, then Enhanced,
+ * then any local en-US, then any English, then the browser default.
  */
 export function bestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
   const english = voices.filter((v) => /^en(-|_|$)/i.test(v.lang));

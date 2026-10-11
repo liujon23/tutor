@@ -24,7 +24,7 @@ export type SendOutcome =
 export async function sendTurn(
   ctx: LessonCtx,
   text: string,
-  opts: { images?: PickedImage[]; via?: Via } = {}
+  opts: { images?: PickedImage[]; via?: Via; heard?: string } = {}
 ): Promise<SendOutcome> {
   const trimmed = text.trim();
   const images = opts.images ?? [];
@@ -38,7 +38,7 @@ export async function sendTurn(
   ctx.thinking.classList.remove("hidden");
   scrollDown(ctx, true);
   try {
-    await api.sendMessage(ctx.id, trimmed, images.map((p) => p.out), opts.via);
+    await api.sendMessage(ctx.id, trimmed, images.map((p) => p.out), opts.via, opts.heard);
     return { status: "sent" };
   } catch (e) {
     // Nothing was persisted, so take the bubble back off screen rather than

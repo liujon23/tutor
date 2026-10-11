@@ -150,6 +150,14 @@ export type DriveInput =
       /** Say "Starting." (default). False when the tap that unlocked audio already said it. */
       announce?: boolean;
     }
+  /**
+   * The tutor's messages since the learner's last turn, read from the server
+   * when drive mode starts: what Again replays until a new turn arrives.
+   * Without it, Again did nothing after switching to drive mode mid-lesson
+   * (`again-empty` ×3 on 2026-10-10) — exactly when it's wanted. Ignored if
+   * a live message has already arrived (it's newer).
+   */
+  | { type: "history"; now: number; lastTurn: string[] }
   /** Stop and wait for a tap — e.g. while the pre-drive check uses the mic and speaker. */
   | { type: "pause"; now: number; reason: string }
   /** The server's word on whether a turn is running (asked when drive mode starts). */
@@ -167,6 +175,8 @@ export type DriveInput =
   | { type: "rec_final"; now: number; text: string; confidence?: number }
   | { type: "rec_end"; now: number }
   | { type: "rec_error"; now: number; error: string; message?: string }
+  /** The submitted answer was cleaned up (or not) and is about to be sent as `text`. */
+  | { type: "cleaned"; now: number; text: string; cleaned: boolean; ms: number; fallback?: string }
   | { type: "send_result"; now: number; ok: boolean; error?: string }
   | { type: "health"; now: number; report: HealthReport | null }
   | { type: "tick"; now: number };
@@ -373,6 +383,16 @@ export class DriveMachine {
       case "rec_error":
         this.recError(input.error, input.message, now);
         break;
+      case "history":
+        if (this.sinceUser.length === 0) this.sinceUser = [...input.lastTurn];
+        this.diag("history", { messages: input.lastTurn.length, used: this.sinceUser.length > 0 && this.sinceUser[0] === input.lastTurn[0] });
+        break;
+      case "cleaned":
+        // The echo will carry the cleaned text, and its clock starts at the send.
+        if (this.pendingEcho) this.pendingEcho = { ...this.pendingEcho, text: input.text.trim(), at: now };
+        if (input.cleaned) this.diag("cleaned", { ms: input.ms, text: input.text });
+        else this.anomaly("cleanup-skipped", { ms: input.ms, fallback: input.fallback ?? null });
+        break;
       case "send_result":
         this.sendResult(input.ok, input.error, now);
         break;
@@ -570,12 +590,15 @@ export class DriveMachine {
   }
 
   private again(now: number): void {
-    if (this.mode !== "live") return;
+    if (this.mode !== "live" && this.mode !== "paused") return;
     const md = this.sinceUser.join("\n\n");
     if (!md.trim()) {
       this.diag("again-empty");
       return;
     }
+    // From paused (a restore, the screen locking), Again is also the resume:
+    // the replay is what the learner asked to hear, so no "Resuming." first.
+    if (this.mode === "paused") this.mode = "live";
     this.cancelSpeech();
     this.stopListening();
     const c = createChunker();
@@ -1158,6 +1181,13 @@ export class DriveMachine {
       }
     }
   }
+}
+
+/** The tutor's messages after the learner's last turn — the turn Again replays. */
+export function lastTutorTurn(entries: { role: "user" | "assistant"; text: string }[]): string[] {
+  const out: string[] = [];
+  for (let i = entries.length - 1; i >= 0 && entries[i].role === "assistant"; i--) out.unshift(entries[i].text);
+  return out;
 }
 
 /**

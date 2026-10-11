@@ -9,6 +9,7 @@ import { DEFAULT_SPACING } from "../core/spacing.js";
 import type { SpacingConfig } from "../core/types.js";
 import { DATA_PATHS, PATHS, ROOT, ensureDataRoot, gitCommit, todayLocal } from "../scripts/lib.js";
 import { registerAssetRoutes } from "./assets.js";
+import { cleanTranscript, prewarmCleanup, withHeard } from "./cleanup.js";
 import { buildCurriculumView } from "./curriculum-view.js";
 import {
   buildAllowedHosts,
@@ -236,7 +237,7 @@ const MAX_IMAGES_PER_MESSAGE = 4;
 
 app.post<{
   Params: { id: string };
-  Body: { text?: string; images?: { media_type?: string; data?: string }[]; via?: Via };
+  Body: { text?: string; images?: { media_type?: string; data?: string }[]; via?: Via; heard?: unknown };
 }>(
   "/api/lesson/:id/message",
   // Base64 photos are bulky — Fastify's default 1 MiB body limit won't do.
@@ -261,11 +262,18 @@ app.post<{
     }
     const via = parseVia(req.body?.via);
     if (typeof via !== "string") return reply.code(400).send(via);
+    // A cleaned spoken turn carries the raw recognition it came from.
+    const rawHeard = req.body?.heard;
+    if (rawHeard !== undefined && (typeof rawHeard !== "string" || rawHeard.length > MAX_HEARD_CHARS || via !== "spoken")) {
+      return reply.code(400).send({ error: "heard must be a string, on a spoken turn" });
+    }
+    const heard = typeof rawHeard === "string" && rawHeard.trim() && rawHeard.trim() !== text ? rawHeard.trim() : undefined;
     try {
       const runner = manager.runnerFor(req.params.id);
       // AFTER runnerFor: read the live runner's record, not a stale copy.
       const tag = turnTag(via, lastVia(runner.sessionRecord.transcript));
-      runner.send(text, false, images, tag ? withTurnTag(text, tag) : undefined, via);
+      const body = withHeard(text, heard);
+      runner.send(text, false, images, tag || heard ? withTurnTag(body, tag) : undefined, via, heard);
     } catch (e) {
       return reply.code(409).send({ error: (e as Error).message });
     }
@@ -361,6 +369,39 @@ app.post<{ Params: { id: string } }>("/api/lesson/:id/kick", async (req, reply) 
     return reply.code(409).send({ error: (e as Error).message });
   }
 });
+
+// Spoken-answer cleanup (server/cleanup.ts): the client sends the raw speech
+// recognition before sending the turn, and sends the repaired text with the
+// raw beside it. Never fails the learner's turn: any problem returns the raw
+// text with `cleaned: false`.
+const MAX_HEARD_CHARS = 20_000;
+
+app.post<{ Params: { id: string } }>("/api/lesson/:id/clean/warm", async (req, reply) => {
+  if (!manager.sessionFor(req.params.id)) return reply.code(404).send({ error: "no such lesson" });
+  prewarmCleanup();
+  return { ok: true };
+});
+
+app.post<{ Params: { id: string }; Body: { text?: unknown } | undefined }>(
+  "/api/lesson/:id/clean",
+  async (req, reply) => {
+    const session = manager.sessionFor(req.params.id);
+    if (!session) return reply.code(404).send({ error: "no such lesson" });
+    const raw = req.body?.text;
+    if (typeof raw !== "string" || !raw.trim()) return reply.code(400).send({ error: "text required" });
+    if (raw.length > MAX_HEARD_CHARS) return reply.code(400).send({ error: "text too long" });
+    const lastTutor = [...session.transcript].reverse().find((t) => t.role === "assistant" && !t.hidden)?.text ?? "";
+    const r = await cleanTranscript(raw, lastTutor);
+    serverDiag(session.id, "cleanup", {
+      ms: r.ms,
+      cleaned: r.cleaned,
+      fallback: r.fallback ?? null,
+      raw: raw.trim(),
+      text: r.text,
+    }, r.cleaned ? "info" : "anomaly");
+    return r;
+  }
+);
 
 // Client diagnostics batches → <data root>/.app/diag/<id>.jsonl. Accepted for
 // any well-formed session id, even one whose session file is gone: a batch

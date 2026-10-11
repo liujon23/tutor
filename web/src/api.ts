@@ -248,6 +248,7 @@ export interface TranscriptEntry {
   at: string;
   images?: string[]; // inbound photo filenames — served via /api/assets/local/<name>
   via?: Via; // spoken turns came through speech recognition
+  heard?: string; // a cleaned spoken turn's raw speech recognition
 }
 
 /** Per-message rating: ⏫ +2 · 👍 +1 · 👎 -1 · ⏬ -2. Only -2 acts live. */
@@ -259,6 +260,14 @@ export interface MessageFeedback {
   note: string;
   at: string;
   flagged?: boolean; // a -2 that was surfaced to the tutor live
+}
+
+/** POST /api/lesson/:id/clean — mirrors CleanupResult in server/cleanup.ts. */
+export interface CleanupResult {
+  text: string;
+  cleaned: boolean;
+  ms: number;
+  fallback?: "timeout" | "error" | "rejected" | "empty";
 }
 
 /** An image attachment for sendMessage: bare-base64 JPEG/PNG/GIF/WebP. */
@@ -376,13 +385,18 @@ export interface Api {
     via?: Via;
   }): Promise<{ sessionId: string; title: string }>;
   lesson(id: string): Promise<LessonState>;
-  sendMessage(id: string, text: string, images?: OutgoingImage[], via?: Via): Promise<{ ok: boolean }>;
+  /** `heard`: a cleaned spoken turn's raw speech recognition. */
+  sendMessage(id: string, text: string, images?: OutgoingImage[], via?: Via, heard?: string): Promise<{ ok: boolean }>;
   endLesson(id: string, via?: Via): Promise<{ ok: boolean; alreadyCommitted?: boolean; alreadyEnding?: boolean }>;
   /** Undo a tapped End: `ending` is otherwise sticky until the commit. */
   keepGoing(id: string): Promise<{ ok: boolean }>;
   health(id: string): Promise<RunnerHealth>;
   /** Replace a runner that stopped making progress (drive-mode watchdog). */
   kick(id: string): Promise<{ ok: boolean; answering: string | null }>;
+  /** A small model's best guess at what a spoken answer actually said. Never rejects for a model failure: `cleaned` is false and `text` is the raw. */
+  cleanSpoken(id: string, text: string): Promise<CleanupResult>;
+  /** Have the cleanup model ready before the first answer. */
+  warmCleanup(id: string): Promise<{ ok: boolean }>;
   /** Upload a drive-mode diagnostics batch. */
   sendDiag(id: string, batch: DiagBatch): Promise<{ ok: boolean; id: string }>;
   setModel(id: string, model: LessonModel): Promise<{ ok: boolean }>;
@@ -445,11 +459,11 @@ const liveApi: Api = {
   lesson: (id: string): Promise<LessonState> =>
     fetch(`/api/lesson/${id}`).then((r) => j<LessonState>(r)),
 
-  sendMessage: (id: string, text: string, images?: OutgoingImage[], via?: Via): Promise<{ ok: boolean }> =>
+  sendMessage: (id: string, text: string, images?: OutgoingImage[], via?: Via, heard?: string): Promise<{ ok: boolean }> =>
     fetch(`/api/lesson/${id}/message`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text, ...(images?.length ? { images } : {}), ...(via ? { via } : {}) }),
+      body: JSON.stringify({ text, ...(images?.length ? { images } : {}), ...(via ? { via } : {}), ...(heard ? { heard } : {}) }),
     }).then((r) => j(r)),
 
   endLesson: (id: string, via?: Via): Promise<{ ok: boolean; alreadyCommitted?: boolean; alreadyEnding?: boolean }> =>
@@ -468,6 +482,19 @@ const liveApi: Api = {
 
   kick: (id: string): Promise<{ ok: boolean; answering: string | null }> =>
     fetch(`/api/lesson/${id}/kick`, { method: "POST" }).then((r) => j(r)),
+
+  cleanSpoken: (id: string, text: string): Promise<CleanupResult> =>
+    fetch(`/api/lesson/${id}/clean`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+      // The server gives up at 10s; past this the network is the problem, and
+      // the caller sends the raw text rather than keep the learner waiting.
+      signal: AbortSignal.timeout(15_000),
+    }).then((r) => j<CleanupResult>(r)),
+
+  warmCleanup: (id: string): Promise<{ ok: boolean }> =>
+    fetch(`/api/lesson/${id}/clean/warm`, { method: "POST" }).then((r) => j(r)),
 
   sendDiag: (id: string, batch: DiagBatch): Promise<{ ok: boolean; id: string }> =>
     fetch(`/api/diag/${id}`, {

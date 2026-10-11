@@ -34,6 +34,9 @@ export interface TranscriptEntry {
   /** User turns: how the learner sent it. Assistant turns: how the turn that
    *  produced it was sent. Absent means typed. */
   via?: Via;
+  /** Spoken user turns: the raw speech recognition, when the shown `text` is
+   *  a small model's cleanup of it (server/cleanup.ts). */
+  heard?: string;
   /** Server-only: what the model actually received, when it differed from
    *  `text` (a spoken-turn tag, the wrap-up checklist). Kept so a kicked
    *  runner can re-send the turn exactly. Stripped before the client sees it. */

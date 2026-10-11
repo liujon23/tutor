@@ -31,6 +31,7 @@ import {
 import {
   DriveMachine,
   LINES,
+  lastTutorTurn,
   stillWorkingLine,
   type DriveAction,
   type DriveInput,
@@ -341,12 +342,28 @@ test("finals accumulate across recogniser sessions; a dangling interim is promot
   if (r.action?.type === "submit") assert.equal(r.action.text, "first part second third bit");
 });
 
-test("the hard cap submits a long answer; Done submits at once", () => {
+test("the cap ends a long answer at its next pause, not mid-word; Done submits at once", () => {
+  const { capMs, capPauseMs, capHardMs, silenceMs } = DEFAULT_ENDPOINT;
+  assert.ok(capMs >= 180_000, "the 90s cap cut J off mid-sentence");
+  // Talking steadily past the cap, a word every second: no pause long enough yet.
   let s = onFinal(onInterim(initialEndpoint(), "a", 0).state, "a", 100).state;
-  for (let t = 1000; t < 95_000; t += 1000) s = onFinal(s, "more", t).state;
-  const capped = onTick(s, DEFAULT_ENDPOINT.capMs);
+  for (let t = 1000; t <= capMs + 5000; t += 1000) s = onFinal(s, "more", t).state;
+  assert.equal(onTick(s, capMs + 5000 + 500).action, null, "mid-flow at the cap: keep listening");
+  // A brief pause, shorter than the normal silence clock, now ends it.
+  assert.ok(capPauseMs < silenceMs);
+  const capped = onTick(s, capMs + 5000 + capPauseMs);
   assert.equal(capped.action?.type, "submit");
-  if (capped.action?.type === "submit") assert.equal(capped.action.trace.reason, "cap");
+  if (capped.action?.type === "submit") {
+    assert.equal(capped.action.trace.reason, "cap");
+    assert.equal(capped.action.trace.waitMs, capPauseMs);
+  }
+  // Speech that never pauses (a radio) still ends at the hard backstop.
+  let r = onFinal(initialEndpoint(), "x", 0).state;
+  for (let t = 500; t < capHardMs; t += 500) r = onFinal(r, "y", t).state;
+  assert.equal(onTick(r, capHardMs - 100).action, null);
+  const hard = onTick(r, capHardMs);
+  assert.equal(hard.action?.type, "submit");
+  if (hard.action?.type === "submit") assert.equal(hard.action.trace.reason, "cap");
 
   const d = onDone(onFinal(initialEndpoint(), "yes", 0).state, 10);
   assert.equal(d.action?.type, "submit");
@@ -624,6 +641,75 @@ test("a spoken answer is submitted once, cues the turn, and awaits its echo", ()
   assert.equal(h.diags("late-final").length, 1);
   h.ev({ type: "user", id: "u1", text: "attention weights" });
   assert.equal(h.diags("echo").length, 1);
+  assert.deepEqual(h.invariants(), []);
+});
+
+test("a cleaned answer's echo is recognised by its cleaned text", () => {
+  const h = new Harness();
+  h.enable({ turnInFlight: false });
+  h.finishSpeech();
+  h.recStarted();
+  h.at(10_000).run({ type: "rec_final", now: h.now, text: "the tension heads" });
+  h.at(14_100).tick();
+  assert.deepEqual(h.submitted, ["the tension heads"]);
+  h.at(15_000).run({ type: "cleaned", now: h.now, text: "The attention heads.", cleaned: true, ms: 900 });
+  h.ev({ type: "user", id: "u1", text: "The attention heads." });
+  assert.equal(h.diags("echo").length, 1);
+  assert.equal(h.diags("user-elsewhere").length, 0, "not mistaken for a turn from another device");
+  // A cleanup that fell back to the raw text is logged as such.
+  const g = new Harness();
+  g.enable({ turnInFlight: false });
+  g.run({ type: "cleaned", now: 0, text: "x", cleaned: false, ms: 10_000, fallback: "timeout" });
+  assert.equal(g.actions.filter((a) => a.type === "diag" && a.kind === "cleanup-skipped").length, 1);
+});
+
+test("Again replays the tutor's last turn even when drive mode came on after it", () => {
+  // The case that logged again-empty three times: a lesson begun in text, then
+  // drive mode switched on. The last turn is history (knownIds), not news —
+  // it isn't spoken on its own, but Again must still reach it.
+  const h = new Harness();
+  const transcript = [
+    { role: "assistant" as const, text: "Welcome back." },
+    { role: "user" as const, text: "go on" },
+    { role: "assistant" as const, text: "Let me check that." },
+    { role: "assistant" as const, text: "**BERT** reads *both* directions. Which one does GPT read?" },
+  ];
+  assert.deepEqual(lastTutorTurn(transcript), [transcript[2].text, transcript[3].text]);
+  assert.deepEqual(lastTutorTurn([...transcript, { role: "user", text: "left" }]), []);
+  h.enable({ turnInFlight: false, knownIds: ["m0", "u0", "m1", "m2"] });
+  h.run({ type: "history", now: h.now, lastTurn: lastTutorTurn(transcript) });
+  h.finishSpeech(); // "Starting."
+  h.recStarted();
+  assert.equal(h.spoken.length, 1, "history isn't spoken unasked");
+  h.at(5_000).run({ type: "again", now: h.now });
+  h.finishSpeech();
+  const replay = h.spoken.slice(1).join(" ");
+  assert.match(replay, /Let me check that./);
+  assert.match(replay, /BERT reads both directions. Which one does GPT read?/);
+  assert.equal(h.diags("again-empty").length, 0);
+  assert.equal(h.started(), 2, "listening again afterwards");
+  // A new learner turn replaces what Again replays.
+  h.ev({ type: "user", id: "u1", text: "the left one" });
+  h.ev({ type: "assistant", id: "m3", text: "Right." });
+  h.ev({ type: "turn_done", isError: false });
+  h.finishSpeech();
+  const before = h.spoken.length;
+  h.at(9_000).run({ type: "again", now: h.now });
+  h.finishSpeech();
+  assert.deepEqual(h.spoken.slice(before), ["Right."]);
+  // From paused (a restore, a locked screen), Again resumes and replays at once.
+  h.run({ type: "visibility", now: h.now, hidden: true });
+  assert.equal(h.m.snapshot.phase, "paused");
+  const pausedAt = h.spoken.length;
+  h.at(10_000).run({ type: "again", now: h.now });
+  assert.equal(h.m.snapshot.phase, "speaking");
+  h.finishSpeech();
+  assert.deepEqual(h.spoken.slice(pausedAt), ["Right."], "the replay, with no Resuming. before it");
+  // A history answer that lands after a live message is older: ignored.
+  h.run({ type: "history", now: h.now, lastTurn: ["stale"] });
+  h.at(12_000).run({ type: "again", now: h.now });
+  h.finishSpeech();
+  assert.deepEqual(h.spoken.slice(-1), ["Right."]);
   assert.deepEqual(h.invariants(), []);
 });
 

@@ -212,6 +212,50 @@ to the tutor's first word. Found, and J's calls:
   `audio-capture` ("Source is muted" / "Source is stopped") and retried fine
   1s later — words in that second would be lost. Watch for it in the car.
 
+**First commuting week** (2026-10-09/10, Lessons 29–31 committed, three diag
+logs read: `aa91ae2c`, `83f32ab8`, `714dd14a`; build `mv1rz3g6`; ≈ $7
+API-equivalent across them; zero invariant failures; every turn missed while
+the screen was off was recovered by reconcile). First delta after an answer:
+median 14s, p90 25s. Found, and J's calls:
+- **Spoken answers are cleaned before the tutor sees them** (J: "cleaned +
+  raw"). `server/cleanup.ts`: Haiku, thinking off, the tutor's last message as
+  context, one CLI subprocess kept warm (`POST /api/lesson/:id/clean/warm` at
+  drive start; replaced after each use; closed after 15 idle minutes). Measured
+  on the PC: cold SDK call ≈ 5s spawn + **36s of Haiku thinking** on a
+  seven-word answer; warm with thinking off, **0.7–2.3s**. A `for await` exit
+  added ~3s (the iterator's `return()` waits out the subprocess) — iterate by
+  hand. The bubble, transcript and tutor get the cleaned text; the raw rides
+  along as `heard` on the entry and in a bracket after the text for the
+  tutor only. A repair whose word count drifts past max(4, 25%) is treated as
+  an answer or a summary and rejected; any failure sends the raw text.
+- **Again replays the last tutor turn even when drive mode came on after
+  it** — it logged `again-empty` ×3 doing nothing in exactly that case. The
+  controller reads the transcript at drive start (`history` input); from
+  PAUSED, Again also resumes.
+- **Samantha always, no "automatic" option** — the automatic pick landed on
+  Eloquence's Flo on 2026-10-10 even after the Samantha change (the cause
+  wasn't pinned down; `voice` now logs `why`). `defaultVoice` picks Samantha
+  outright and only falls through to the old scoring when she's missing.
+- **The 90s cap cut J off mid-sentence once** (19:27, "…so I think there is
+  Attention"); every other answer ended on silence, the longest at 68s. J: 3
+  minutes, ending at the next 1.5s pause; a hard backstop at 4 minutes for
+  speech that never pauses.
+- **The heard text scrolls** (J's pick): bottom-anchored, about six lines,
+  oldest lines fade off the top.
+- **Quieter on some drives, not others** (J's report, can't be measured from
+  the page). Matches a well-reported iOS pattern: after the mic, the session
+  stays in its record mode and speech plays attenuated. **Experiment, on by
+  default with a toggle** (J): `audioSession.type = "playback"` before
+  speaking, `"auto"` before the mic opens — never `"play-and-record"`. On
+  Bluetooth it should keep the tutor's voice out of call-quality audio; the mic
+  itself still forces the car into phone mode while J answers (iOS requires it
+  for any Bluetooth mic; a web page can't pick the built-in mic instead). Every
+  switch, every `audioSession` statechange and the session state at each
+  utterance's start are logged — read them after the next drive.
+- **The tone context goes `suspended` ~8s after its last sound**, so a lead-in
+  or listening tone played late, over the speech it should precede. Tones now
+  resume the context first (500ms limit) and speech waits for the tone.
+
 **Audit.** A review of this plan's first draft against the code, the raw spike
 logs and the usage ledger found nine wrong claims and a set of gaps; the
 corrections are folded in throughout. The load-bearing finding: the draft treated
@@ -342,7 +386,9 @@ On submit, if an interim is newer than the last final, stop the recogniser and
 wait up to ~1s for its final before sending. Both numbers are first guesses;
 the endpointer's decision trace (Diagnostics) exists to tune them.
 
-Plus a hard cap around 90s, and a **Done** tap that submits immediately. This
+Plus a cap at 3 minutes that ends the answer at its next 1.5s pause (hard at
+4 minutes; it was 90s and hard until it cut J off), and a **Done** tap that
+submits immediately. This
 split is what makes recall warm-ups work unchanged — thinking time is free by
 construction, so no per-question timing hints are needed and grading is untouched.
 
@@ -744,8 +790,10 @@ Each of these cost real time to find. Don't rediscover them.
   catch it** — `tsx --test` doesn't typecheck; only `npm run typecheck` does. Keep
   the pure audio modules free of imports beyond each other, and list them in the
   root `tsconfig.json` `include`, as `web/src/lesson/reconcile.ts` already is.
-- **Never set `navigator.audioSession.type`.** Measured: `"play-and-record"` made
-  speaker output quieter and made the car switch Bluetooth source.
+- **Never set `navigator.audioSession.type` to `"play-and-record"`.** Measured: it
+  made speaker output quieter and made the car switch Bluetooth source.
+  `"playback"` while speaking / `"auto"` before listening is a separate, logged
+  experiment (see First commuting week).
 - **`web/src/markdown.ts`'s `extractMath` eats currency.** If `text.ts` reuses
   that heuristic, "it fell from $50 to $100" silently loses everything between
   the dollar signs. A test asserting "no `$` survives" would pass. Write a

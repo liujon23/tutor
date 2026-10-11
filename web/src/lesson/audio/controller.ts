@@ -11,7 +11,7 @@ import { api } from "../../api.js";
 import type { LessonEvent, StreamStatus, TranscriptEntry } from "../../api.js";
 import type { LessonCtx } from "../ctx.js";
 import { sendTurn } from "../send.js";
-import { DriveMachine, type DriveAction, type DriveInput, type LessonEventIn } from "./drive-state.js";
+import { DriveMachine, lastTutorTurn, type DriveAction, type DriveInput, type LessonEventIn } from "./drive-state.js";
 import { createDiag, parseStoredBatches, type Diag, type DiagBatch } from "./diag.js";
 import { audioAdapter, probes, type SpeechSettings } from "./adapter.js";
 import { DrivePanel } from "./panel.js";
@@ -99,9 +99,11 @@ function loadSettings(): SpeechSettings {
       voiceURI: typeof v.voiceURI === "string" ? v.voiceURI : null,
       rate: typeof v.rate === "number" ? v.rate : 1,
       tones: v.tones !== false,
+      // Absent in settings saved before 2026-10-10: on, like a fresh device.
+      sessionPlayback: v.sessionPlayback !== false,
     };
   } catch {
-    return { voiceURI: null, rate: 1, tones: true };
+    return { voiceURI: null, rate: 1, tones: true, sessionPlayback: true };
   }
 }
 
@@ -147,7 +149,14 @@ export class DriveController implements AudioController {
     this.panel = new DrivePanel(
       {
         tap: () => this.tap(),
-        again: () => this.withTap(() => this.dispatch({ type: "again", now: now() })),
+        again: () => {
+          // Again from paused resumes too, and this tap is what re-unlocks audio.
+          if (this.machine.snapshot.phase === "paused") {
+            audioAdapter.unlock();
+            void audioAdapter.acquireWakeLock();
+          }
+          this.withTap(() => this.dispatch({ type: "again", now: now() }));
+        },
         exit: () => this.exit(),
         check: () => void this.check(),
         settings: (s) => this.applySettings(s),
@@ -197,6 +206,15 @@ export class DriveController implements AudioController {
       })
       // Unreachable: stay "turn running"; the reply watchdog re-asks and says so.
       .catch((e) => this.diag.anomaly("health-at-start-failed", { error: (e as Error).message }));
+    // What Again replays before any new turn: read fresh, since the screen's
+    // copy of the transcript is only the one it loaded with.
+    void api
+      .lesson(this.ctx.id)
+      .then((l) => l.transcript)
+      .catch(() => this.ctx.lesson.transcript)
+      .then((t) => this.dispatch({ type: "history", now: now(), lastTurn: lastTutorTurn(t) }));
+    // Spawning the cleanup model takes ~5s; have it ready for the first answer.
+    void api.warmCleanup(this.ctx.id).catch(() => undefined);
 
     this.tickTimer = setInterval(() => {
       this.dispatch({ type: "tick", now: now() });
@@ -347,8 +365,26 @@ export class DriveController implements AudioController {
     }
   }
 
-  private async submit(text: string): Promise<void> {
-    const out = await sendTurn(this.ctx, text, { via: "spoken" });
+  /**
+   * Send a heard answer: first a small model's best guess at what was really
+   * said (server/cleanup.ts), which is what the tutor reads, the bubble shows
+   * and the transcript keeps — with the raw recognition riding along as
+   * `heard`. Cleanup can only ever cost time: any failure sends the raw text.
+   */
+  private async submit(raw: string): Promise<void> {
+    let text = raw.trim();
+    let heard: string | undefined;
+    try {
+      const r = await api.cleanSpoken(this.ctx.id, text);
+      if (r.cleaned && r.text.trim()) {
+        if (r.text.trim() !== text) heard = text;
+        text = r.text.trim();
+      }
+      this.dispatch({ type: "cleaned", now: now(), text, cleaned: r.cleaned, ms: r.ms, ...(r.fallback ? { fallback: r.fallback } : {}) });
+    } catch (e) {
+      this.dispatch({ type: "cleaned", now: now(), text, cleaned: false, ms: 0, fallback: (e as Error).message });
+    }
+    const out = await sendTurn(this.ctx, text, { via: "spoken", heard });
     this.dispatch({
       type: "send_result",
       now: now(),
@@ -408,7 +444,8 @@ export class DriveController implements AudioController {
       line(p.safari, p.safari ? "Safari" : "Not Safari — speech recognition only works in Safari on iOS");
       line(p.secure, p.secure ? "Secure (HTTPS) page" : "Not HTTPS — use the tailnet URL");
       line(p.recognition, "Speech recognition present");
-      line(null, p.audioSession ? "audioSession present (left untouched)" : "no audioSession API");
+      const playback = loadSettings().sessionPlayback;
+      line(null, p.audioSession ? `audioSession present (playback while speaking: ${playback ? "on" : "off"})` : "no audioSession API");
       const voices = await audioAdapter.voices();
       line(voices.length > 0, `${voices.length} voices`);
       await sleep(300);
@@ -428,14 +465,14 @@ export class DriveController implements AudioController {
         line(false, "Couldn't check the build");
       }
       await intro;
-      audioAdapter.tone("turn-start");
+      await audioAdapter.tone("turn-start");
       await sleep(500);
       await audioAdapter.speakOnce("That was a tone. This sentence should sound just as loud as the first one.");
       line(null, "Tone, then speech — judge the volume by ear");
       // The machine's recogniser must be fully stopped before the check's.
       for (let i = 0; i < 20 && this.machine.snapshot.rec !== "stopped"; i++) await sleep(100);
       await audioAdapter.speakOnce("Mic check. After the tone, say: testing, one, two, three.");
-      audioAdapter.tone("listening");
+      await audioAdapter.tone("listening");
       const mic = await audioAdapter.listenOnce();
       line(
         mic.ok,

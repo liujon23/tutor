@@ -343,5 +343,7 @@ export const demoApi: Api = {
   keepGoing: async () => ({ ok: true }),
   health: async () => ({ alive: true, turnInFlight: false, queueLength: 0, msSinceLastMessage: 0, listeners: 1 }),
   kick: async () => ({ ok: true, answering: null }),
+  cleanSpoken: async (_id: string, text: string) => ({ text, cleaned: false, ms: 0 }),
+  warmCleanup: async () => ({ ok: true }),
   sendDiag: async (_id, batch) => ({ ok: true, id: batch.id }),
 };
