@@ -364,6 +364,33 @@ test("checkPatch validates the profile arm; checkProfilePatch agrees on both sid
   assert.deepEqual(checkProfilePatch(paths.profile, goodNeedle), []);
 });
 
+test("a removal needle matches across a bullet's line wrap and quote styles", () => {
+  const paths = scratchCopy();
+  // On disk: "…grounded in\n  examples from education…" — the needle crosses the wrap.
+  // Lessons 29 and 32 were rejected on exactly this, two and three times over.
+  const across: ProfilePatch = { workingNotes: { removeContaining: ["STS lessons click when grounded in examples from education"] } };
+  assert.deepEqual(checkProfilePatch(paths.profile, across), []);
+  applyProfilePatch(paths.profile, across);
+  const after = readFileSync(paths.profile, "utf8");
+  assert.ok(!after.includes("CS education researcher"), "the whole wrapped bullet goes");
+  assert.ok(!after.includes("examples from education already familiar"), "including its continuation line");
+  assert.ok(after.includes("The learner reads for argument"), "its neighbours stay");
+
+  // Curly quotes in the needle match straight ones on disk, and the reverse.
+  const curly: ProfilePatch = { workingNotes: { removeContaining: ["one step past what’s been said"] } };
+  assert.deepEqual(checkProfilePatch(paths.profile, curly), []);
+});
+
+test("a needle that misses lists the section's bullets; an empty one is refused", () => {
+  const paths = scratchCopy();
+  const [miss] = checkProfilePatch(paths.profile, { workingNotes: { removeContaining: ["no such phrase"] } });
+  assert.match(miss, /no bullet containing 'no such phrase'/);
+  assert.match(miss, /Its bullets begin: "The learner is a CS education researcher/);
+  assert.match(miss, /"Preference guess: check-questions/);
+  const [empty] = checkProfilePatch(paths.profile, { workingNotes: { removeContaining: ["  "] } });
+  assert.match(empty, /empty removeContaining/);
+});
+
 test("a rejected patch (bad profile needle) leaves lesson-history.md and curriculum untouched — no partial apply", () => {
   const paths = scratchCopy();
   const historyBefore = readFileSync(paths.history, "utf8");

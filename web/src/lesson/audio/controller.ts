@@ -385,12 +385,44 @@ export class DriveController implements AudioController {
       this.dispatch({ type: "cleaned", now: now(), text, cleaned: false, ms: 0, fallback: (e as Error).message });
     }
     const out = await sendTurn(this.ctx, text, { via: "spoken", heard });
+    if (out.status === "failed") {
+      // A failed POST isn't proof the answer was lost: on 2026-10-13 the
+      // server stored it and the tutor was already replying when the phone's
+      // connection blipped and the response never arrived ("Load failed").
+      // "Please say it again" then invites a duplicate turn. Ask first.
+      const landed = await this.answerLanded(text);
+      this.diag.log("send-verify", { error: out.error, landed });
+      if (landed) {
+        void this.deps.reconcile(); // sendTurn took the bubble back; this redraws it
+        this.dispatch({ type: "send_result", now: now(), ok: true });
+        return;
+      }
+    }
     this.dispatch({
       type: "send_result",
       now: now(),
       ok: out.status === "sent",
       ...(out.status === "failed" ? { error: out.error } : {}),
     });
+  }
+
+  /**
+   * Whether the server's newest learner turn is this answer. Retried while the
+   * connection is still coming back (~6s); unreachable throughout counts as
+   * not landed. Two identical answers in a row (a second "yes" whose send
+   * failed) would read as landed — the reply watchdog recovers that case.
+   */
+  private async answerLanded(text: string): Promise<boolean> {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const { transcript } = await api.lesson(this.ctx.id);
+        const lastUser = [...transcript].reverse().find((e) => e.role === "user");
+        return lastUser?.text === text.trim();
+      } catch {
+        await sleep(2000);
+      }
+    }
+    return false;
   }
 
   private render(): void {

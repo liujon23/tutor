@@ -256,6 +256,24 @@ median 14s, p90 25s. Found, and J's calls:
   or listening tone played late, over the speech it should precede. Tones now
   resume the context first (500ms limit) and speech waits for the tone.
 
+**With those changes** (2026-10-13, build `mv697b00`, two drives, Lesson 32
+committed; J: "it worked better"). Every utterance started with the session at
+`playback` and the AudioContext running — it never suspended once (it had on
+every earlier drive). `audioSession.state` reads null on iOS 18.7, and no
+`statechange` fired. Cleanup: 14 answers, 0.76–2.8s, no fallbacks. Two answers
+ran past the old 90s cap (87s, 121s) and ended on silence. Found:
+- **commit_session rejected on a profile bullet's line wrap** — Lesson 32
+  three tries (5.5 min, ≈$1.13 for the turn, each retry re-sending a ~20k-char
+  patch), Lesson 29 two. `removeContaining` matched the bullet's lines joined
+  with their two-space continuation indent, so any phrase quoted across a wrap
+  missed. `core/profile.ts` now collapses whitespace and quote styles before
+  matching, refuses an empty needle, and on a miss lists the section's bullet
+  openings. All four rejected needles match against the profiles of the time.
+- **"That answer didn't reach the tutor"** was said for an answer that had: the
+  server stored it and the tutor was replying when the connection blipped and
+  the POST's response was lost. A failed send now checks the server's newest
+  learner turn (retrying ~6s) before saying so.
+
 **Audit.** A review of this plan's first draft against the code, the raw spike
 logs and the usage ledger found nine wrong claims and a set of gaps; the
 corrections are folded in throughout. The load-bearing finding: the draft treated
