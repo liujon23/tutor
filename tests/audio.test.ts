@@ -2,7 +2,7 @@
 // endpointer (endpoint.ts), the turn-taking machine (drive-state.ts) and the
 // diagnostics seam (diag.ts). No browser, no server.
 //
-// The rules these lock down are in docs/drive-mode-plan.md; each one exists
+// The rules these lock down are in docs/drive-mode.md; each one exists
 // because breaking it is silent in a car — nothing on screen to notice.
 import { test } from "node:test";
 import assert from "node:assert/strict";

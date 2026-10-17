@@ -8,7 +8,7 @@
 // import of anything under web/src/ would break one of them. Keep it pure.
 // (Same rule as web/src/lesson/reconcile.ts.)
 //
-// Two hard rules, both from docs/drive-mode-plan.md:
+// Two hard rules, both from docs/drive-mode.md:
 // - Nothing the voice receives may contain a markdown sigil. Anything that had
 //   to be stripped crudely is reported in `notes`, so the diag log shows what
 //   this module could not handle rather than it being silently mangled.

@@ -10,7 +10,7 @@
 // adapter (speak, start the recogniser, submit, …). No browser API is touched
 // and no clock is read.
 //
-// The rules (docs/drive-mode-plan.md, Turn-taking / Speaking / Controls):
+// The rules (docs/drive-mode.md, Turn-taking / Speaking / Controls):
 // - Half-duplex. The mic opens only when the speech queue has drained AND the
 //   turn is over (`turn_done`). Draining alone is not enough: a web-tool turn
 //   drains after "Let me check that." and resumes after the tool runs.

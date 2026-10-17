@@ -146,8 +146,43 @@ the same core patcher as the CLI and git-commits it. Proposed confirmed-pattern
 changes show up in the wrap-up panel with Approve/Reject buttons — nothing touches
 "How I learn best" without your explicit yes.
 
-Abandoning a lesson (or letting it idle >24h) writes nothing back — no partial
-entries.
+Abandoning a lesson (or letting it idle for 7 days) writes nothing back — no
+partial entries. The In-progress card shows when it expires.
+
+### Drive mode
+
+A two-way spoken lesson for the car: the tutor's replies are read aloud, you
+answer out loud, and it carries on hands-free. It's a mode of the same lesson,
+not a separate one — toggle it on for the drive and off at your desk, and it's
+the same conversation, committed the same way.
+
+- **iPhone Safari only**, over the tailnet HTTPS URL. Chrome and Firefox on iOS
+  can't do speech recognition, and the page needs a secure origin.
+- **Turning it on:** set **Listen** to "on — drive mode" on the select screen
+  (remembered per device) before Start, so the tutor's opening is spoken too;
+  or tap the headphones button beside "+" in a lesson already open.
+- **The screen is one big button** whose meaning follows the state word:
+  SPEAKING → skip, LISTENING → done, THINKING → hear how long it's been,
+  PAUSED → resume. **↺ Again** replays the tutor's last turn (even one sent
+  before drive mode was on); **✕ Exit drive mode** goes back to text. There's no
+  End here — finish the lesson from the text screen.
+- **Answering:** start talking after the listening tone. Pauses to think are
+  fine — nothing is sent until you've said something and then gone quiet for 4s
+  (7s if you stopped mid-sentence), or after ~3 minutes at your next pause. Tap
+  to send at once. A small model tidies up the transcription before the tutor
+  sees it; the raw recognition is kept alongside.
+- **If the phone locks or a call comes in,** drive mode pauses; one tap resumes.
+  A reload reopens the lesson in drive mode, paused.
+- **Phone speaker is best.** On Bluetooth the car switches to phone-call audio
+  whenever the mic is open — unavoidable from a web page.
+- The **debug strip** at the bottom (for use while parked) holds the voice
+  (Samantha by default), speed, tones, the "playback mode while speaking"
+  setting, and a **pre-drive check** worth running before the first drive on a
+  new build.
+
+Everything drive mode does is logged to `.app/diag/<session>.jsonl` in the data
+root. How it works, what the phone was measured to do, and the decisions behind
+it: [docs/drive-mode.md](docs/drive-mode.md).
 
 ## Usage tracking
 

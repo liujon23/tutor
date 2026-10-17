@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// The drive overlay (J's design, docs/drive-mode-plan.md): the whole screen is
+// The drive overlay (J's design, docs/drive-mode.md): the whole screen is
 // one tap target whose meaning follows the phase — speaking → skip,
 // listening → done, paused → resume, thinking → a spoken status line. A big
 // state word and hint; while listening, the words heard so far. Again and

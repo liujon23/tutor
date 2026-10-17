@@ -2,7 +2,7 @@
 // The only file that touches speechSynthesis, SpeechRecognition, the screen
 // wake lock and Web Audio. Everything here is plumbing: it executes what the
 // drive state machine decides, and reports what the browser did back as
-// DriveInputs. Each rule in it was learned on J's phone (docs/drive-mode-plan.md):
+// DriveInputs. Each rule in it was learned on J's phone (docs/drive-mode.md):
 //
 // - One SpeechRecognition, ever: constructing another plays the system chime.
 // - Never start() a recogniser that is running — the spike threw

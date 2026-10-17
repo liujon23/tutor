@@ -4,7 +4,7 @@
 // and the diagnostics log. It owns no rules of its own — those live in
 // drive-state.ts — only wiring, timers, storage and uploads.
 //
-// Hung on LessonCtx as one opaque field, `audio` (docs/drive-mode-plan.md).
+// Hung on LessonCtx as one opaque field, `audio` (docs/drive-mode.md).
 // ---------------------------------------------------------------------------
 
 import { api } from "../../api.js";

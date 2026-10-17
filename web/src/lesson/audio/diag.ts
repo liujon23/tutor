@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // Client-side diagnostics for drive mode — the one seam every audio module
-// logs through. Deliberately over-built (docs/drive-mode-plan.md, Diagnostics):
+// logs through. Deliberately over-built (docs/drive-mode.md, Diagnostics):
 // this app has one user, so a log line costs nothing, while a silent failure
 // on a 30-minute drive costs a lesson. To strip it later, pass
 // `enabled: false` (or make these methods no-ops) and leave the call sites.

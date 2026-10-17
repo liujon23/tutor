@@ -4,7 +4,7 @@
 // SSE connects) and the client's uploaded batches. Read afterwards with
 // `npm run drive-report`.
 //
-// Deliberately over-built (docs/drive-mode-plan.md, Diagnostics): this app has
+// Deliberately over-built (docs/drive-mode.md, Diagnostics): this app has
 // one user, so a log line costs nothing, while a silent failure on a drive
 // costs a lesson. To strip it later, make `serverDiag` a no-op and leave the
 // call sites. .app/ never enters git.
