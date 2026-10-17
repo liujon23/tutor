@@ -5,6 +5,28 @@ import { showStats } from "./stats.js";
 import { showCurriculum } from "./curriculum/screen.js";
 import { h, clear } from "./dom.js";
 import { showLesson } from "./lesson/screen.js";
+import { listenPreference, pendingDriveLesson, setListenPreference } from "./lesson/audio/controller.js";
+import { audioAdapter } from "./lesson/audio/adapter.js";
+
+/**
+ * Open a lesson, in drive mode when Listen is on. Must be called inside the
+ * tap: the AudioContext and the first speech have to start there, or iOS
+ * keeps the lesson silent (everything after this awaits the network).
+ */
+function openLesson(id: string): void {
+  if (!__DEMO__ && listenPreference()) {
+    unlockForDrive();
+    void showLesson(id, { drive: "after-select" });
+  } else {
+    void showLesson(id);
+  }
+}
+
+function unlockForDrive(): void {
+  audioAdapter.unlock();
+  void audioAdapter.speakOnce("Starting.");
+  void audioAdapter.acquireWakeLock();
+}
 
 export const root = document.getElementById("app")!;
 
@@ -24,6 +46,12 @@ function pickLane(lanes: StatusLane[]): StatusLane | undefined {
     if (target < 0) return lane;
   }
   return lanes[lanes.length - 1];
+}
+
+/** "expires in 6 days" — an untouched in-progress lesson is auto-abandoned. */
+function expiresIn(iso: string): string {
+  const days = Math.max(1, Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000));
+  return `expires in ${days} day${days === 1 ? "" : "s"}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +112,7 @@ export async function showSelect(): Promise<void> {
       att.append(
         h(
           "button",
-          { class: "attention-row", onclick: () => showLesson(a.id) },
+          { class: "attention-row", onclick: () => openLesson(a.id) },
           h("span", { class: "attention-title" }, a.title || "Lesson"),
           h("span", { class: "attention-reason" }, label)
         )
@@ -102,9 +130,13 @@ export async function showSelect(): Promise<void> {
       resume.append(
         h(
           "button",
-          { class: "resume-row", onclick: () => showLesson(s.id) },
+          { class: "resume-row", onclick: () => openLesson(s.id) },
           h("span", { class: "resume-title" }, s.title || "Lesson"),
-          h("span", { class: "resume-meta" }, `${s.params.size} · started ${s.createdAt.slice(0, 10)}`)
+          h(
+            "span",
+            { class: "resume-meta" },
+            `${s.params.size} · started ${s.createdAt.slice(0, 10)}${s.expiresAt ? ` · ${expiresIn(s.expiresAt)}` : ""}`
+          )
         )
       );
     }
@@ -304,12 +336,33 @@ export async function showSelect(): Promise<void> {
     );
     sizeRow.append(b);
   }
+  // Listen: drive mode from the first word, so the tutor's opening is spoken
+  // (and written for the ear). Remembered on this device.
+  let listen = !__DEMO__ && listenPreference();
+  const listenRow = h("div", { class: "seg-row" });
+  for (const on of [false, true]) {
+    const b = h(
+      "button",
+      {
+        class: `seg ${on === listen ? "on" : ""}`,
+        onclick: () => {
+          listen = on;
+          setListenPreference(on);
+          listenRow.querySelectorAll(".seg").forEach((x) => x.classList.remove("on"));
+          b.classList.add("on");
+        },
+      },
+      on ? "on — drive mode" : "off"
+    );
+    listenRow.append(b);
+  }
   screen.append(
     h(
       "section",
       { class: "card controls" },
       h("div", { class: "control" }, h("label", {}, "Session size"), sizeRow),
-      h("div", { class: "control" }, h("label", {}, "Model"), modelRow)
+      h("div", { class: "control" }, h("label", {}, "Model"), modelRow),
+      __DEMO__ ? null : h("div", { class: "control" }, h("label", {}, "Listen"), listenRow)
     )
   );
 
@@ -321,6 +374,9 @@ export async function showSelect(): Promise<void> {
     startBtn.textContent = topic ? `Start: ${topic.name}` : "Start lesson";
   };
   const start = async (discuss: boolean) => {
+    // Inside the tap, before any await: unlock audio for a spoken start.
+    const spoken = listen;
+    if (spoken) unlockForDrive();
     startBtn.disabled = discussBtn.disabled = true;
     startBtn.textContent = "Starting…";
     try {
@@ -330,8 +386,9 @@ export async function showSelect(): Promise<void> {
         discuss,
         size,
         model,
+        ...(spoken ? { via: "spoken" as const } : {}),
       });
-      showLesson(res.sessionId);
+      void showLesson(res.sessionId, spoken ? { drive: "after-select" } : {});
     } catch (e) {
       startBtn.disabled = discussBtn.disabled = false;
       refreshStart();
@@ -344,6 +401,9 @@ export async function showSelect(): Promise<void> {
   // The element still exists (start() toggles its disabled state); it just
   // never enters the DOM.
   screen.append(h("div", { class: "start-row" }, startBtn, __DEMO__ ? null : discussBtn));
+  // Which bundle this page is running — to check a rebuild reached the phone
+  // without opening a lesson (the drive overlay's debug strip shows it too).
+  if (!__DEMO__) screen.append(h("div", { class: "build-id" }, `build ${__BUILD_ID__}`));
 
   refreshSelection();
   root.append(screen);
@@ -405,4 +465,9 @@ if (!__DEMO__ && "serviceWorker" in navigator && !location.hostname.includes("lo
   void navigator.serviceWorker.register("/sw.js");
 }
 
-void showSelect();
+// Reload-on-resume: iOS kills speech when the page is backgrounded mid-lesson,
+// and there is no routing — so a lesson that was in drive mode reopens there,
+// paused until a tap re-unlocks audio.
+const driveLesson = __DEMO__ ? null : pendingDriveLesson();
+if (driveLesson) void showLesson(driveLesson, { drive: "restore" });
+else void showSelect();

@@ -1,9 +1,8 @@
 import { h, clear } from "../dom.js";
-import { api } from "../api.js";
 import type { OutgoingImage } from "../api.js";
 import type { LessonCtx } from "./ctx.js";
 import { showBanner } from "./ctx.js";
-import { addBubble, scrollDown } from "./bubbles.js";
+import { sendTurn } from "./send.js";
 // Demo-mode-only pre-fill wiring. Referenced only inside `if (__DEMO__)`
 // blocks below, so the live build's dead-code elimination drops both these
 // bindings and the whole replay module they come from.
@@ -45,8 +44,13 @@ export interface ComposerEls {
   composer: HTMLElement;
 }
 
+export interface ComposerOptions {
+  /** The headphones button: start drive mode. Called inside the tap (iOS needs that). */
+  onListen?: () => void;
+}
+
 /** Builds the composer row and its attachment chip strip, and wires them up. */
-export function buildComposer(ctx: LessonCtx): ComposerEls {
+export function buildComposer(ctx: LessonCtx, opts: ComposerOptions = {}): ComposerEls {
   const input = h("textarea", {
     class: "composer-input",
     placeholder: "Message…",
@@ -129,28 +133,37 @@ export function buildComposer(ctx: LessonCtx): ComposerEls {
     refreshChips();
   });
 
-  const composer = h("div", { class: "composer" }, attachBtn, fileInput, input, sendBtn);
+  // Drive mode (J's placement: beside "+"). Absent from the demo, which has no
+  // server to talk to.
+  const listenBtn =
+    __DEMO__ || !opts.onListen
+      ? null
+      : (h(
+          "button",
+          { class: "composer-attach composer-listen", "aria-label": "Listen — drive mode", onclick: () => opts.onListen?.() },
+          "🎧"
+        ) as HTMLButtonElement);
+
+  const composer = h("div", { class: "composer" }, attachBtn, listenBtn, fileInput, input, sendBtn);
 
   async function send(text: string): Promise<void> {
-    const trimmed = text.trim();
     const images = pendingImages.splice(0, pendingImages.length);
     refreshChips();
-    if (!trimmed && images.length === 0) return;
-    addBubble(ctx, "user", trimmed, images.map((p) => p.preview));
-    ctx.renderedCount++; // the server persists this user turn to the transcript
-    ctx.lesson.ending = false; // chatting on means we're no longer just wrapping up
-    ctx.endingHint.classList.add("hidden");
-    ctx.thinking.classList.remove("hidden");
-    scrollDown(ctx, true);
-    try {
-      await api.sendMessage(ctx.id, trimmed, images.map((p) => p.out));
-    } catch (e) {
-      ctx.thinking.classList.add("hidden");
-      // The attachments weren't delivered — put them back in the composer.
-      pendingImages.push(...images);
-      refreshChips();
-      showBanner(ctx, `Couldn't send: ${(e as Error).message}`);
+    // `ending` stays set while chatting: answering the wrap-up's own questions
+    // must not drop an uncommitted lesson out of "Needs your attention". Only
+    // a commit or the hint's "Keep going" clears it.
+    const outcome = await sendTurn(ctx, text, { images });
+    if (outcome.status !== "failed") return;
+    // The attachments weren't delivered — put them back in the composer.
+    pendingImages.push(...images);
+    refreshChips();
+    // Restore the text too, so the retry is a tap rather than a retype.
+    const trimmed = text.trim();
+    if (trimmed && !input.value.trim()) {
+      input.value = trimmed;
+      growInput();
     }
+    showBanner(ctx, `Couldn't send: ${outcome.error}`);
   }
 
   const submit = () => {

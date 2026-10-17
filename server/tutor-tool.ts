@@ -9,7 +9,14 @@ import { applySessionPatch, checkPatch } from "../core/patcher.js";
 import { appendFeedbackLedger, checkFeedbackCoverage, composeFeedbackHandoff } from "./feedback.js";
 import { DATA_PATHS, gitCommit } from "../scripts/lib.js";
 import { fmtDuration, writeTranscript, type CommitTimings } from "./transcript.js";
-import { appendUsageLedger, formatInt, formatUsd, summarizeUsage, totalTokens } from "./usage.js";
+import {
+  appendUsageLedger,
+  countLearnerTurns,
+  formatInt,
+  formatUsd,
+  summarizeUsage,
+  totalTokens,
+} from "./usage.js";
 import { saveSession } from "./store.js";
 import type { CommitResult, StoredSession } from "./types.js";
 
@@ -184,6 +191,7 @@ export function createCommitSessionTool(ctx: TutorToolContext) {
                   topicIds: sessionPatch.lesson.topicIds,
                   size: session.params.size,
                   committedAt: new Date().toISOString(),
+                  ...countLearnerTurns(session.transcript),
                 },
                 usage,
                 records

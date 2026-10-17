@@ -30,6 +30,9 @@ export interface UnitLessonView {
   topicsLabel: string;
   topicsFull: string;
   hasTranscript: boolean;
+  /** Learner turns spoken in drive mode; absent for lessons that predate it. */
+  spokenTurns?: number;
+  typedTurns?: number;
 }
 
 export interface UnitView {
@@ -149,6 +152,8 @@ function buildUnitView(
       topicsLabel: e.topicsLabel,
       topicsFull: e.topicsFull,
       hasTranscript: e.hasTranscript,
+      ...(e.spokenTurns !== undefined ? { spokenTurns: e.spokenTurns } : {}),
+      ...(e.typedTurns !== undefined ? { typedTurns: e.typedTurns } : {}),
     })),
   };
 }

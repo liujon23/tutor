@@ -2,6 +2,11 @@
 import type { SessionSize, SpacingConfig } from "../core/types.js";
 
 export type LessonModel = "opus" | "sonnet";
+
+/** How a learner turn reached the model: typed in the app, or spoken in drive
+ *  mode (and so transcribed by speech recognition). Absent means typed. Named
+ *  `via` because "medium" already means CLI-vs-app in this repo. */
+export type Via = "typed" | "spoken";
 export type LessonStatus = "active" | "committed" | "abandoned";
 
 export interface LessonParams {
@@ -26,6 +31,16 @@ export interface TranscriptEntry {
   /** Inbound photo filenames under .app/assets/ (served via /api/assets/local/).
    *  Never base64 — the session JSON stays small; the commit archives copies. */
   images?: string[];
+  /** User turns: how the learner sent it. Assistant turns: how the turn that
+   *  produced it was sent. Absent means typed. */
+  via?: Via;
+  /** Spoken user turns: the raw speech recognition, when the shown `text` is
+   *  a small model's cleanup of it (server/cleanup.ts). */
+  heard?: string;
+  /** Server-only: what the model actually received, when it differed from
+   *  `text` (a spoken-turn tag, the wrap-up checklist). Kept so a kicked
+   *  runner can re-send the turn exactly. Stripped before the client sees it. */
+  modelText?: string;
 }
 
 // --- Per-message feedback ----------------------------------------------------
@@ -90,6 +105,8 @@ export interface UsageRecord {
   tools: string[]; // tool names that fired this turn (WebSearch, WebFetch, commit_session…)
   hadImage: boolean; // the user turn that triggered this carried a photo
   isError: boolean;
+  /** How the user turn that drove this was sent — spoken vs typed cost. */
+  via?: Via;
 }
 
 /** Per-lesson roll-up of usage — what the wrap-up shows and the ledger stores. */
@@ -152,7 +169,9 @@ export interface StoredSession {
 export type LessonEvent =
   | { type: "ready"; model: string }
   | { type: "user"; id?: string; text: string; images?: string[] }
-  | { type: "delta"; text: string }
+  // `id` is the transcript id the finished message will carry, assigned when
+  // it starts streaming — so a client can tell how much of a message it has.
+  | { type: "delta"; id?: string; text: string }
   | { type: "assistant"; id?: string; text: string }
   | { type: "tool_use"; name: string }
   | { type: "feedback_flag"; messageId: string; note: string }
@@ -160,7 +179,11 @@ export type LessonEvent =
   // costUsd here is the lesson-so-far total (sum of turns recorded this
   // session so far), not the cost of this one turn.
   | { type: "turn_done"; costUsd: number; isError: boolean; errors?: string[]; tokens?: TokenCounts }
-  | { type: "rate_limit"; status: string; resetsAt?: number }
+  // `info` is the SDK's whole rate_limit_info (utilization, window type, …).
+  | { type: "rate_limit"; status: string; resetsAt?: number; info?: Record<string, unknown> }
   | { type: "api_error"; error: string }
   | { type: "error"; message: string }
-  | { type: "closed" };
+  | { type: "closed" }
+  // Sent on each SSE connection every few seconds, so a client can tell a dead
+  // stream from a model that is thinking. Never dispatched through a runner.
+  | { type: "heartbeat" };

@@ -6,6 +6,7 @@ import { recallCandidates, recommendNext, type RecallCandidate } from "../core/s
 import type { SpacingConfig } from "../core/types.js";
 import { SECTIONS } from "../core/profile.js";
 import { DATA_PATHS, todayLocal } from "../scripts/lib.js";
+import { sessionExpiresAt } from "./params.js";
 import { listSessions } from "./store.js";
 import type { StoredSession } from "./types.js";
 
@@ -72,6 +73,8 @@ export function buildStatus(spacing: SpacingConfig) {
       params: s.params,
       createdAt: s.createdAt,
       lastActivityAt: s.lastActivityAt,
+      // When the sweep would auto-abandon it, so the card can say so.
+      expiresAt: sessionExpiresAt(s.lastActivityAt),
     }));
 
   // What's due per lane, computed for every lane here so a consumer picking a

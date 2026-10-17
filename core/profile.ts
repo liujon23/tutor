@@ -73,6 +73,29 @@ function bulletBlocks(lines: string[], sec: Section): [number, number][] {
   return blocks;
 }
 
+/**
+ * Text as a removal needle is matched against it: runs of whitespace — a
+ * bullet's line wraps and two-space continuation indent included — count as
+ * one space, and curly quotes as straight ones. Bullets are wrapped at ~92
+ * columns on disk but quoted on one line by the model, so a phrase that
+ * crossed a wrap never matched: three rejected commit_session calls (each
+ * re-sending a ~20k-char patch) before Lesson 32 committed, two before 29.
+ */
+function matchText(s: string): string {
+  return s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim();
+}
+
+/** How each bullet in a section begins — told to the model on a miss, so its retry quotes real text. */
+function bulletOpenings(work: string[], s: Section): string {
+  const openings = bulletBlocks(work, s).map(([a, b]) => {
+    const t = matchText(work.slice(a, b).join(" ")).replace(/^- /, "");
+    return `"${t.length > 70 ? `${t.slice(0, 70)}…` : t}"`;
+  });
+  if (!openings.length) return " The section has no bullets.";
+  const shown = openings.slice(0, 30);
+  return ` Its bullets begin: ${shown.join(" | ")}${openings.length > shown.length ? ` | …and ${openings.length - shown.length} more` : ""}.`;
+}
+
 function applyBulletEdits(lines: string[], headingPrefix: string, edits: BulletEdits): string[] {
   const sec = findSection(lines, headingPrefix);
   if (!sec) throw new Error(`profile.md: section starting with '${headingPrefix}' not found`);
@@ -82,11 +105,14 @@ function applyBulletEdits(lines: string[], headingPrefix: string, edits: BulletE
   // Removals first (indices shift otherwise)
   for (const needle of edits.removeContaining ?? []) {
     const s = findSection(work, headingPrefix)!;
-    const blocks = bulletBlocks(work, s);
-    const hit = blocks.find(([a, b]) => work.slice(a, b).join(" ").includes(needle));
+    const want = matchText(needle);
+    // An empty needle is contained in every bullet: it would silently remove the first.
+    if (!want) throw new Error(`profile.md: empty removeContaining in section '${headingPrefix}' (patch aborted)`);
+    const hit = bulletBlocks(work, s).find(([a, b]) => matchText(work.slice(a, b).join(" ")).includes(want));
     if (!hit) {
       throw new Error(
-        `profile.md: no bullet containing '${needle}' in section '${headingPrefix}' — nothing removed (patch aborted)`
+        `profile.md: no bullet containing '${needle}' in section '${headingPrefix}' — nothing removed (patch aborted).` +
+          bulletOpenings(work, s)
       );
     }
     work.splice(hit[0], hit[1] - hit[0]);

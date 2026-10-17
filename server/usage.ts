@@ -13,7 +13,7 @@
 // and sums is per-turn and safe to add across records.
 import { appendFileSync, mkdirSync } from "node:fs";
 import { PATHS } from "../scripts/lib.js";
-import type { LessonUsage, TokenCounts, UsageRecord } from "./types.js";
+import type { LessonUsage, TokenCounts, TranscriptEntry, UsageRecord, Via } from "./types.js";
 
 export const USAGE_LEDGER = PATHS.usageLedger;
 
@@ -36,6 +36,8 @@ export interface TurnTags {
   model: string;
   tools: string[];
   hadImage: boolean;
+  /** How the user turn that drove this was sent. */
+  via?: Via;
 }
 
 export function emptyTokens(): TokenCounts {
@@ -88,6 +90,7 @@ export function usageFromResult(msg: ResultUsageLike, tags: TurnTags, costUsd: n
     tools: [...new Set(tags.tools)],
     hadImage: tags.hadImage,
     isError: msg.is_error ?? false,
+    ...(tags.via ? { via: tags.via } : {}),
   };
 }
 
@@ -165,6 +168,22 @@ export interface LedgerMeta {
   topicIds: string[];
   size: string;
   committedAt: string;
+  /** Learner turns by how they were sent. A lesson usually mixes the two, so
+   *  these are counts, not a flag. Absent on lines written before drive mode. */
+  spokenTurns?: number;
+  typedTurns?: number;
+}
+
+/** Visible learner turns, split by how they were sent (absent `via` = typed). */
+export function countLearnerTurns(transcript: TranscriptEntry[]): { spokenTurns: number; typedTurns: number } {
+  let spokenTurns = 0;
+  let typedTurns = 0;
+  for (const t of transcript) {
+    if (t.role !== "user" || t.hidden) continue;
+    if (t.via === "spoken") spokenTurns++;
+    else typedTurns++;
+  }
+  return { spokenTurns, typedTurns };
 }
 
 /**

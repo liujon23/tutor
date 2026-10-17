@@ -9,6 +9,7 @@ import { DEFAULT_SPACING } from "../core/spacing.js";
 import type { SpacingConfig } from "../core/types.js";
 import { DATA_PATHS, PATHS, ROOT, ensureDataRoot, gitCommit, todayLocal } from "../scripts/lib.js";
 import { registerAssetRoutes } from "./assets.js";
+import { cleanTranscript, prewarmCleanup, withHeard } from "./cleanup.js";
 import { buildCurriculumView } from "./curriculum-view.js";
 import {
   buildAllowedHosts,
@@ -18,10 +19,11 @@ import {
   tailnetHostname,
 } from "./exposure.js";
 import { composeFeedbackHandoff, messageSnippet, validateFeedbackInput } from "./feedback.js";
-import { buildLessonSystemPrompt, kickoffMessage } from "./prompt.js";
-import { defaultModel, readBuildId } from "./params.js";
+import { isSessionId, parseClientBatch, serverDiag, writeClientBatch } from "./diag.js";
+import { buildLessonSystemPrompt, kickoffMessage, lastVia, turnTag, withTurnTag } from "./prompt.js";
+import { END_TURN_TEXT, defaultModel, readBuildId } from "./params.js";
 import { buildReport } from "./report.js";
-import { LessonManager } from "./runner.js";
+import { LessonManager, endAlreadyPending } from "./runner.js";
 import { buildStatus, laneExists } from "./status.js";
 import { newSessionId, saveSession } from "./store.js";
 import { INBOUND_MEDIA_TYPES } from "./types.js";
@@ -33,7 +35,15 @@ import type {
   MessageFeedback,
   RatingLevel,
   StoredSession,
+  Via,
 } from "./types.js";
+
+/** Read an optional `via` from a request body: absent → typed, junk → an error. */
+function parseVia(raw: unknown): Via | { error: string } {
+  if (raw === undefined || raw === null) return "typed";
+  if (raw === "typed" || raw === "spoken") return raw;
+  return { error: "via must be 'typed' or 'spoken'" };
+}
 
 const PORT = Number(process.env.TUTOR_PORT ?? 4321);
 const HOST = process.env.TUTOR_HOST ?? "127.0.0.1";
@@ -160,6 +170,8 @@ interface CreateLessonBody {
   size?: "tight" | "standard" | "deep";
   model?: "opus" | "sonnet";
   historyN?: number;
+  /** "spoken" when Listen is on at the select screen: the opening is read aloud. */
+  via?: Via;
 }
 
 app.post<{ Body: CreateLessonBody }>("/api/lesson", async (req, reply) => {
@@ -177,6 +189,8 @@ app.post<{ Body: CreateLessonBody }>("/api/lesson", async (req, reply) => {
   if (params.laneId && !laneExists(params.laneId)) {
     return reply.code(400).send({ error: `lane '${params.laneId}' not found` });
   }
+  const via = parseVia(b.via);
+  if (typeof via !== "string") return reply.code(400).send(via);
 
   let prompt;
   try {
@@ -198,7 +212,11 @@ app.post<{ Body: CreateLessonBody }>("/api/lesson", async (req, reply) => {
     transcript: [],
     commit: null,
   };
-  manager.start(session, kickoffMessage(params));
+  // A spoken start tags the kickoff, so the opening arrives in spoken form.
+  const kickoff = kickoffMessage(params);
+  const tag = turnTag(via, "typed");
+  manager.start(session, kickoff, tag ? withTurnTag(kickoff, tag) : undefined, via);
+  serverDiag(session.id, "lesson-created", { via, size, model: params.model, laneId: params.laneId ?? null });
   return { sessionId: session.id, title: session.title };
 });
 
@@ -208,7 +226,10 @@ app.get<{ Params: { id: string } }>("/api/lesson/:id", async (req, reply) => {
   const { systemPrompt: _omit, ...rest } = session;
   return {
     ...rest,
-    transcript: session.transcript.filter((t) => !t.hidden),
+    // modelText is server machinery (tags, the wrap-up checklist) — never shown.
+    transcript: session.transcript.filter((t) => !t.hidden).map(({ modelText: _m, ...t }) => t),
+    // Lets a reconnecting client tell "still thinking" from "the stream lost the ending".
+    turnInFlight: manager.turnInFlight(req.params.id),
   };
 });
 
@@ -216,7 +237,7 @@ const MAX_IMAGES_PER_MESSAGE = 4;
 
 app.post<{
   Params: { id: string };
-  Body: { text?: string; images?: { media_type?: string; data?: string }[] };
+  Body: { text?: string; images?: { media_type?: string; data?: string }[]; via?: Via; heard?: unknown };
 }>(
   "/api/lesson/:id/message",
   // Base64 photos are bulky — Fastify's default 1 MiB body limit won't do.
@@ -239,18 +260,27 @@ app.post<{
       }
       images.push({ media_type: img.media_type as InboundMediaType, data: img.data });
     }
+    const via = parseVia(req.body?.via);
+    if (typeof via !== "string") return reply.code(400).send(via);
+    // A cleaned spoken turn carries the raw recognition it came from.
+    const rawHeard = req.body?.heard;
+    if (rawHeard !== undefined && (typeof rawHeard !== "string" || rawHeard.length > MAX_HEARD_CHARS || via !== "spoken")) {
+      return reply.code(400).send({ error: "heard must be a string, on a spoken turn" });
+    }
+    const heard = typeof rawHeard === "string" && rawHeard.trim() && rawHeard.trim() !== text ? rawHeard.trim() : undefined;
     try {
-      manager.runnerFor(req.params.id).send(text, false, images);
+      const runner = manager.runnerFor(req.params.id);
+      // AFTER runnerFor: read the live runner's record, not a stale copy.
+      const tag = turnTag(via, lastVia(runner.sessionRecord.transcript));
+      const body = withHeard(text, heard);
+      runner.send(text, false, images, tag || heard ? withTurnTag(body, tag) : undefined, via, heard);
     } catch (e) {
       return reply.code(409).send({ error: (e as Error).message });
     }
-    // The learner chatting on means they're no longer just trying to wrap up.
-    // (sessionFor AFTER runnerFor: mutate the live runner's record, not a copy.)
-    const session = manager.sessionFor(req.params.id);
-    if (session?.ending && !session.commit) {
-      session.ending = false;
-      saveSession(session);
-    }
+    // `ending` is deliberately NOT cleared here. Answering the wrap-up's own
+    // "any last questions?" used to clear it, so a lesson cut off mid-wrap-up
+    // (arriving at the office) dropped out of "Needs your attention". It now
+    // holds until a commit, or the learner's explicit "keep going".
     return { ok: true };
   }
 );
@@ -259,8 +289,10 @@ app.post<{
 // uncommitted lesson shows up as "needs attention" instead of vanishing at expiry.
 // Any siloed per-message feedback rides along as model-only text: the model
 // sees it, the transcript keeps just the short human message.
-app.post<{ Params: { id: string } }>("/api/lesson/:id/end", async (req, reply) => {
+app.post<{ Params: { id: string }; Body: { via?: Via } | undefined }>("/api/lesson/:id/end", async (req, reply) => {
   if (!manager.sessionFor(req.params.id)) return reply.code(404).send({ error: "no such lesson" });
+  const via = parseVia(req.body?.via);
+  if (typeof via !== "string") return reply.code(400).send(via);
   let runner;
   try {
     runner = manager.runnerFor(req.params.id);
@@ -271,8 +303,13 @@ app.post<{ Params: { id: string } }>("/api/lesson/:id/end", async (req, reply) =
   // live record — a stale copy would clobber its transcript writes.
   const session = manager.sessionFor(req.params.id)!;
   if (session.commit) return { ok: true, alreadyCommitted: true };
+  if (endAlreadyPending(session.transcript)) {
+    serverDiag(session.id, "end-duplicate", { via });
+    return { ok: true, alreadyEnding: true };
+  }
   session.ending = true;
   saveSession(session);
+  serverDiag(session.id, "ending-set", { via });
   const endText =
     "Let's wrap up. Work through these in order, and do NOT call commit_session until " +
     "every earlier step is done:\n" +
@@ -285,9 +322,109 @@ app.post<{ Params: { id: string } }>("/api/lesson/:id/end", async (req, reply) =
     "4. Only once this wrap-up conversation is done, build the patch and call " +
     "commit_session exactly once.";
   const handoff = composeFeedbackHandoff(session);
-  runner.send(endText, false, [], handoff ? `${endText}\n\n${handoff}` : undefined);
+  // The transcript keeps the short human line the client renders; the model
+  // gets the full ordered checklist (plus any ratings hand-off) as modelText.
+  // Storing the checklist itself as a visible user turn put six lines of
+  // machinery on screen after any reconcile, and would be read aloud verbatim
+  // by a spoken client.
+  const checklist = handoff ? `${endText}\n\n${handoff}` : endText;
+  const tag = turnTag(via, lastVia(session.transcript));
+  runner.send(END_TURN_TEXT, false, [], withTurnTag(checklist, tag), via);
   return { ok: true };
 });
+
+// "Keep going" — the learner tapped End, then decided to carry on. `ending` is
+// otherwise sticky until a commit (see the message route), so this is its only
+// other way out.
+app.post<{ Params: { id: string } }>("/api/lesson/:id/keep-going", async (req, reply) => {
+  const session = manager.sessionFor(req.params.id);
+  if (!session) return reply.code(404).send({ error: "no such lesson" });
+  if (session.commit) return reply.code(409).send({ error: "lesson is already committed" });
+  if (session.ending) {
+    session.ending = false;
+    saveSession(session);
+    serverDiag(session.id, "ending-cleared", { by: "keep-going" });
+  }
+  return { ok: true };
+});
+
+// --- Drive-mode support ---------------------------------------------------------
+
+// What the client's reply watchdog asks before acting. Never revives a runner:
+// it reports, and the client decides (a re-POST would duplicate the turn).
+app.get<{ Params: { id: string } }>("/api/lesson/:id/health", async (req, reply) => {
+  if (!manager.sessionFor(req.params.id)) return reply.code(404).send({ error: "no such lesson" });
+  return manager.health(req.params.id);
+});
+
+// Replace a runner that stopped making progress, re-sending the turn it was
+// stuck on to the model only (no duplicate in the transcript).
+app.post<{ Params: { id: string } }>("/api/lesson/:id/kick", async (req, reply) => {
+  const session = manager.sessionFor(req.params.id);
+  if (!session) return reply.code(404).send({ error: "no such lesson" });
+  if (session.commit) return reply.code(409).send({ error: "lesson is already committed" });
+  try {
+    return { ok: true, ...manager.kick(req.params.id) };
+  } catch (e) {
+    return reply.code(409).send({ error: (e as Error).message });
+  }
+});
+
+// Spoken-answer cleanup (server/cleanup.ts): the client sends the raw speech
+// recognition before sending the turn, and sends the repaired text with the
+// raw beside it. Never fails the learner's turn: any problem returns the raw
+// text with `cleaned: false`.
+const MAX_HEARD_CHARS = 20_000;
+
+app.post<{ Params: { id: string } }>("/api/lesson/:id/clean/warm", async (req, reply) => {
+  if (!manager.sessionFor(req.params.id)) return reply.code(404).send({ error: "no such lesson" });
+  prewarmCleanup();
+  return { ok: true };
+});
+
+app.post<{ Params: { id: string }; Body: { text?: unknown } | undefined }>(
+  "/api/lesson/:id/clean",
+  async (req, reply) => {
+    const session = manager.sessionFor(req.params.id);
+    if (!session) return reply.code(404).send({ error: "no such lesson" });
+    const raw = req.body?.text;
+    if (typeof raw !== "string" || !raw.trim()) return reply.code(400).send({ error: "text required" });
+    if (raw.length > MAX_HEARD_CHARS) return reply.code(400).send({ error: "text too long" });
+    const lastTutor = [...session.transcript].reverse().find((t) => t.role === "assistant" && !t.hidden)?.text ?? "";
+    const r = await cleanTranscript(raw, lastTutor);
+    serverDiag(session.id, "cleanup", {
+      ms: r.ms,
+      cleaned: r.cleaned,
+      fallback: r.fallback ?? null,
+      raw: raw.trim(),
+      text: r.text,
+    }, r.cleaned ? "info" : "anomaly");
+    return r;
+  }
+);
+
+// Client diagnostics batches → <data root>/.app/diag/<id>.jsonl. Accepted for
+// any well-formed session id, even one whose session file is gone: a batch
+// held in the phone's storage may arrive days after the lesson.
+app.post<{ Params: { id: string }; Body: unknown }>(
+  "/api/diag/:id",
+  { bodyLimit: 4 * 1024 * 1024 },
+  async (req, reply) => {
+    if (!isSessionId(req.params.id)) return reply.code(400).send({ error: "bad session id" });
+    // sendBeacon (used on pagehide) may post the batch as text/plain.
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        return reply.code(400).send({ error: "batch is not JSON" });
+      }
+    }
+    const batch = parseClientBatch(body, req.params.id);
+    if (typeof batch === "string") return reply.code(400).send({ error: batch });
+    return { ok: true, id: batch.id, ...writeClientBatch(req.params.id, batch) };
+  }
+);
 
 // --- Per-message feedback ----------------------------------------------------
 // The learner rates individual tutor messages (⏫/👍/👎/⏬ + a required note). Ratings are
@@ -378,6 +515,9 @@ app.post<{ Params: { id: string }; Body: { model?: "opus" | "sonnet" } }>(
   }
 );
 
+// Drive mode treats ~60s without any event as a dead stream; four missed beats.
+const HEARTBEAT_MS = 15_000;
+
 // SSE event stream — the lesson screen's live feed.
 app.get<{ Params: { id: string } }>("/api/lesson/:id/events", async (req, reply) => {
   const session = manager.sessionFor(req.params.id);
@@ -399,11 +539,23 @@ app.get<{ Params: { id: string } }>("/api/lesson/:id/events", async (req, reply)
   // runner revivals; a dormant session simply streams nothing until the next
   // POST message revives it.
   const unsubscribe = manager.subscribe(req.params.id, write);
+  const connectedAt = Date.now();
+  serverDiag(req.params.id, "sse-connect", {
+    ua: req.headers["user-agent"] ?? null,
+    listeners: manager.listenerCount(req.params.id),
+  });
 
-  const ping = setInterval(() => reply.raw.write(`: ping\n\n`), 25_000);
+  // A real event, not an SSE comment: EventSource never surfaces comments, so
+  // a client could not tell a dead stream from a model that is thinking. Also
+  // keeps proxies from idling the connection out.
+  const heartbeat = setInterval(() => write({ type: "heartbeat" }), HEARTBEAT_MS);
   req.raw.on("close", () => {
-    clearInterval(ping);
+    clearInterval(heartbeat);
     unsubscribe();
+    serverDiag(req.params.id, "sse-disconnect", {
+      connectedMs: Date.now() - connectedAt,
+      listeners: manager.listenerCount(req.params.id),
+    });
   });
 
   // Keep the reply open — Fastify must not try to send a body.

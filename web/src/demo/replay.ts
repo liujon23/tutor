@@ -5,6 +5,7 @@
 // picked. Only reachable when built with `--mode demo` (__DEMO__ === true);
 // otherwise this whole module is unreferenced and Rollup drops it.
 import { transcriptName } from "../api.js";
+import { END_TURN_TEXT } from "../lesson/reconcile.js";
 import type {
   Api,
   CommitResult,
@@ -248,6 +249,13 @@ async function sendMessage(_id: string, text: string): Promise<{ ok: boolean }> 
 async function endLesson(): Promise<{ ok: boolean; alreadyCommitted?: boolean }> {
   const rec = await loadRecording();
   if (commit) return { ok: true, alreadyCommitted: true };
+  // Mirror the live server, which persists this turn and echoes it over SSE
+  // (server/index.ts /end). The lesson screen renders the End-lesson bubble
+  // from that event rather than optimistically, so without this the demo
+  // would show no bubble at all.
+  const endMid = nextId();
+  transcript.push({ id: endMid, role: "user", text: END_TURN_TEXT, at: new Date().toISOString() });
+  listener?.({ type: "user", id: endMid, text: END_TURN_TEXT });
   // No real wrap-up turn to run — jump straight to the recording's commit so
   // "End lesson" still does something sensible mid-replay. Bump `generation`
   // first so any in-flight playForward stream stops emitting once its next
@@ -331,4 +339,11 @@ export const demoApi: Api = {
   approvePatterns,
   abandon,
   events,
+  // Drive mode is hidden in demo builds; these only keep the Api shape whole.
+  keepGoing: async () => ({ ok: true }),
+  health: async () => ({ alive: true, turnInFlight: false, queueLength: 0, msSinceLastMessage: 0, listeners: 1 }),
+  kick: async () => ({ ok: true, answering: null }),
+  cleanSpoken: async (_id: string, text: string) => ({ text, cleaned: false, ms: 0 }),
+  warmCleanup: async () => ({ ok: true }),
+  sendDiag: async (_id, batch) => ({ ok: true, id: batch.id }),
 };

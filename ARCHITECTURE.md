@@ -115,6 +115,25 @@ Two invariants make the design hold:
   Only approved patterns enter `## How I learn best`, which then overrides the
   teaching contract's defaults in every future lesson.
 
+## Drive mode (spoken lessons)
+
+Drive mode is a rendering mode of the lesson screen, not a second path: the same
+session, SSE stream and patcher, with speech in and out. It adds no model
+context and no write path — a spoken turn differs only in a `via: "spoken"` tag
+the server turns into a model-only prefix ("reply in spoken form"), and in
+counts on the usage ledger and markers in the archived transcript.
+
+The browser side lives in `web/src/lesson/audio/`. The rules are in four pure,
+import-free modules tested in `tests/audio.test.ts` — `text.ts` (markdown →
+speech), `endpoint.ts` (when the learner has finished answering),
+`drive-state.ts` (the turn-taking state machine) and `diag.ts` — and every
+browser API is confined to `adapter.ts`. On the server, `server/cleanup.ts`
+tidies a spoken answer's transcription with a small model before it's sent, and
+`server/diag.ts` writes the diagnostics both sides log to `.app/diag/`.
+
+[docs/drive-mode.md](docs/drive-mode.md) is the reference: how it works, what
+the phone was measured to do, the traps, and the decisions behind it.
+
 ## Demo mode
 
 `vite build web --mode demo` sets a compile-time `__DEMO__` flag: `web/src/api.ts`
