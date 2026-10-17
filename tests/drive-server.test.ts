@@ -15,7 +15,7 @@ import {
   KICK_NUDGE,
   SPOKEN_TAG,
   TYPED_TAG,
-  buildLessonSystemPrompt,
+  STATIC_PROMPT,
   lastVia,
   turnTag,
   withTurnTag,
@@ -100,12 +100,9 @@ test("withTurnTag prefixes the body, or leaves it alone", () => {
 });
 
 test("the system prompt explains spoken turns and no longer claims math always renders", () => {
-  const { systemPrompt } = buildLessonSystemPrompt({
-    size: "standard",
-    model: "opus",
-    historyN: 3,
-    spacing: DEFAULT_SPACING,
-  });
+  // The static part only: the full prompt appends a session packet built from
+  // the data root, which a fresh checkout (CI) doesn't have.
+  const systemPrompt = STATIC_PROMPT;
   assert.match(systemPrompt, /## Spoken turns/);
   assert.match(systemPrompt, /mode holds until the next tag/);
   assert.match(systemPrompt, /Never grade\s+a transcription artifact/);

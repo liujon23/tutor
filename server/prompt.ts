@@ -212,7 +212,8 @@ committed and what's queued next. Only if you left something in
 proposedConfirmedPatterns, add that it is waiting for their approval in the app's
 wrap-up panel.`;
 
-const STATIC_PROMPT = `${APP_INTRO}\n\n${TEACHING_CONTRACT}\n\n${APP_MACHINERY}`;
+/** The system prompt minus the session packet — the same for every lesson, and testable without a data root. */
+export const STATIC_PROMPT = `${APP_INTRO}\n\n${TEACHING_CONTRACT}\n\n${APP_MACHINERY}`;
 
 export function buildLessonSystemPrompt(params: LessonParams): {
   systemPrompt: string;
