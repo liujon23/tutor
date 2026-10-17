@@ -115,11 +115,31 @@ npm run validate
 Fix anything it flags. **YAML footgun:** in an unquoted multi-line `notes`/`direction`
 value, a `: ` (colon-space) or a leading quote makes the parser fail with "Nested
 mappings are not allowed in compact mappings" — double-quote the whole value or
-rephrase. `npm run validate` catches it. Then commit:
+rephrase. `npm run validate` catches it. **Comments don't survive:** every lesson
+write-back re-serializes `curriculum.yaml` and drops `#` comments, so anything worth
+keeping goes in a `notes` or `direction` field, not a comment.
+
+Then commit — **in the data root, not this checkout** (the checkout tracks no data, so
+`git add data` here fails). The data root is `TUTOR_DATA_DIR` from `.env` if set,
+else `my-data/`. Commit only if it is the top level of its own repository:
 
 ```
-git add data && git commit -m "course-setup: <what changed>"
+git -C <data-root> rev-parse --show-toplevel   # must print <data-root> itself
+git -C <data-root> add data
+git -C <data-root> commit -m "course-setup: <what changed>"
 ```
+
+If it isn't its own repo (an error, or a different top level), don't commit: tell the
+learner the edits are saved but unversioned, and that `npm run init-data` sets up
+one-commit-per-change history.
+
+**Unit summaries.** If the work changed any unit's structure — a new or renamed unit,
+topics added/removed/reordered, or a lane's `direction` rewritten — the app's
+curriculum viewer shows placeholder blurbs for those units until they're regenerated.
+After committing, run `npm run unit-summaries -- --check` (free; lists what's stale).
+If anything is stale, offer to run `npm run unit-summaries` — it spends tokens, so ask
+first; it writes `data/unit-summaries.json` and commits on its own.
 
 Close by summarizing what you set up — goals captured, floor found, unit skeleton —
-so the learner can eyeball it, and point them to `daily-lesson` to begin.
+so the learner can eyeball it, and point them to the app (or `daily-lesson` in Claude
+Code) to begin.
