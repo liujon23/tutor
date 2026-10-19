@@ -173,6 +173,8 @@ the same conversation, committed the same way.
   sees it; the raw recognition is kept alongside.
 - **If the phone locks or a call comes in,** drive mode pauses; one tap resumes.
   A reload reopens the lesson in drive mode, paused.
+- **If Safari blocks the mic** (MIC BLOCKED), tap **Reload**: Safari only asks
+  again on a fresh page, and the lesson comes back in drive mode, paused.
 - **Phone speaker is best.** On Bluetooth the car switches to phone-call audio
   whenever the mic is open — unavoidable from a web page.
 - The **debug strip** at the bottom (for use while parked) holds the voice

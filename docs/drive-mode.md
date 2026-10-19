@@ -109,6 +109,16 @@ commuting week. **J would rather wait than feel rushed.**
   say "The mic stalled. Listening again.", keeping any half-said answer.
 - **No auto-resume after an interruption.** Hidden → hard PAUSED, one tap to
   resume. A phone call breaks the gesture chain; auto-resuming yields a silent car.
+- **Never start recognition while speech is playing** — the machine's own *or*
+  untracked speech (the select screen's "Starting.", spoken cues with tones off).
+  Safari fails the mic permission check without showing its prompt, and the
+  refusal then sticks for the page. `startRecognizer` waits for
+  `speechSynthesis` to go quiet (logged `rec-start-deferred`; gives up after 5s).
+- **A refused mic offers Reload.** A Safari `not-allowed` puts the overlay in
+  MIC BLOCKED with a Reload button (the tap reloads); the reload comes back via
+  the pending-drive record, paused, and the tap that resumes it leads to the
+  prompt. A browser that can't recognise speech at all (`unsupported`, incl.
+  Chrome on iOS) just pauses with the needs-Safari line.
 
 ## Speaking
 
@@ -278,6 +288,10 @@ the diagnostics widen it.
 
 - **Recognition works in Safari only.** Chrome/Firefox/Edge on iOS expose
   `webkitSpeechRecognition` but fail at once with `not-allowed`.
+- **A mic request over playing speech is refused without a prompt**, ~1.2s in
+  (`not-allowed`, "User permission check has failed") — and every later start
+  in that page fails in ~2ms, until a reload. A request after speech ends shows
+  the prompt as normal (2026-10-10, 2026-10-19).
 - **Restart gap ~110ms once warm; a cold start 1.4–3.6s** to `audiostart`. The
   first start in a lesson sometimes fails ~1s in with `audio-capture` ("Source is
   muted") and retries fine.
@@ -358,6 +372,11 @@ J's calls, in order, with the evidence behind them.
   mode held on every utterance, cleanup never fell back, two answers ran past the
   old cap. Profile bullet removals now match across line wraps (Lessons 29 and
   32 had commits rejected 2–3 times on it); a failed send is verified first.
+- **Mic refused without a prompt** (2026-10-19): reopening a lesson that waited
+  on J, with Listen on, opened the mic during "Starting."; Safari refused it and
+  kept refusing until J closed and reopened the app. Recognition now waits for
+  speech to end; a refusal shows a Reload button (J's call, over reloading by
+  itself or only saying so).
 
 ## Open items
 

@@ -352,6 +352,13 @@ export class DriveController implements AudioController {
       case "reconnect":
         this.deps.reconnect();
         return;
+      case "reload":
+        // Safari asks for a mic it refused only on a fresh page. The pending
+        // drive record stays (no stop()), so the reload reopens this lesson in
+        // drive mode, paused; the tap that resumes it leads to the prompt.
+        this.beaconFlush("reload");
+        location.reload();
+        return;
       case "finished":
         clearPendingDrive();
         audioAdapter.releaseWakeLock();

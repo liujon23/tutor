@@ -157,6 +157,8 @@ export class AudioAdapter {
   private capture: { resolve: (r: MicCheck) => void; startedAt: number; audioAt: number | null } | null = null;
   private current: SpeechSynthesisUtterance | null = null;
   private leadInTimer: ReturnType<typeof setTimeout> | undefined;
+  /** A recogniser start waiting for speech to end (see startRecognizer). */
+  private deferredStart: ReturnType<typeof setTimeout> | undefined;
   private ac: AudioContext | null = null;
   private wake: WakeLockSentinel | null = null;
   private settings: SpeechSettings = { voiceURI: null, rate: 1, tones: true, sessionPlayback: true };
@@ -478,7 +480,11 @@ export class AudioAdapter {
         c.resolve({ ok: false, error: e.error });
         return;
       }
-      if (!this.capture) this.input({ type: "rec_error", now: now(), error: e.error, message: e.message });
+      // Outside real Safari (Chrome/Firefox/Edge on iOS) a refusal is the
+      // browser lacking the entitlement — no reload or prompt can fix that.
+      const refused = e.error === "not-allowed" || e.error === "service-not-allowed";
+      const error = refused && !probes().safari ? "unsupported" : e.error;
+      if (!this.capture) this.input({ type: "rec_error", now: now(), error, message: e.message });
     };
     r.onend = () => {
       this.log("rec-end", { session: this.recSession, ms: Math.round(now() - this.recStartedAt) });
@@ -495,12 +501,53 @@ export class AudioAdapter {
     return r;
   }
 
+  /**
+   * Start a recogniser session for the machine — but never while anything is
+   * speaking. Safari fails the mic permission check, without showing its
+   * prompt, for a start() made over playing speech (2026-10-10 and -19: the
+   * select screen's "Starting.", which the machine doesn't track, was still
+   * playing), and then refuses the mic for the rest of the page. So wait for
+   * the speech to end; past 5s, start anyway rather than never listen.
+   */
   startRecognizer(): void {
     const r = this.recognizer();
     if (!r) {
-      this.input({ type: "rec_error", now: now(), error: "not-allowed", message: "no SpeechRecognition in this browser" });
+      this.input({ type: "rec_error", now: now(), error: "unsupported", message: "no SpeechRecognition in this browser" });
       return;
     }
+    clearTimeout(this.deferredStart);
+    this.deferredStart = undefined;
+    if (speechSynthesis.speaking || speechSynthesis.pending) {
+      const since = now();
+      this.log("rec-start-deferred", { speaking: speechSynthesis.speaking, pending: speechSynthesis.pending });
+      const retry = () => {
+        if ((speechSynthesis.speaking || speechSynthesis.pending) && now() - since < 5000) {
+          this.deferredStart = setTimeout(retry, 100);
+          return;
+        }
+        this.deferredStart = undefined;
+        const waitedMs = Math.round(now() - since);
+        if (waitedMs >= 5000) this.log("rec-start-deferral-gave-up", { waitedMs }, "anomaly");
+        else this.log("rec-start-undeferred", { waitedMs });
+        this.beginRecognizer(r);
+      };
+      this.deferredStart = setTimeout(retry, 100);
+      return;
+    }
+    this.beginRecognizer(r);
+  }
+
+  /** A deferred start was cancelled by a stop/abort: the session never began, so end it for the machine. */
+  private cancelDeferredStart(): boolean {
+    if (this.deferredStart === undefined) return false;
+    clearTimeout(this.deferredStart);
+    this.deferredStart = undefined;
+    this.log("rec-start-deferral-cancelled");
+    this.input({ type: "rec_end", now: now() });
+    return true;
+  }
+
+  private beginRecognizer(r: Recognizer): void {
     this.sessionFor("mic");
     this.recSession++;
     this.finalsThisSession.clear();
@@ -516,6 +563,7 @@ export class AudioAdapter {
   }
 
   stopRecognizer(): void {
+    if (this.cancelDeferredStart()) return;
     try {
       this.rec?.stop();
     } catch (e) {
@@ -524,6 +572,7 @@ export class AudioAdapter {
   }
 
   abortRecognizer(): void {
+    if (this.cancelDeferredStart()) return;
     try {
       this.rec?.abort();
     } catch (e) {

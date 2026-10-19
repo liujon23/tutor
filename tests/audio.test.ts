@@ -834,14 +834,43 @@ test("a system line mid-answer keeps the half-said answer, and its clock restart
   assert.deepEqual(h.submitted, ["the key is the value vector"]);
 });
 
-test("not-allowed (Chrome on iOS) pauses with a spoken explanation, no retry loop", () => {
+test("an unsupported browser (Chrome on iOS) pauses with a spoken explanation, no retry loop", () => {
+  // The adapter reports Chrome's refusal ("Microphone permission check has
+  // failed") as unsupported: no reload or prompt can fix a missing entitlement.
   const h = new Harness();
   h.enable({ turnInFlight: false });
   h.finishSpeech();
-  h.run({ type: "rec_error", now: h.now, error: "not-allowed", message: "Microphone permission check has failed" });
+  h.run({ type: "rec_error", now: h.now, error: "unsupported", message: "Microphone permission check has failed" });
   assert.ok(h.spoken.includes(LINES.micUnavailable));
+  assert.equal(h.m.snapshot.phase, "paused");
   for (let t = 1000; t < 20_000; t += 1000) h.at(t).tick();
   assert.equal(h.started(), 1);
+  assert.equal(h.actions.filter((a) => a.type === "reload").length, 0);
+});
+
+test("a mic Safari refused offers a reload, and nothing else retries it", () => {
+  // 2026-10-19: once Safari refused the mic, every start in that page failed in
+  // ~2ms without a prompt, until J closed and reopened the app.
+  const h = new Harness();
+  h.enable({ turnInFlight: false });
+  h.finishSpeech();
+  h.run({ type: "rec_error", now: h.now, error: "not-allowed", message: "User permission check has failed" });
+  assert.equal(h.m.snapshot.phase, "blocked");
+  assert.equal(h.spoken.filter((t) => t === LINES.micBlocked).length, 1);
+  assert.ok(!h.spoken.includes(LINES.micUnavailable), "not the needs-Safari line");
+  h.finishSpeech();
+  for (let t = 1000; t < 20_000; t += 1000) h.at(t).tick();
+  assert.equal(h.started(), 1, "no retry into a refusal that sticks");
+  // Again and the screen locking leave it blocked.
+  h.run({ type: "again", now: h.now });
+  h.run({ type: "visibility", now: h.now, hidden: true });
+  h.run({ type: "visibility", now: h.now, hidden: false });
+  assert.equal(h.m.snapshot.phase, "blocked");
+  // The tap (the Reload button bubbles to it) reloads — once per tap.
+  h.at(25_000).tap();
+  assert.equal(h.actions.filter((a) => a.type === "reload").length, 1);
+  assert.equal(h.started(), 1);
+  assert.deepEqual(h.invariants(), []);
 });
 
 test("a failed request is announced once, then the mic reopens", () => {

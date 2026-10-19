@@ -94,6 +94,7 @@ export const LINES = {
   resuming: "Resuming.",
   micStalled: "The mic stalled. Listening again.",
   micUnavailable: "The microphone isn't available. Drive mode needs Safari, with microphone access allowed.",
+  micBlocked: "Safari blocked the microphone. Tap Reload to be asked again.",
   sendFailed: "That answer didn't reach the tutor. Please say it again.",
   kicking: "The tutor seems stuck. Restarting it.",
   stuck: "The tutor seems stuck. Tap to retry.",
@@ -206,10 +207,12 @@ export type DriveAction =
   | { type: "reconcile" }
   | { type: "reconnect" }
   | { type: "finished" }
+  /** Reload the page: the only way to make Safari ask for a mic it refused (see recError). */
+  | { type: "reload" }
   | { type: "diag"; level: "info" | "anomaly" | "invariant"; kind: string; detail?: unknown };
 
-export type Mode = "off" | "paused" | "live" | "stuck" | "done";
-export type Phase = "off" | "paused" | "speaking" | "listening" | "waiting" | "stuck" | "done";
+export type Mode = "off" | "paused" | "live" | "stuck" | "done" | "blocked";
+export type Phase = "off" | "paused" | "speaking" | "listening" | "waiting" | "stuck" | "done" | "blocked";
 export type RecState = "stopped" | "starting" | "running" | "stopping";
 
 interface Utterance {
@@ -439,6 +442,7 @@ export class DriveMachine {
       case "paused":
       case "stuck":
       case "done":
+      case "blocked":
         return this.mode;
       case "live":
         if (this.speaking || this.queue.length) return "speaking";
@@ -552,6 +556,10 @@ export class DriveMachine {
         return;
       case "done":
         this.speakNow({ text: LINES.committed, kind: "system" }, now);
+        return;
+      case "blocked":
+        this.diag("reload", { why: "mic-blocked" });
+        this.emit({ type: "reload" });
         return;
     }
   }
@@ -957,14 +965,22 @@ export class DriveMachine {
       this.diag("rec-quiet-end", { error, message });
       return;
     }
-    if (error === "not-allowed" || error === "service-not-allowed") {
+    // The mic can't be had: say why once, and stop asking. "unsupported" is a
+    // browser that can't recognise speech at all (anything but Safari on iOS):
+    // pause. A refusal in Safari sticks for the rest of the page, with no
+    // prompt (seen 2026-10-19: three starts, each refused in ~2ms, until J
+    // closed and reopened the app) — only a reload makes Safari ask again, so
+    // the next tap reloads.
+    if (error === "unsupported" || error === "not-allowed" || error === "service-not-allowed") {
+      const blocked = error !== "unsupported";
+      const line = blocked ? LINES.micBlocked : LINES.micUnavailable;
       this.anomaly("rec-not-allowed", { error, message });
       this.stopListening();
       this.rec = "stopped";
-      // Spoken directly: once paused, nothing drains the queue.
-      this.diag("say", { why: "not-allowed", text: LINES.micUnavailable });
-      this.speakNow({ text: LINES.micUnavailable, kind: "system" }, now);
-      this.mode = "paused";
+      // Spoken directly: once paused or blocked, nothing drains the queue.
+      this.diag("say", { why: error, text: line });
+      this.speakNow({ text: line, kind: "system" }, now);
+      this.mode = blocked ? "blocked" : "paused";
       return;
     }
     // network, audio-capture, a start() that threw, anything unknown: back off.

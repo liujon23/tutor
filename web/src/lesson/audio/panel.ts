@@ -39,6 +39,7 @@ const LABELS: Record<Phase, [string, string]> = {
   paused: ["PAUSED", "tap to resume"],
   stuck: ["STUCK", "tap to retry"],
   done: ["COMMITTED", "lesson saved · Exit to close"],
+  blocked: ["MIC BLOCKED", "Safari didn't allow the microphone"],
 };
 
 const RATES = [0.9, 1, 1.1, 1.2];
@@ -52,6 +53,9 @@ export class DrivePanel {
   // off the screen while J was still saying them).
   private heardText = h("span", {});
   private heard = h("div", { class: "drive-heard" }, this.heardText);
+  // Shown only while the mic is blocked. Its click bubbles to the overlay's
+  // tap, which in that state reloads — one tap target, a visible label.
+  private reloadBtn = h("button", { class: "drive-reload hidden" }, "Reload");
   private stripLabel = h("span", {});
   private debug = h("div", { class: "drive-debug hidden" });
   private debugBody = h("pre", { class: "drive-debug-body" });
@@ -144,7 +148,7 @@ export class DrivePanel {
         h("span", { class: "drive-spacer" }),
         corner("✕ Exit drive mode", "", () => this.handlers.exit())
       ),
-      h("div", { class: "drive-center" }, this.state, this.hint, this.heard),
+      h("div", { class: "drive-center" }, this.state, this.hint, this.heard, this.reloadBtn),
       strip,
       this.debug
     );
@@ -188,6 +192,7 @@ export class DrivePanel {
       this.state.textContent = phase === "waiting" && !snap.turnInFlight ? "GETTING READY" : word;
       this.hint.textContent = hint;
     }
+    this.reloadBtn.classList.toggle("hidden", extras.checking || phase !== "blocked");
     const heard = phase === "listening" && snap.heard ? `“${snap.heard}”` : "";
     if (this.heardText.textContent !== heard) {
       this.heardText.textContent = heard;

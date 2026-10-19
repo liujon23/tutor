@@ -1759,7 +1759,22 @@ input.hidden[type="file"] {
 .drive-overlay[data-phase="listening"] .drive-state { color: #6ee7b7; }
 .drive-overlay[data-phase="waiting"] .drive-state { color: #fcd34d; }
 .drive-overlay[data-phase="paused"] .drive-state,
-.drive-overlay[data-phase="stuck"] .drive-state { color: #fca5a5; }
+.drive-overlay[data-phase="stuck"] .drive-state,
+.drive-overlay[data-phase="blocked"] .drive-state { color: #fca5a5; }
+
+/* The mic-blocked state's one action: big, since it's the whole remedy. */
+.drive-reload {
+  font: inherit;
+  font-size: 24px;
+  font-weight: 700;
+  margin-top: 12px;
+  padding: 16px 44px;
+  border: none;
+  border-radius: 14px;
+  background: #4f46b8;
+  color: #fff;
+  cursor: pointer;
+}
 .drive-overlay[data-phase="done"] .drive-state { color: #93c5fd; }
 .drive-overlay[data-phase="checking"] .drive-state { color: #f0abfc; }
 
