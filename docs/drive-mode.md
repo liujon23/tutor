@@ -274,7 +274,9 @@ only when it's *acting* on a problem.
   audio-session switches.
 - **Invariants:** never `start()` while speaking or recognising; never submit
   during a turn or an empty buffer; never speak a sigil.
-- **Server records:** runner start/revive/close, SSE connect/disconnect, every
+- **Server records:** runner start/revive/close, the tool list and MCP state at
+  SDK init, how long the runner waited for the `tutor` tool server
+  (`mcp-ready`), SSE connect/disconnect, every
   dispatched event with its listener count (0 = lost to a gap), turn timing
   (send → first delta → result), full `rate_limit_info`, cleanup, kicks, ending.
 - **Pre-drive check** (debug strip, run parked): Safari, HTTPS, recognition,
@@ -351,7 +353,13 @@ there), navigation prompts interrupting speech, Low Power Mode and the wake lock
 - **The service worker serves pages network-first** (`tests/sw.test.ts`); check
   the build id in the debug strip before trusting a test on the phone.
 - **Prompt caching is automatic** through the Agent SDK; read `cacheRead` /
-  `cacheCreation` when reasoning about the cost of many short spoken turns.
+  `cacheCreation` when reasoning about the cost of many short spoken turns. A
+  turn with `cacheRead` 0 less than an hour after the previous one is a broken
+  prefix, not an expired cache — something before the messages changed.
+- **A new runner's first message must wait for the `tutor` MCP server.** Once
+  the CLI answers, it lists no MCP servers for ~0.5s; a message already queued
+  goes out in that gap without `commit_session`, so the next call's prompt
+  doesn't match and re-writes the whole cache (see the decisions log).
 
 ## Decisions log
 
@@ -378,6 +386,18 @@ J's calls, in order, with the evidence behind them.
   speech to end; a refusal shows a Reload button (J's call, over reloading by
   itself or only saying so).
 
+- **Cache misses after every runner start** (2026-10-29, from the usage ledger
+  for Lessons 29–40): the second call of every runner (J's first answer after
+  the kickoff, and the first answer after each revival) read nothing from the
+  cache 1–4 minutes after the first, re-writing ~40k tokens (~$0.35 each,
+  roughly a quarter of a lesson's cost; 38 of 167 turns missed, 60% of spend,
+  most of it unavoidable revivals after a gap of over an hour). Each time it
+  wrote ~3.1k tokens more than the previous turn explains. A probe showed the
+  `tutor` server joining ~0.5s after the CLI starts answering, so the runner
+  now holds its first message until `tutor` reports connected (≤10s, logged as
+  `mcp-ready`). Check it in the ledger: turn 1's `cacheRead` should be about
+  turn 0's `cacheCreation`.
+
 ## Open items
 
 - **How the curriculum viewer shows spoken turns.** The counts reach
@@ -388,6 +408,10 @@ J's calls, in order, with the evidence behind them.
   and `speech-audit` (run `text.ts` over every archived tutor message).
 - **Cost per lesson** — `via` on usage records makes spoken vs typed cost exact;
   worth a look once there are more drives.
+- **Thinking before the first word.** A spoken reply is ~230 words (~300 tokens)
+  but ~1,400 output tokens: most of the wait after an answer is thinking. Lower
+  effort for spoken turns would shorten it, at some cost to teaching; changing
+  it mid-lesson also drops the message cache. Untried.
 - **Wrap-up by voice** is out of drive mode by design; revisit if it gets
   annoying.
 - **Full-duplex barge-in** looks feasible but is unverified.
