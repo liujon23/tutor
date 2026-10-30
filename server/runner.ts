@@ -22,6 +22,11 @@ import type {
   Via,
 } from "./types.js";
 
+/** Longest a new runner holds its first message for the `tutor` MCP server (awaitTutorServer). */
+const MCP_READY_WAIT_MS = 10_000;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
+
 /**
  * SDK user-turn content: image blocks first, then the text. This is the
  * documented SDKUserMessage.message.content shape — pure and unit-tested.
@@ -388,6 +393,7 @@ export class LessonRunner {
   }
 
   private async *input(): AsyncGenerator<SDKUserMessage> {
+    await this.awaitTutorServer();
     while (!this.closed) {
       while (this.queue.length > 0) yield this.queue.shift()!;
       if (this.closed) break;
@@ -395,6 +401,38 @@ export class LessonRunner {
         this.wake = resolve;
       });
     }
+  }
+
+  /**
+   * Hold the runner's first message until the in-process `tutor` MCP server
+   * reports connected. Lessons 29–40 show the first API call of every runner
+   * going out with a different tool list from the calls after it: the second
+   * call never reads the first one's cache and re-writes the whole ~40k-token
+   * prompt a minute or two later (~$0.35 each, at every start and revival).
+   * Probed: once the CLI answers it lists no MCP servers for ~0.5s, then
+   * `tutor` as connected, and a message already queued is sent in that gap.
+   * The wait mostly overlaps CLI startup the first message waits out anyway;
+   * the cap only matters if the server never connects. Logged either way.
+   */
+  private async awaitTutorServer(): Promise<void> {
+    const started = Date.now();
+    const deadline = started + MCP_READY_WAIT_MS;
+    let status = "unknown";
+    await Promise.resolve(); // `this.q` is assigned after query() returns
+    while (!this.closed && Date.now() < deadline) {
+      const statuses = await Promise.race([
+        this.q.mcpServerStatus().catch((e: Error) => {
+          status = `error: ${e.message}`;
+          return null;
+        }),
+        sleep(deadline - Date.now()).then(() => null),
+      ]);
+      const tutor = statuses?.find((s) => s.name === "tutor");
+      if (tutor) status = tutor.status;
+      if (status !== "pending" && status !== "unknown") break;
+      await sleep(100);
+    }
+    this.diag("mcp-ready", { status, waitedMs: Date.now() - started }, status === "connected" ? "info" : "anomaly");
   }
 
   private onCommitted(commit: CommitResult): void {
@@ -445,7 +483,14 @@ export class LessonRunner {
             this.session.sdkSessionId = msg.session_id;
             saveSession(this.session);
           }
-          this.diag("sdk-init", { model: msg.model, sdkSessionId: msg.session_id });
+          // The tool list and MCP state at init: the first call's tool list is
+          // what decides whether it shares a cache prefix with the calls after it.
+          this.diag("sdk-init", {
+            model: msg.model,
+            sdkSessionId: msg.session_id,
+            tools: msg.tools,
+            mcpServers: msg.mcp_servers,
+          });
           this.emit({ type: "ready", model: msg.model });
         } else if (msg.subtype === "api_retry") {
           // The SDK is retrying an API call: progress, not a hang (health's
