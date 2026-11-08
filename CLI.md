@@ -22,7 +22,7 @@ Open Claude Code in this folder and say *"let's do a lesson"*. The
    topic and its carried plan, recall candidates, your profile, the active-lane
    curriculum slice, recent history).
 2. It teaches from the packet, per the shared teaching contract
-   (`skills/references/teaching-contract.md`) — the same contract the app
+   (`.claude/skills/references/teaching-contract.md`) — the same contract the app
    splices into its system prompt.
 3. At wrap-up it builds a session patch and applies it with
    `commit-session` — validated first, then written and git-committed.
@@ -43,6 +43,7 @@ npm run unit-summaries [-- --check | --force]
 npm run backfill-completed-at [-- --dry-run]
 npm run demo:snapshot
 npm run echo-test
+npm run set-token
 ```
 
 - **`start-lesson`** prints the session packet — useful for seeing exactly what
@@ -73,6 +74,8 @@ npm run echo-test
   data repo to read). Commit what it writes.
 - **`echo-test`** verifies the Agent SDK and your token before the first app
   lesson.
+- **`set-token`** asks for the token `claude setup-token` printed (hidden
+  input), writes it to `.env`, and runs `echo-test` against it.
 
 Paths these commands print or mention (`data/curriculum.yaml` and friends) are
 relative to your **data root** — `my-data/` by default, or wherever

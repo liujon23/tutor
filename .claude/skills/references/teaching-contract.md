@@ -1,7 +1,7 @@
 # Teaching contract — shared by the CLI skill and the app
 
 The single source of truth for HOW a lesson is taught. Two consumers read it:
-`skills/daily-lesson/SKILL.md` (Claude Code CLI lessons) and `server/prompt.ts`
+`.claude/skills/daily-lesson/SKILL.md` (Claude Code CLI lessons) and `server/prompt.ts`
 (the app splices this file into the lesson system prompt at lesson creation).
 Medium-specific machinery — parameter/selection flow, per-message ratings, the
 commit mechanics — stays in those consumers; everything here applies to both.

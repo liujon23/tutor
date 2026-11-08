@@ -13,13 +13,13 @@ files directly, never regenerate documents, and never hand-edit state. You run
 
 ## Contract (read these once per session)
 
-- `skills/references/teaching-contract.md` — **how to teach**: the rigid-scaffolding /
+- `.claude/skills/references/teaching-contract.md` — **how to teach**: the rigid-scaffolding /
   fluid-teaching idea, recall warm-up, readiness check, the teaching defaults and
   session-size anchors, materials & sourcing, primary-source-first, project-bearing
   lanes, the synthesis capstone, stopping, and the patch-content rules. It is shared
   with the app so the tutor behaves identically in both media — this file only adds the
   terminal-specific flow around it.
-- `skills/references/document-formats.md` — the patch schema and update rules
+- `.claude/skills/references/document-formats.md` — the patch schema and update rules
   (especially the confirmed-pattern gate).
 
 Terminal note: this medium renders neither images nor mermaid — where the contract's
@@ -88,7 +88,7 @@ which the script surfaces and refuses to apply. You propose, the learner dispose
 
 ## Step 6 — Commit the session
 
-Build a session patch (schema: `skills/references/document-formats.md`; worked
+Build a session patch (schema: `.claude/skills/references/document-formats.md`; worked
 example: `examples/session-patch.example.json`). Get the content right per the
 teaching contract's **Patch content** section — honest compact lesson entry, state
 changes for everything touched, `nextUp` always set, the profile gates, working-notes

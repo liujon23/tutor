@@ -37,7 +37,7 @@ export function loadCurriculum(path: string): Curriculum {
 // validate reminder at the top — the YAML serializer drops all comments, so the
 // header has to be reattached here rather than living inline in the file.
 const HEADER = [
-  " Curriculum Map — structured store (see skills/references/document-formats.md)",
+  " Curriculum Map — structured store (see .claude/skills/references/document-formats.md)",
   " States: topic = not-started | touched | comfortable | shaky",
   "         unit  = not-started | in-progress | core-complete | complete",
   " Edit by hand if you like, but run `npm run validate` afterward.",

@@ -15,5 +15,7 @@ exports/
 .DS_Store
 transcripts/usage.jsonl.bak
 
-.claude/
+# Local Claude Code settings stay private; the project's skills are shared.
+.claude/*
+!.claude/skills/
 web/dist-demo/

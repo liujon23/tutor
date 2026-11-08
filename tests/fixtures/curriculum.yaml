@@ -1,4 +1,4 @@
-# Curriculum Map — structured store (see skills/references/document-formats.md)
+# Curriculum Map — structured store (see .claude/skills/references/document-formats.md)
 # States: topic = not-started | touched | comfortable | shaky
 #         unit  = not-started | in-progress | core-complete | complete
 # Edit by hand if you like, but run `npm run validate` afterward.

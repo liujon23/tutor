@@ -143,6 +143,19 @@ export function upsertEnv(contents: string, key: string, value: string): string 
   return lines.join("\n");
 }
 
+/**
+ * Tidy a pasted `claude setup-token` value. Terminals wrap the long token
+ * across lines, so a copy can carry newlines or spaces mid-token; people also
+ * paste the whole `CLAUDE_CODE_OAUTH_TOKEN=...` line, or wrap it in quotes.
+ * Returns "" when nothing usable is left.
+ */
+export function cleanPastedToken(raw: string): string {
+  let t = raw.replace(/\s+/g, "");
+  t = t.replace(/^export/, "").replace(/^CLAUDE_CODE_OAUTH_TOKEN=/, "");
+  t = t.replace(/^["']+|["']+$/g, "");
+  return t;
+}
+
 /** Path equality across git's forward slashes and Windows' case-insensitivity. */
 function samePath(a: string, b: string): boolean {
   const norm = (p: string) => {

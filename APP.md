@@ -20,9 +20,13 @@ web/       Vite PWA: select / lesson / wrap-up screens (vanilla TS + marked + Ka
 1. **Auth** — mint a subscription token and put it in the server's environment:
 
    ```bash
-   claude setup-token          # prints CLAUDE_CODE_OAUTH_TOKEN
-   cp .env.example .env        # paste the token there (or export it in your shell)
+   claude setup-token          # prints the token
+   npm run set-token           # paste it: writes CLAUDE_CODE_OAUTH_TOKEN to .env, runs echo-test
    ```
+
+   (Or set `CLAUDE_CODE_OAUTH_TOKEN` in `.env` by hand, or export it in your shell.
+   Don't rely on a logged-in Claude Code instead: the app can fall back to it, but
+   that login isn't always available or refreshable from the server's process.)
 
    The token is a key to the whole subscription: it lives only on this PC — never in
    the frontend, never in this repo. Fallback order if policy changes: set

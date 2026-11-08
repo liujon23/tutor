@@ -15,7 +15,7 @@ touching the file.
 > `data/curriculum.yaml` is normally `my-data/data/curriculum.yaml`. Check which
 > applies before editing.
 
-Read `skills/references/document-formats.md` first — it defines the YAML schema, ID
+Read `.claude/skills/references/document-formats.md` first — it defines the YAML schema, ID
 conventions, graph rules, and update gates.
 
 ## The setup conversation

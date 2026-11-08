@@ -34,7 +34,7 @@ then git-committed. **One lesson = one commit**; `git revert` undoes a bad one.
 | `scripts/` | CLI entry points; resolves the real paths (`scripts/lib.ts`) | teaching |
 | `server/` | HTTP + SSE, the Agent SDK session, the `commit_session` tool | curriculum semantics (delegates to core) |
 | `web/` | the PWA; `web/src/demo/` replays a recording instead of calling the server | everything server-side |
-| `skills/` | the Claude Code flows + the teaching contract (shared with the app) | implementation |
+| `.claude/skills/` | the Claude Code flows + the teaching contract (shared with the app) | implementation |
 
 On disk, that's:
 
@@ -47,7 +47,8 @@ core/        deterministic TS library — slicer, selector, validator, patcher
 scripts/     CLIs: start-lesson · commit-session · validate · export-lane
 server/      Fastify + Claude Agent SDK backend; serves the PWA
 web/         the PWA (vanilla TS + Vite); web/src/demo/ is the static replay
-skills/      Claude Code skills + the teaching contract (how lessons are taught)
+.claude/     skills/ — Claude Code skills + the teaching contract (how lessons are
+               taught); Claude Code loads skills from here automatically
 examples/    starter-data/ — what a fresh data root is seeded from
 tests/       node:test suite (npm test)
 ```
@@ -94,7 +95,7 @@ Two invariants make the design hold:
    constants live in `core/spacing.ts`).
 4. **`core/patcher.ts`** — validate-then-apply; note the compute-then-write shape
    so a late failure can't leave a partial write.
-5. **`skills/references/teaching-contract.md`** — how lessons are taught; shared
+5. **`.claude/skills/references/teaching-contract.md`** — how lessons are taught; shared
    verbatim between the CLI skill and the app's system prompt. The profile's
    confirmed patterns override its defaults.
 6. **`server/tutor-tool.ts`** — the commit pipeline (guards, ledgers, transcript,

@@ -1,7 +1,7 @@
 # Learner Profile
 <!-- Add your name to the title ("# Learner Profile — Ada") and the tutor will use it.
      This file is YOURS. The tutor reads it every lesson and updates it through the
-     gated patch flow described in skills/references/document-formats.md — but you can
+     gated patch flow described in .claude/skills/references/document-formats.md — but you can
      edit it by hand any time. It starts nearly empty on purpose: the system's job is
      to learn how you learn, one lesson at a time. -->
 

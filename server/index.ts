@@ -599,7 +599,7 @@ app.delete<{ Params: { id: string } }>("/api/lesson/:id", async (req, reply) => 
 // --- Startup ----------------------------------------------------------------
 
 function authNote(): string {
-  if (process.env.CLAUDE_CODE_OAUTH_TOKEN) return "CLAUDE_CODE_OAUTH_TOKEN (Pro subscription)";
+  if (process.env.CLAUDE_CODE_OAUTH_TOKEN) return "CLAUDE_CODE_OAUTH_TOKEN (Claude subscription)";
   if (process.env.ANTHROPIC_API_KEY) return "ANTHROPIC_API_KEY (metered API)";
   return "no token in env — the SDK will fall back to Claude Code's own login if present";
 }

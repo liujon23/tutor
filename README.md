@@ -89,10 +89,17 @@ motivation to learn, maybe find a buddy to learn something together. Or sign up 
 
 ## Quickstart
 
+**New to the command line?** Follow **[SETUP.md](SETUP.md)** instead. It covers
+which Claude plan you need (Pro or Max; the free plan can't run this), what to
+install first, and how to have Claude do the setup for you.
+
+Needs Node.js 20.19+ (or 22.12+), git, and Claude Code's `claude` command.
+
 ```bash
 git clone https://github.com/liujon23/tutor && cd tutor
 npm run setup          # install + build, with sanity checks
-claude setup-token     # prints a token — put it in .env (cp .env.example .env)
+claude setup-token     # prints a token for your Claude plan
+npm run set-token      # paste it; saves it to .env and checks it works
 npm run serve          # open http://127.0.0.1:4321
 ```
 
