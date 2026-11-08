@@ -1,0 +1,23 @@
+{
+  "$comment": "Probe-only patch for the starter data: records a pretend 'Lesson 1' so the probe can check that commit works. Never applied to the learner's real files.",
+  "lesson": {
+    "date": "2026-01-01",
+    "laneId": "ai",
+    "unitId": "ai-nn-foundations",
+    "topicIds": ["ai-nn-foundations-activation"],
+    "whatHappened": "Probe run: no real lesson. Checks the kit can apply a patch.",
+    "performanceSketch": "n/a (probe)",
+    "sourcesUsed": "None named.",
+    "feedbackCaptured": "skipped",
+    "askedAbout": "nothing"
+  },
+  "curriculum": {
+    "topicUpdates": [{ "id": "ai-nn-foundations-activation", "state": "shaky" }],
+    "laneUpdates": [
+      {
+        "id": "ai",
+        "nextUp": { "topicId": "ai-nn-foundations-backprop", "plan": "Probe placeholder plan." }
+      }
+    ]
+  }
+}

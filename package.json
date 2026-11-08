@@ -20,6 +20,7 @@
     "restart": "node scripts/restart.mjs",
     "build:web": "vite build web",
     "build:demo": "vite build web --mode demo",
+    "build:chat-kit": "node scripts/build-chat-kit.mjs",
     "dev:web": "vite web",
     "echo-test": "tsx scripts/echo-test.ts",
     "set-token": "tsx scripts/set-token.ts",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@types/node": "^20.14.0",
     "dompurify": "^3.4.11",
+    "esbuild": "^0.28.2",
     "highlight.js": "^11.11.1",
     "katex": "^0.17.0",
     "marked": "^18.0.5",

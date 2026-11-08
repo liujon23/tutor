@@ -13,6 +13,7 @@
     "scripts/**/*.ts",
     "tests/**/*.ts",
     "server/**/*.ts",
+    "chat-edition/**/*.ts",
     "web/src/lesson/reconcile.ts",
     "web/src/lesson/audio/text.ts",
     "web/src/lesson/audio/endpoint.ts",
