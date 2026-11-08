@@ -140,7 +140,7 @@ export function mapError(raw: string): string {
   switch (raw) {
     case "authentication_failed":
     case "oauth_org_not_allowed":
-      return "Auth failed — the subscription token may have expired. On the host PC, re-run `claude setup-token` and restart the server.";
+      return "Auth failed — the subscription token may have expired. On the host PC, run `claude setup-token`, then `npm run set-token`, and restart the server.";
     case "rate_limit":
       return "Hit the Pro rate limit — wait for the window to reset, or switch to Sonnet.";
     case "billing_error":

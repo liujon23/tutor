@@ -14,8 +14,8 @@ when it started — there's no hot reload. So most changes need a restart:
 | `server/` or `core/` logic | Restart the server |
 | `server/prompt.ts` (how the tutor teaches) | Restart **and** start a *new* lesson — a lesson's instructions are fixed when it's created, so a running lesson keeps the old ones even after a restart |
 | `web/src/*` (the UI) | Rebuild + reload: `npm run build:web`, then reload the page. An open app shows an "update available" toast when the server has a newer build; tap it |
-| `skills/references/teaching-contract.md` (how the tutor teaches, both media) | The single shared source: CLI lessons pick it up immediately; the app splices it into the prompt at server start, so restart **and** start a *new* lesson (same as `prompt.ts`). |
-| other `skills/**` | Nothing for the app — the skill files themselves are the *Claude Code CLI* flow, which the app never reads. They take effect on your next CLI lesson. |
+| `.claude/skills/references/teaching-contract.md` (how the tutor teaches, both media) | The single shared source: CLI lessons pick it up immediately; the app splices it into the prompt at server start, so restart **and** start a *new* lesson (same as `prompt.ts`). |
+| other `.claude/skills/**` | Nothing for the app — the skill files themselves are the *Claude Code CLI* flow, which the app never reads. They take effect on your next CLI lesson. |
 | `data/*` (curriculum, profile) | Nothing to restart — each new lesson reads these fresh |
 
 The **one-click restart below does the first three at once**: it stops the server,

@@ -1,5 +1,5 @@
 // The lesson system prompt for the app. The shared teaching contract
-// (skills/references/teaching-contract.md — single source for HOW to teach,
+// (.claude/skills/references/teaching-contract.md — single source for HOW to teach,
 // shared with the CLI skill) is spliced into the static prompt at module load;
 // what's authored here is only the app machinery: rendering capabilities, the
 // selection-screen handoff, per-message ratings, and the commit_session tool.
@@ -14,6 +14,7 @@ import type { LessonParams, TranscriptEntry, Via } from "./types.js";
 
 export const TEACHING_CONTRACT_PATH = join(
   ROOT,
+  ".claude",
   "skills",
   "references",
   "teaching-contract.md"

@@ -28,10 +28,13 @@ if (!existsSync(join(ROOT, "package.json"))) {
   console.error("[x] No package.json here — run this from the project root.");
   process.exit(1);
 }
-const major = Number(process.versions.node.split(".")[0]);
+// Matches "engines" in package.json; the floor comes from Vite (the web build).
+const [major, minor] = process.versions.node.split(".").map(Number);
 console.log(`Node ${process.versions.node} detected.`);
-if (major < 20) {
-  console.error(`[x] Node ${major} is too old. Install the current LTS from nodejs.org and re-run.`);
+const nodeOk = major > 22 || (major === 22 && minor >= 12) || (major === 20 && minor >= 19);
+if (!nodeOk) {
+  console.error(`[x] Node ${process.versions.node} is too old (need 20.19+ or 22.12+).`);
+  console.error("    Install the current LTS from https://nodejs.org, open a NEW terminal, and re-run.");
   process.exit(1);
 }
 
@@ -104,15 +107,16 @@ console.log(
   hasToken
     ? "Auth: a token was found in your environment."
     : [
-        "Auth: no token set. The app will try your existing Claude Code login,",
-        "      which is usually enough. If a lesson ever fails with an auth error,",
-        "      run `claude setup-token` and set CLAUDE_CODE_OAUTH_TOKEN to its output.",
+        "Auth: no token yet. Lessons in the app need one. Run these two:",
+        "        claude setup-token     (signs in through your browser, prints a token)",
+        "        npm run set-token      (paste it there; it saves and checks it)",
       ].join("\n")
 );
 console.log(`\nYour data: ${dataRoot}`);
 console.log("      (gitignored by this checkout, so `git pull` never touches your lessons.");
 console.log("       To keep it somewhere else: npm run init-data -- --dir <path>)");
 console.log("\nNext steps:");
+if (!hasToken) console.log("  0. Save your token:      claude setup-token, then npm run set-token");
 console.log("  1. Test it on this PC:   npm run serve   then open http://127.0.0.1:4321");
 console.log("  2. Reach it from phone:  open https://<pc-tailscale-name>.<tailnet>.ts.net/");
 console.log("     (one-time: expose it with `tailscale serve --bg 4321`; see SETUP.md/APP.md)");

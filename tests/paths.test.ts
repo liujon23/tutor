@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join, resolve, sep } from "node:path";
 
-import { DEFAULT_DATA_DIR, resolveTutorPaths, upsertEnv } from "../scripts/lib.js";
+import { DEFAULT_DATA_DIR, cleanPastedToken, resolveTutorPaths, upsertEnv } from "../scripts/lib.js";
 
 // A resolved absolute stand-in for the code repo — platform-appropriate.
 const CODE_ROOT = resolve(sep, "srv", "tutor-code");
@@ -72,4 +72,18 @@ test("upsertEnv uncomments the commented placeholder from .env.example", () => {
 
 test("upsertEnv handles an empty file", () => {
   assert.equal(upsertEnv("", "TUTOR_DATA_DIR", "/srv/data"), "TUTOR_DATA_DIR=/srv/data\n");
+});
+
+test("upsertEnv fills the commented token placeholder from .env.example", () => {
+  const example = "# Auth\n#CLAUDE_CODE_OAUTH_TOKEN=\n#ANTHROPIC_API_KEY=\n";
+  const out = upsertEnv(example, "CLAUDE_CODE_OAUTH_TOKEN", "sk-ant-oat01-abc");
+  assert.equal(out, "# Auth\nCLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-abc\n#ANTHROPIC_API_KEY=\n");
+});
+
+test("cleanPastedToken undoes terminal line-wrapping and pasted wrappers", () => {
+  assert.equal(cleanPastedToken("  sk-ant-oat01-abc\n"), "sk-ant-oat01-abc");
+  assert.equal(cleanPastedToken("sk-ant-oat01-ab\r\n  cd"), "sk-ant-oat01-abcd");
+  assert.equal(cleanPastedToken('CLAUDE_CODE_OAUTH_TOKEN="sk-ant-oat01-abc"'), "sk-ant-oat01-abc");
+  assert.equal(cleanPastedToken("export CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-abc"), "sk-ant-oat01-abc");
+  assert.equal(cleanPastedToken("   \n"), "");
 });
