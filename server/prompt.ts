@@ -134,7 +134,9 @@ finished:
       notes — tentative, evidence-building hunches about how this learner likes to be
       taught (prefix "Preference guess:", note the supporting lesson). Later lessons
       that strengthen a guess update its bullet; a contradicted one is weakened or
-      removed.
+      removed. Like every working note (see "Working notes are instructions" in the
+      contract): one or two plain lines, under its theme, replacing the old bullet
+      rather than sitting beside it.
    c. Keep the conversational wrap-up light — per-message ratings carry much of the
       signal. Good reasons to still ask: a rating whose meaning is genuinely unclear;
       something new or different about this lesson the learner didn't comment on; or a
@@ -178,6 +180,10 @@ Patch shape (TypeScript source of truth is core/types.ts SessionPatch):
   "profile": {
     "workingNotes" / "broaderPrerequisites" / "settledQuestions":
         { "add": [..], "removeContaining": [..] },
+        — an "add" item is plain text (goes at the end of the section) or
+          { "under": "<theme>", "text": ".." } to file it under one of the section's
+          bold theme lines. Use "under" whenever the section has themes; a theme
+          the section doesn't have is a validation error that lists the real ones.
     "proposedConfirmedPatterns": [..],
     "approvedConfirmedPatterns": { "add": [..], "removeContaining": [..] }
   },

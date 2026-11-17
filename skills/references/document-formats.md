@@ -122,7 +122,10 @@ be preserved):
   also where **preference guesses** live: tentative reads on how the learner likes to be taught,
   built up from per-message feedback in the app (bullets prefixed "Preference guess:",
   with supporting lessons noted). Guesses strengthen/weaken freely across sessions;
-  promotion into "How I learn best" goes through the confirmed-pattern gate.
+  promotion into "How I learn best" goes through the confirmed-pattern gate. The
+  section may be grouped under bold theme lines (`**Lanes**`, alone on a line); a
+  patch files a new note under one with `{under, text}`. What a note should and
+  shouldn't be is in the teaching contract ("Working notes are instructions").
 
 ## lesson-history.md
 
@@ -171,7 +174,9 @@ truth: `core/types.ts` (`SessionPatch`); worked example:
                  laneUpdates[]    — {id, currentUnit?, direction?, nextUp?},
                  newTopics[], newUnits[] },
   profile?:    { workingNotes / broaderPrerequisites / settledQuestions —
-                   {add[], removeContaining[]},
+                   {add[], removeContaining[]}; an add item is text (appended to
+                   the section) or {under: "<theme>", text} (placed after that
+                   bold theme's last bullet; an unknown theme rejects the patch),
                  proposedConfirmedPatterns[]   — surfaced, NEVER applied,
                  approvedConfirmedPatterns     — applied; only after the learner's explicit yes },
   project?:    { laneId, content }             — project-bearing lanes only; `content`

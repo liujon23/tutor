@@ -166,8 +166,15 @@ export interface NewUnitSpec {
   };
 }
 
+/**
+ * A bullet to add: plain text goes at the end of the section; `{ under, text }`
+ * goes under that bold theme line (`**Lanes**`), after the theme's last bullet.
+ * A section grouped by theme stays grouped only if its additions name one.
+ */
+export type BulletAdd = string | { under: string; text: string };
+
 export interface BulletEdits {
-  add?: string[];
+  add?: BulletAdd[];
   removeContaining?: string[];
 }
 
