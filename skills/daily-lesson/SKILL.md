@@ -3,7 +3,7 @@ name: daily-lesson
 description: Deliver a personalized, interactive tutoring lesson to the user, drawn from their learning documents via the repo's deterministic scripts. Use this whenever the user wants to learn, study, do today's lesson, continue a course, be taught or quizzed on a topic, or says things like "let's do a lesson", "teach me something", "what are we learning today", "start my lesson", "I want to study X", or names a topic they want to dig into. This is the user's standing daily-study system — reach for it for any "I want to learn / be tutored" moment, even when they don't say the word "lesson". Do NOT use it to create or restructure a course (that's the course-setup skill).
 ---
 
-# Daily Lesson (v2 — script-driven)
+# Daily Lesson
 
 This skill runs one tutoring lesson for the learner, end to end, in the terminal. All
 bookkeeping is done by the repo's scripts, not by you: you never read the three data
@@ -91,8 +91,8 @@ which the script surfaces and refuses to apply. You propose, the learner dispose
 Build a session patch (schema: `skills/references/document-formats.md`; worked
 example: `examples/session-patch.example.json`). Get the content right per the
 teaching contract's **Patch content** section — honest compact lesson entry, state
-changes for everything touched, `nextUp` always set, the profile gates, working-notes
-consolidation, and the `project` arm rules.
+changes for everything touched, `nextUp` always set, the profile gates, the
+working-notes rule, and the `project` arm rules.
 
 Write the patch to `.session/patch.json` (create the dir if needed), then run this
 **once** (a lesson commits exactly once — don't split it into multiple commits):

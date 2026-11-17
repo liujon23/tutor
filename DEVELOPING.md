@@ -2,7 +2,7 @@
 
 A short reference for when you edit the tutor and want the change to take effect —
 and a one-click way to restart the server. For first-time setup see **SETUP.md**;
-for the full ops reference see **APP.md**.
+for using and running the app see **APP.md**.
 
 ## What takes effect when you change…
 
@@ -13,14 +13,17 @@ when it started — there's no hot reload. So most changes need a restart:
 |---|---|
 | `server/` or `core/` logic | Restart the server |
 | `server/prompt.ts` (how the tutor teaches) | Restart **and** start a *new* lesson — a lesson's instructions are fixed when it's created, so a running lesson keeps the old ones even after a restart |
-| `web/src/*` (the UI) | Rebuild + reload: `npm run build:web`, then reload the page. On the phone the installed app caches; reopen it twice (or pull-to-refresh) to pick up the new build |
-| `skills/references/teaching-contract.md` (how the tutor teaches, both media) | The single shared source: CLI lessons pick it up immediately; the app splices it into the prompt at server start, so restart **and** start a *new* lesson (same as `prompt.ts`). No more mirroring by hand. |
+| `web/src/*` (the UI) | Rebuild + reload: `npm run build:web`, then reload the page. An open app shows an "update available" toast when the server has a newer build; tap it |
+| `skills/references/teaching-contract.md` (how the tutor teaches, both media) | The single shared source: CLI lessons pick it up immediately; the app splices it into the prompt at server start, so restart **and** start a *new* lesson (same as `prompt.ts`). |
 | other `skills/**` | Nothing for the app — the skill files themselves are the *Claude Code CLI* flow, which the app never reads. They take effect on your next CLI lesson. |
 | `data/*` (curriculum, profile) | Nothing to restart — each new lesson reads these fresh |
 
 The **one-click restart below does the first three at once**: it stops the server,
 rebuilds the web app, and starts fresh — so after clicking it, both backend and UI
 changes are live. (You still start a new lesson to pick up `prompt.ts` changes.)
+
+Restarting mid-lesson is safe: everything a lesson needs is in its session file
+under `.app/`, and it picks up where it was on your next message.
 
 ## The one-click restart
 
@@ -32,7 +35,7 @@ changes are live. (You still start a new lesson to pick up `prompt.ts` changes.)
 3. **Starts** a fresh server on localhost (`127.0.0.1`). Your phone/iPad reach it
    over the tailnet as HTTPS through `tailscale serve`, which terminates TLS and
    proxies to this local port — so make sure that's set up once (`tailscale serve
-   --bg 4321`; see APP.md).
+   --bg 4321`; see SETUP.md).
 
 It runs in the foreground: the window stays open while the server runs, showing its
 log. **Close the window to stop the server; run it again to restart.**

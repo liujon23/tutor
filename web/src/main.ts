@@ -410,8 +410,9 @@ export async function showSelect(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Update toast — sw.js serves the shell cache-first, so an installed PWA can
-// silently run one build behind. Compare the server's current build id
+// Update toast — a page loads the newest build (sw.js serves pages
+// network-first), but one left open keeps running the build it loaded, and the
+// offline fallback can be older still. Compare the server's current build id
 // (GET /api/version) against the one baked into this bundle (__BUILD_ID__);
 // on a mismatch, offer a one-tap cache-clear + reload.
 // ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@ name: course-setup
 description: Set up a brand-new learning course/lane for the user, or revisit and restructure an existing one — defining goals, doing a wide prerequisite sweep, and seeding the curriculum with an initial unit structure. Use this when the user wants to start learning a new subject area, add a new lane/course to their tutoring system, redefine what they're aiming for in a course, reshape or re-plan an existing course's units, or adjust their interest-area mix and weights. Reach for this on phrases like "I want to start learning X", "add a new course on Y", "I want to rethink where this course is going", or "let's re-plan this unit". Do NOT use it to deliver an actual lesson (that's the daily-lesson skill).
 ---
 
-# Course Setup (v2 — script-validated)
+# Course Setup
 
 This skill stands up or reshapes a course. It runs rarely, and it's the one activity
 that edits `data/curriculum.yaml` **directly** (structural work doesn't fit the
