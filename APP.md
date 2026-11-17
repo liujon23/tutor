@@ -217,9 +217,13 @@ lands in three places, all from one source:
 > focus mid-lesson, so a lesson can read as "long" without using any more of the
 > subscription. Still worth knowing; just don't treat it as spend.
 
-One small gap by design: the final wrap-up turn commits *before* its own result
-message arrives, so that last turn's tokens aren't counted — a tiny, consistent
-undercount.
+One gap: the final wrap-up turn commits *before* its own result message
+arrives, so the wrap-up panel and the transcript header don't count it — and it
+is the costliest turn of a lesson (the model writing the whole patch; 18% of
+cost across Lessons 29–50). The ledger does count it: when the result arrives
+the server appends a follow-up line for that lesson, which the report folds in.
+That line isn't part of the lesson's own git commit; it rides in the next one.
+Ledger lines written before this (through Lesson 50) lack the wrap-up turn.
 
 ### The analysis report
 

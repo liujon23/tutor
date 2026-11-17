@@ -38,6 +38,7 @@ npm run start-lesson -- --lane ai --size deep [--model opus] [--history 5]
 npm run commit-session -- --patch .session/patch.json [--dry-run]
 npm run validate
 npm run usage-report [-- --json]
+npm run drive-report [-- <session-id-prefix>] [-- --since 2026-11-01] [-- --json]
 npm run export-lane -- --lane sts [--out <dir>] [--md-only] [--clean]
 npm run unit-summaries [-- --check | --force]
 npm run backfill-completed-at [-- --dry-run]
@@ -54,6 +55,11 @@ npm run echo-test
 - **`usage-report`** analyzes the token/cost ledger: totals, per-lesson
   timeline, breakdowns by lane / size / model / feature. (The app's Stats
   screen shows the same analysis.)
+- **`drive-report`** analyzes the drive-mode diagnostics in `.app/diag/`:
+  broken rules and anomalies, where the wait for a reply goes, whether the
+  prompt cache held, what the stream lost and recovered, backgrounding,
+  endpointing and the recogniser. Every session by default; a session-id prefix
+  or `--since` narrows it.
 - **`export-lane`** renders a lane as a shareable Markdown + PDF document — no
   state or progress, just the direction, notes, and curated links. `--clean`
   strips all authored prose down to a bare syllabus / reading list, safe to

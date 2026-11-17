@@ -204,3 +204,24 @@ export function appendUsageLedger(
   appendFileSync(USAGE_LEDGER, line, "utf8");
   return "transcripts/usage.jsonl";
 }
+
+/** A ledger line holding turns that finished after their lesson's line was written. */
+export interface LedgerFollowUp {
+  lessonNumber: number;
+  followUp: true;
+  costModel: "delta";
+  turns: UsageRecord[];
+}
+
+/**
+ * Add a turn to a lesson that is already in the ledger. The wrap-up turn's
+ * result only arrives after commit_session has written the lesson's line and
+ * git-committed it, and that turn — the model composing the whole patch — is
+ * the most expensive of the lesson (18% of cost across Lessons 29–50). The
+ * follow-up line is not committed here; it rides in the next lesson's commit.
+ * Readers fold it into its lesson (parseLedger in usage-report.ts).
+ */
+export function appendUsageFollowUp(lessonNumber: number, record: UsageRecord, ledger: string = USAGE_LEDGER): void {
+  const line: LedgerFollowUp = { lessonNumber, followUp: true, costModel: "delta", turns: [record] };
+  appendFileSync(ledger, JSON.stringify(line) + "\n", "utf8");
+}

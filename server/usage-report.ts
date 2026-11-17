@@ -8,7 +8,9 @@ import {
   formatDuration,
   formatInt,
   formatUsd,
+  summarizeUsage,
   totalTokens,
+  type LedgerFollowUp,
   type LedgerMeta,
 } from "./usage.js";
 import type { LessonUsage, TokenCounts, UsageRecord } from "./types.js";
@@ -19,17 +21,34 @@ export interface LedgerEntry extends LedgerMeta {
   turns: UsageRecord[];
 }
 
-/** Parse JSONL text into entries, skipping blank or malformed lines. */
+/**
+ * Parse JSONL text into one entry per lesson, skipping blank or malformed
+ * lines. Follow-up lines (turns that finished after their lesson's line was
+ * written — see appendUsageFollowUp) are folded into their lesson: the turns
+ * are appended and the roll-up recomputed, keeping the lesson's wall clock.
+ * A follow-up whose lesson isn't in the ledger is dropped.
+ */
 export function parseLedger(text: string): LedgerEntry[] {
   const out: LedgerEntry[] = [];
+  const followUps: LedgerFollowUp[] = [];
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed) continue;
     try {
-      out.push(JSON.parse(trimmed) as LedgerEntry);
+      const parsed = JSON.parse(trimmed) as LedgerEntry | LedgerFollowUp;
+      if ("followUp" in parsed && parsed.followUp) followUps.push(parsed);
+      else out.push(parsed as LedgerEntry);
     } catch {
       /* a corrupt line shouldn't sink the whole report */
     }
+  }
+  for (const f of followUps) {
+    // The newest line for that lesson number: a re-used number can't happen
+    // through the patcher, but the last one is the one a follow-up trails.
+    const entry = [...out].reverse().find((e) => e.lessonNumber === f.lessonNumber);
+    if (!entry || !Array.isArray(f.turns)) continue;
+    entry.turns = [...entry.turns, ...f.turns];
+    entry.usage = summarizeUsage(entry.turns, entry.usage.wallClockMs);
   }
   return out;
 }

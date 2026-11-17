@@ -174,9 +174,11 @@ export function createCommitSessionTool(ctx: TutorToolContext) {
 
         try {
           const tArchive = Date.now(); // archiving logs (usage + feedback ledgers)
-          // Roll up resource use. The wrap-up turn's own tokens land after this
-          // tool returns, so they're a small known undercount — the record here
-          // covers everything through the moment the learner ended the lesson.
+          // Roll up resource use through the moment the learner ended the
+          // lesson. The wrap-up turn's own tokens land after this tool returns
+          // and it is the costliest turn of all, so the runner adds it to the
+          // ledger as a follow-up line when its result arrives. The transcript
+          // header and the wrap-up panel, written here, don't include it.
           const session = ctx.session();
           const records = session.usage ?? [];
           const wallClockMs = Date.parse(session.lastActivityAt) - Date.parse(session.createdAt);

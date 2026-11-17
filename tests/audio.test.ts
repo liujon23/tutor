@@ -802,17 +802,52 @@ test("backgrounding pauses; the tap resumes and re-speaks the interrupted chunk"
   assert.deepEqual(h.spoken.slice(-3), ["Interrupted sentence.", LINES.resuming, "Interrupted sentence."]);
 });
 
-test("the recogniser watchdog restarts a mic that went silent without end or error", () => {
+test("the recogniser watchdog restarts a quiet mic without a word when nothing was heard", () => {
   const h = new Harness();
   h.enable({ turnInFlight: false });
   h.finishSpeech();
   h.recStarted();
-  h.at(31_000).tick();
+  h.at(31_000).tick(); // thirty seconds of thinking, or a recogniser that stopped reporting
   assert.equal(h.diags("rec-watchdog").length, 1);
+  assert.ok(!h.spoken.includes(LINES.micStalled), "thinking time is not announced as a stall");
+  assert.equal(h.started(), 2, "a fresh recogniser session, straight away");
+  assert.equal(h.m.snapshot.phase, "listening");
+  assert.equal(h.actions.filter((a) => a.type === "cue" && a.cue === "listening").length, 1, "no second listening tone");
+  assert.deepEqual(h.invariants(), []);
+});
+
+test("the recogniser watchdog says so when the mic never opens", () => {
+  const h = new Harness();
+  h.enable({ turnInFlight: false });
+  h.finishSpeech(); // the recogniser is asked to start, and no audiostart ever comes
+  assert.equal(h.started(), 1);
+  h.at(h.now + 8_300).tick();
+  const dog = h.diags("rec-watchdog");
+  assert.equal(dog.length, 1);
+  assert.deepEqual((dog[0] as { detail?: { rec?: string; silent?: boolean } }).detail?.silent, false);
   assert.ok(h.spoken.includes(LINES.micStalled));
   h.finishSpeech();
   assert.equal(h.started(), 2, "listening again after the notice");
   assert.deepEqual(h.invariants(), []);
+});
+
+test("an answer that is never echoed reopens the stream, once", () => {
+  const h = new Harness();
+  h.enable({ turnInFlight: false });
+  h.finishSpeech();
+  h.recStarted();
+  h.at(10_000).run({ type: "rec_final", now: h.now, text: "attention weights" });
+  h.at(14_100).tick();
+  assert.deepEqual(h.submitted, ["attention weights"]);
+  h.run({ type: "send_result", now: h.now, ok: true });
+  h.at(20_000).tick();
+  assert.equal(h.actions.filter((a) => a.type === "reconnect").length, 0, "not before the echo is overdue");
+  h.at(24_200).tick();
+  assert.equal(h.diags("no-echo").length, 1);
+  assert.equal(h.actions.filter((a) => a.type === "reconnect").length, 1);
+  h.at(30_000).tick();
+  assert.equal(h.actions.filter((a) => a.type === "reconnect").length, 1, "once per answer");
+  assert.ok(!h.spoken.includes(LINES.connectionLost), "a quiet reconnect: nothing is known to be lost yet");
 });
 
 test("a system line mid-answer keeps the half-said answer, and its clock restarts", () => {

@@ -105,8 +105,11 @@ commuting week. **J would rather wait than feel rushed.**
 - **A final can arrive after `stop()`** — logged as `late-final`, never fed into
   the next answer.
 - **Recogniser watchdog:** iOS can stop `onresult` with neither `onerror` nor
-  `onend`. No event for 30s while listening (8s while starting) → abort, restart,
-  say "The mic stalled. Listening again.", keeping any half-said answer.
+  `onend`. No event for 30s while listening (8s while starting) → abort and
+  restart. A running recogniser that has heard nothing is restarted without a
+  word: it can't be told from J thinking, and 2 of the first 4 firings were
+  that. A mic that never opened, or went quiet mid-answer, also says "The mic
+  stalled. Listening again.", keeping any half-said answer.
 - **No auto-resume after an interruption.** Hidden → hard PAUSED, one tap to
   resume. A phone call breaks the gesture chain; auto-resuming yields a silent car.
 - **Never start recognition while speech is playing** — the machine's own *or*
@@ -219,8 +222,8 @@ brackets, so a wrong guess is recoverable.
   spawn plus 36s of Haiku *thinking* on a seven-word answer.
 - Read the iterator by hand: leaving a `for await` calls `return()`, which waits
   out the subprocess's shutdown (~3s).
-- **Never costs the turn:** a timeout (10s server, 15s client), error, empty
-  reply, or a "repair" whose word count drifts past max(4, 25%) — an answer or a
+- **Never costs the turn:** a timeout (10s server, 15s client), error (a failed
+  request's error text is never taken for a reply), empty reply, or a "repair" whose word count drifts past max(4, 25%) — an answer or a
   summary, not a transcription — sends the raw text.
 
 ## Recording that a lesson was spoken
@@ -249,6 +252,10 @@ drop. Network loss is the most likely way this fails, not an edge case.
   stuck session had already recorded it); a second stall → STUCK, tap to retry.
 - **A failed send is verified** before "That answer didn't reach the tutor": the
   POST's response can be lost after the server stored the answer.
+- **An answer that isn't echoed reopens the stream.** 10s after a submit with no
+  `user` event back, the `EventSource` is recreated (and so reconciled) without
+  a word. On 2026-11-03 the stream had died before the answer was sent, and the
+  reply waited on the 60s silence clock.
 - **Reload-on-resume:** `{lessonId}` is kept in localStorage while drive mode is
   on; a reload reopens that lesson in drive mode, PAUSED, waiting for the tap
   that re-unlocks audio.
@@ -266,7 +273,9 @@ only when it's *acting* on a problem.
   hide / `pagehide` (`sendBeacon`), mirrored in localStorage until acknowledged
   (~2MB cap). The server appends client and server records to
   `<data root>/.app/diag/<sessionId>.jsonl` (25MB cap; never in git).
-- **Client records:** every recogniser event with latencies; per utterance the
+- **Client records:** every recogniser event with latencies (an interim result
+  as its length and last 40 characters — in full they were 54% of the log); per
+  utterance the
   markdown slice, spoken text, estimated vs actual duration, and the audio
   session and `AudioContext` state at its start; endpointer decision traces
   (which clock fired, timings); taps; SSE open/error/reconcile; wake lock,
@@ -275,10 +284,14 @@ only when it's *acting* on a problem.
 - **Invariants:** never `start()` while speaking or recognising; never submit
   during a turn or an empty buffer; never speak a sigil.
 - **Server records:** runner start/revive/close, the tool list and MCP state at
-  SDK init, how long the runner waited for the `tutor` tool server
+  SDK init (`sdk-init-unexpected` if it holds anything a lesson shouldn't
+  have), how long the runner waited for the `tutor` tool server
   (`mcp-ready`), SSE connect/disconnect, every
   dispatched event with its listener count (0 = lost to a gap), turn timing
   (send → first delta → result), full `rate_limit_info`, cleanup, kicks, ending.
+- **Reading it:** `npm run drive-report` (one session by id prefix, or all)
+  summarises the log — broken rules, anomalies, the wait for a reply split into
+  its parts, cache misses, events lost to a stream gap and recovered.
 - **Pre-drive check** (debug strip, run parked): Safari, HTTPS, recognition,
   voices, wake lock, server health, heartbeat, current build, a tone then speech
   at equal volume, and a mic round trip — spoken and listed.
@@ -313,8 +326,11 @@ the diagnostics widen it.
   mode" — and a web page can't choose the built-in mic instead. With playback
   mode the tutor's voice can use media audio; the car still switches while J
   answers. **The phone speaker remains the default.**
-- **Latency:** the tutor's first word arrives a median ~14s after an answer
-  (p90 ~25s); turns with web tools run to ~100s.
+- **Latency:** the tutor's first word comes a median ~24s after an answer is
+  submitted (p90 ~45s): ~2.4s cleanup and send, ~15s to the model's first text
+  (about 1,000 of a spoken reply's ~1,360 output tokens are thinking), ~2.5s to
+  speech — on top of the 4s silence clock. Turns with web tools take a median
+  54s (through Lesson 50, from `drive-report`).
 - Wake lock acquires and holds; `speechSynthesis` reports 223 voices at load.
 
 **Not yet measured:** standalone-PWA mode (recognition is reported to fail
@@ -356,10 +372,13 @@ there), navigation prompts interrupting speech, Low Power Mode and the wake lock
   `cacheCreation` when reasoning about the cost of many short spoken turns. A
   turn with `cacheRead` 0 less than an hour after the previous one is a broken
   prefix, not an expired cache — something before the messages changed.
-- **A new runner's first message must wait for the `tutor` MCP server.** Once
-  the CLI answers, it lists no MCP servers for ~0.5s; a message already queued
-  goes out in that gap without `commit_session`, so the next call's prompt
-  doesn't match and re-writes the whole cache (see the decisions log).
+- **The tool list must not change after a runner's first call.** A tool that
+  appears later changes the prompt prefix, and the next call re-writes the
+  whole cache. Two things hold it still: `strictMcpConfig` (only the `tutor`
+  server — no account connectors, plugins or `.mcp.json`), and the runner
+  holding its first message until `tutor` is connected and nothing is pending
+  (once the CLI answers, it lists no MCP servers for ~0.5s). `sdk-init-unexpected`
+  in the log means the list has something it shouldn't (see the decisions log).
 
 ## Decisions log
 
@@ -397,6 +416,22 @@ J's calls, in order, with the evidence behind them.
   now holds its first message until `tutor` reports connected (≤10s, logged as
   `mcp-ready`). Check it in the ledger: turn 1's `cacheRead` should be about
   turn 0's `cacheCreation`.
+- **That wasn't the cause** (2026-11-16, from the diag logs through Lesson 50):
+  with the wait live from Oct 31, Lessons 41–44 still missed on turn 2. The
+  `sdk-init` records show why: 3 tools on a runner's first call, 11 on its
+  second — the claude.ai account connector "Claude Docs" had finished
+  connecting and added 8 tools (the extra ~3.1k tokens noted above). The misses
+  stopped on Nov 8 only because the server moved from the Claude Code login to
+  `CLAUDE_CODE_OAUTH_TOKEN`, which loads no account connectors. Now pinned with
+  `strictMcpConfig`, the wait extended to any pending server, and a logged
+  tripwire. The misses that remain are turns over an hour after the last
+  (23 of 325, ~20% of spend): the cache has expired, and a lesson spread over
+  days pays for the whole prompt again each time it's picked up.
+- **Same audit** (J's calls): the commit turn joins the usage ledger as a
+  follow-up line (it was 18% of cost and uncounted); a quiet mic with nothing
+  heard restarts silently; an unechoed answer reopens the stream; interims are
+  logged by length; cleanup refuses a failed request's error text. Thinking
+  effort stays as it is.
 
 ## Open items
 
@@ -404,8 +439,8 @@ J's calls, in order, with the evidence behind them.
   `CurriculumUnitLesson`; nothing renders them yet.
 - **A math-heavy warning on the select screen** when Listen is on — how to judge
   "math-heavy" (the lane, or math density in past transcripts) is undecided.
-- **Offline tools never built:** `drive-report` (summarise a session's diag log)
-  and `speech-audit` (run `text.ts` over every archived tutor message).
+- **Offline tool never built:** `speech-audit` (run `text.ts` over every
+  archived tutor message).
 - **Cost per lesson** — `via` on usage records makes spoken vs typed cost exact;
   worth a look once there are more drives.
 - **Thinking before the first word.** A spoken reply is ~230 words (~300 tokens)

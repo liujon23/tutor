@@ -2,7 +2,7 @@
 // under <data root>/.app/diag/, holding both what the server saw (runner
 // lifecycle, every dispatched event with its listener count, turn timing,
 // SSE connects) and the client's uploaded batches. Read afterwards with
-// `npm run drive-report`.
+// `npm run drive-report` (server/drive-report.ts).
 //
 // Deliberately over-built (docs/drive-mode.md, Diagnostics): this app has
 // one user, so a log line costs nothing, while a silent failure on a drive

@@ -127,6 +127,9 @@ const SPOKEN_CUES: Partial<Record<Cue, string>> = {
   "still-working": "Still working.",
 };
 
+/** How much of an interim result's text the diag log keeps (its end: the newest words). */
+const INTERIM_TAIL_CHARS = 40;
+
 /** Gap after a lead-in tone before speech, so the waking route clips the tone, not the words. */
 const LEAD_IN_MS = 250;
 
@@ -467,7 +470,10 @@ export class AudioAdapter {
         }
       }
       if (interim) {
-        this.log("rec-interim", { session: this.recSession, text: interim });
+        // Each interim repeats the whole phrase so far: logged in full they
+        // were 54% of the diag log. Its timing is what the endpointer analysis
+        // needs; the words are in the finals and the submitted answer.
+        this.log("rec-interim", { session: this.recSession, chars: interim.length, tail: interim.slice(-INTERIM_TAIL_CHARS) });
         if (!this.capture) this.input({ type: "rec_interim", now: now(), text: interim });
       }
     };

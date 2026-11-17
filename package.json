@@ -11,6 +11,7 @@
     "validate": "tsx scripts/validate.ts",
     "init-data": "tsx scripts/init-data.ts",
     "usage-report": "tsx scripts/usage-report.ts",
+    "drive-report": "tsx scripts/drive-report.ts",
     "export-lane": "tsx scripts/export-lane.ts",
     "test": "tsx --test tests/*.test.ts",
     "serve": "tsx server/index.ts",

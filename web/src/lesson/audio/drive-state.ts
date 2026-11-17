@@ -291,7 +291,6 @@ export class DriveMachine {
   private listening = false;
   private listenCued = false;
   private ep: EndpointState = initialEndpoint();
-  private recStartAt = 0;
   private lastRecEventAt = 0;
   private recRetryAt: number | null = null;
   private recBackoffIdx = 0;
@@ -904,7 +903,6 @@ export class DriveMachine {
     this.invariant(!this.speaking, "listen-while-speaking");
     this.invariant(!this.turnInFlight, "listen-during-turn");
     this.rec = "starting";
-    this.recStartAt = now;
     this.lastRecEventAt = now;
     this.recRetryAt = null;
     this.emit({ type: "startRecognizer" });
@@ -921,7 +919,6 @@ export class DriveMachine {
 
   private recAudioStart(now: number): void {
     this.lastRecEventAt = now;
-    this.diag("rec-audiostart", { latencyMs: now - this.recStartAt });
     if (this.rec === "starting") this.rec = "running";
     this.recBackoffIdx = 0;
     if (this.listening && this.ep.phase === "hearing" && this.ep.lastActivityAt === null) {
@@ -941,13 +938,11 @@ export class DriveMachine {
       this.diag("late-final", { text, confidence });
       return;
     }
-    this.diag("rec-final", { text, confidence });
     this.applyEp(onFinal(this.ep, text, now), now);
   }
 
   private recEnd(now: number): void {
     this.lastRecEventAt = now;
-    this.diag("rec-end", { sessionMs: now - this.recStartAt });
     this.rec = "stopped";
     if (!this.listening) return;
     const step = onRecognizerEnd(this.ep, now);
@@ -988,7 +983,8 @@ export class DriveMachine {
     this.recBackoffIdx++;
     this.recRetryAt = now + delay;
     if (error === "start-threw") this.rec = "stopped";
-    this.anomaly("rec-error", { error, message, retryInMs: delay });
+    // The adapter logs the error itself as `rec-error`; this is what was done about it.
+    this.anomaly("rec-backoff", { error, message, retryInMs: delay });
   }
 
   private applyEp(step: EndpointStep, now: number): void {
@@ -1114,13 +1110,27 @@ export class DriveMachine {
       const quiet = now - this.lastRecEventAt;
       const limit = this.rec === "starting" ? this.cfg.recStartTimeoutMs : this.cfg.recWatchdogMs;
       if (quiet >= limit) {
-        this.anomaly("rec-watchdog", { rec: this.rec, quietMs: quiet });
+        // A running recogniser that has heard nothing is, as far as anyone can
+        // tell, the learner thinking: thinking time is free (endpoint.ts), and
+        // "The mic stalled." 30s into it is an interruption, not help (2 of the
+        // 4 firings through Lesson 50). Restart it without a word. A mic that
+        // never started, or went quiet mid-answer, still gets the notice.
+        const silent = this.rec === "running" && this.ep.phase === "idle";
+        this.anomaly("rec-watchdog", { rec: this.rec, quietMs: quiet, silent });
         this.emit({ type: "abortRecognizer" });
-        this.rec = "stopped";
-        // Re-opened after the spoken notice drains; a half-said answer is kept.
-        if (this.ep.phase === "hearing") this.resumeBuffer = keepHeard(this.ep);
-        this.listening = false;
-        this.say(LINES.micStalled, "rec-watchdog");
+        if (silent) {
+          // `end` restarts it (recEnd); if `end` never comes, the stop timeout
+          // above gives up on it and the backoff clock below starts a new one.
+          this.rec = "stopping";
+          this.recRetryAt = now;
+          this.lastRecEventAt = now;
+        } else {
+          this.rec = "stopped";
+          // Re-opened after the spoken notice drains; a half-said answer is kept.
+          if (this.ep.phase === "hearing") this.resumeBuffer = keepHeard(this.ep);
+          this.listening = false;
+          this.say(LINES.micStalled, "rec-watchdog");
+        }
       }
     }
 
@@ -1134,6 +1144,11 @@ export class DriveMachine {
     if (this.pendingEcho && !this.pendingEcho.warned && now - this.pendingEcho.at >= this.cfg.echoTimeoutMs) {
       this.pendingEcho.warned = true;
       this.anomaly("no-echo", { text: this.pendingEcho.text, ms: now - this.pendingEcho.at });
+      // The send went out and the stream didn't echo it: the stream is the
+      // likeliest casualty (2026-11-03: it had died before the answer was sent,
+      // and the reply waited on the 60s silence clock). Reopen it now, quietly
+      // — a reconnect reconciles, so a reply already written is picked up.
+      this.emit({ type: "reconnect" });
     }
 
     // Turn in flight and nothing to say: a cue so silence doesn't read as broken.

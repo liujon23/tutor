@@ -20,8 +20,10 @@ import {
   turnTag,
   withTurnTag,
 } from "../server/prompt.js";
-import { StreamIds, endAlreadyPending, isFailedRequest, lastUnansweredUser } from "../server/runner.js";
-import { countLearnerTurns, usageFromResult } from "../server/usage.js";
+import { StreamIds, endAlreadyPending, isFailedRequest, lastUnansweredUser, unexpectedAtInit } from "../server/runner.js";
+import { appendUsageFollowUp, countLearnerTurns, summarizeUsage, usageFromResult } from "../server/usage.js";
+import { readLedger } from "../server/usage-report.js";
+import { analyzeDrive, dist, formatDriveReport, parseDiag } from "../server/drive-report.js";
 import { renderTranscript } from "../server/transcript.js";
 import {
   createClientBatchWriter,
@@ -32,7 +34,7 @@ import {
 import { readSessionFiles, writeJsonAtomic } from "../server/store.js";
 import { END_TURN_TEXT, SESSION_EXPIRY_MS, sessionExpiresAt } from "../server/params.js";
 import { buildLessonIndex } from "../server/lesson-index.js";
-import { CLEANUP_SYSTEM, acceptCleanup, cleanTranscript, cleanupPrompt, tidyCleanup, withHeard } from "../server/cleanup.js";
+import { CLEANUP_SYSTEM, acceptCleanup, cleanTranscript, cleanupPrompt, replyText, tidyCleanup, withHeard } from "../server/cleanup.js";
 import type { StoredSession, TranscriptEntry } from "../server/types.js";
 
 const SID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
@@ -413,6 +415,23 @@ test("cleanup falls back to the raw text on a timeout, an error, or a rejected r
 
   const chatty = await cleanTranscript(raw, "", async () => ({ text: "Great question! Attention heads are parallel attention computations, each with its own projections." }));
   assert.deepEqual([chatty.text, chatty.fallback], ["the tension heads", "rejected"]);
+  assert.match(chatty.rejected ?? "", /^Great question!/, "what the model wrote instead is kept for the log");
+  assert.equal(ok.rejected, undefined);
+});
+
+test("a failed cleanup request is an error, never the learner's words", () => {
+  // 2026-11-08: the login had expired and the "reply" was the error text. Its
+  // eleven words pass the word-count check for any answer of 7 to 15 words.
+  const failed = {
+    type: "assistant",
+    error: "authentication_failed",
+    message: { content: [{ type: "text", text: "Failed to authenticate: OAuth session expired and could not be refreshed" }] },
+  };
+  assert.equal(acceptCleanup("I think it is because the gradient vanishes over many steps", failed.message.content[0].text), true, "the old guard alone lets it through");
+  assert.throws(() => replyText(failed), /authentication_failed/);
+  assert.equal(replyText({ type: "assistant", message: { content: [{ type: "text", text: "The attention heads." }] } }), "The attention heads.");
+  assert.equal(replyText({ type: "system" }), null);
+  assert.equal(replyText({ type: "assistant", message: { content: [{ type: "tool_use" }] } }), "");
 });
 
 test("the cleanup prompt carries the tutor's message and the transcript, and stays bounded", () => {
@@ -427,4 +446,115 @@ test("the tutor gets the repaired text with the raw recognition beside it", () =
   assert.equal(withHeard("The attention heads.", "the tension heads"), 'The attention heads.\n\n[raw speech recognition, before cleanup: "the tension heads"]');
   assert.equal(withHeard("Yes.", undefined), "Yes.");
   assert.equal(withHeard("yes", " yes "), "yes", "nothing to add when cleanup changed nothing");
+});
+
+// --- The session's tool list ---------------------------------------------------
+
+test("a lesson's init is pinned to the web tools, commit_session and the tutor server", () => {
+  const pinned = unexpectedAtInit(
+    ["WebFetch", "WebSearch", "mcp__tutor__commit_session"],
+    [{ name: "tutor", status: "connected" }]
+  );
+  assert.deepEqual(pinned, { tools: [], servers: [] });
+  // What Lessons 41–44 logged on a runner's second call: an account connector had joined.
+  const leaked = unexpectedAtInit(
+    ["WebFetch", "WebSearch", "mcp__claude_ai_Claude_Docs__create", "mcp__tutor__commit_session"],
+    [
+      { name: "claude.ai Claude Docs", status: "connected" },
+      { name: "claude.ai Gmail", status: "needs-auth" },
+      { name: "tutor", status: "connected" },
+    ]
+  );
+  assert.deepEqual(leaked.tools, ["mcp__claude_ai_Claude_Docs__create"]);
+  assert.deepEqual(leaked.servers, ["claude.ai Claude Docs=connected", "claude.ai Gmail=needs-auth"]);
+  assert.deepEqual(unexpectedAtInit(undefined, undefined), { tools: [], servers: [] });
+});
+
+// --- The commit turn in the usage ledger --------------------------------------------
+
+test("a turn that finishes after the commit is folded into its lesson's ledger entry", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tutor-ledger-"));
+  const ledger = join(dir, "usage.jsonl");
+  const turn = (costUsd: number, tools: string[] = []) =>
+    usageFromResult({ usage: { input_tokens: 2, output_tokens: 100, cache_read_input_tokens: 1000 }, duration_ms: 5000 }, { model: "claude-opus-4-8", tools, hadImage: false, via: "spoken" }, costUsd);
+  const line = (lessonNumber: number, turns: ReturnType<typeof turn>[]) =>
+    JSON.stringify({ lessonNumber, date: "2026-11-12", laneId: "ai", unitId: "u", topicIds: ["t"], size: "standard", committedAt: "2026-11-12T00:00:00Z", costModel: "delta", usage: summarizeUsage(turns, 60_000), turns }) + "\n";
+  writeFileSync(ledger, line(49, [turn(1)]) + line(50, [turn(0.25), turn(0.5)]), "utf8");
+
+  appendUsageFollowUp(50, turn(0.41, ["mcp__tutor__commit_session"]), ledger);
+
+  const entries = readLedger(ledger);
+  assert.equal(entries.length, 2, "the follow-up is not a lesson of its own");
+  const l50 = entries.find((e) => e.lessonNumber === 50)!;
+  assert.equal(l50.turns.length, 3);
+  assert.equal(l50.usage.turns, 3);
+  assert.ok(Math.abs(l50.usage.costUsd - 1.16) < 1e-9);
+  assert.equal(l50.usage.wallClockMs, 60_000, "the lesson's wall clock is kept");
+  assert.equal(entries.find((e) => e.lessonNumber === 49)!.usage.turns, 1, "other lessons untouched");
+
+  // A follow-up for a lesson the ledger doesn't hold is dropped, not invented.
+  appendUsageFollowUp(77, turn(9), ledger);
+  assert.equal(readLedger(ledger).length, 2);
+});
+
+// --- drive-report --------------------------------------------------------------
+
+test("drive-report reads a log: duplicates dropped, waits split, cache and stream counted", () => {
+  const sv = (at: string, kind: string, detail: unknown, level = "info") => JSON.stringify({ src: "server", at, kind, level, detail });
+  let seq = 0;
+  const cl = (at: string, kind: string, detail: unknown, level = "info", batch = "b1") =>
+    JSON.stringify({ src: "client", batch, build: "x", seq: ++seq, t: 0, at, kind, level, state: "", detail });
+  const tokens = (cacheRead: number, cacheCreation: number) => ({ input: 2, output: 500, cacheRead, cacheCreation });
+  const T = (s: number) => new Date(Date.UTC(2026, 10, 12, 18, 0, s)).toISOString();
+  const submit = cl(T(100), "ep-submit", { reason: "silence", silenceMs: 4000, heardMs: 20_000, midSentence: false });
+  const text = [
+    // Turn 0: the kickoff writes the prompt.
+    sv(T(0), "sdk-init", { tools: ["WebFetch", "WebSearch", "mcp__tutor__commit_session"], mcpServers: [{ name: "tutor", status: "connected" }] }),
+    sv(T(10), "result", { msSinceSend: 9000, isError: false, via: "spoken", tools: [], tokens: tokens(1600, 25_000), costUsd: 0.26 }),
+    // The learner answers; the stream is down for the reply.
+    submit,
+    submit, // the same record again: a batch re-sent after a lost ack
+    cl(T(102), "send-ok", {}),
+    sv(T(102), "send", { via: "spoken" }),
+    sv(T(102), "sdk-init", { tools: ["WebFetch", "WebSearch", "mcp__claude_ai_Claude_Docs__read", "mcp__tutor__commit_session"], mcpServers: [{ name: "claude.ai Claude Docs", status: "connected" }, { name: "tutor", status: "connected" }] }),
+    sv(T(117), "first-delta", { msSinceSend: 15_000 }),
+    cl(T(119), "speak", { gen: 3, kind: "tutor" }),
+    cl(T(120), "tts-start", { gen: 3 }),
+    sv(T(125), "dispatch", { type: "assistant", listeners: 0 }, "anomaly"),
+    sv(T(125), "result", { msSinceSend: 23_000, isError: false, via: "spoken", tools: [], tokens: tokens(0, 30_000), costUsd: 0.4 }),
+    sv(T(125), "dispatch", { type: "turn_done", listeners: 1 }),
+    cl(T(126), "fill-gap", { id: "m1" }),
+    cl(T(127), "rec-watchdog", { rec: "running", quietMs: 30_000, silent: true }, "anomaly"),
+    cl(T(128), "listen-while-speaking", {}, "invariant"),
+    "{ not json",
+    "",
+  ].join("\n");
+
+  const lines = parseDiag(text);
+  assert.equal(lines.filter((l) => l.kind === "ep-submit").length, 1, "re-sent client records are counted once");
+  const a = analyzeDrive([{ id: SID, lines }]);
+  assert.equal(a.records, lines.length);
+  assert.deepEqual(a.invariants, { "listen-while-speaking": 1 });
+  assert.equal(a.anomalies["client:rec-watchdog"], 1);
+  assert.equal(a.anomalies["server:dispatch"], undefined, "lost dispatches are the stream's table, not an anomaly row");
+  assert.deepEqual([a.turns.spoken, a.turns.typed], [2, 0]);
+  assert.equal(a.wait.silenceMs.p50, 4000);
+  assert.equal(a.wait.cleanupAndSendMs.p50, 2000);
+  assert.equal(a.wait.firstDeltaMs.p50, 15_000);
+  assert.equal(a.wait.deltaToSpeechMs.p50, 3000);
+  assert.equal(a.wait.submitToSpeechMs.p50, 20_000);
+  assert.equal(a.cache.misses, 1, "the first turn writing the prompt is not a miss; the second re-writing it is");
+  assert.equal(a.cache.shortGap.length, 1);
+  assert.ok(a.cache.shortGap[0].gapMin < 2);
+  assert.deepEqual([a.cache.unpinnedInits, a.cache.inits], [1, 2]);
+  assert.deepEqual([a.stream.dispatched, a.stream.lostTotal, a.stream.lost.assistant, a.stream.filled], [2, 1, 1, 1]);
+  assert.deepEqual([a.recognizer.watchdog, a.recognizer.watchdogSilent], [1, 1]);
+
+  const report = formatDriveReport(a);
+  assert.match(report, /Broken rules: 1/);
+  assert.match(report, /within an hour of the last turn: 1/);
+  assert.match(report, /1 of 2 inits listed a tool or server a lesson shouldn't have/);
+  assert.match(formatDriveReport(analyzeDrive([])), /No drive-mode diagnostics/);
+  assert.deepEqual(dist([]), { n: 0, p50: null, p90: null, max: null });
+  assert.deepEqual(dist([3, 1, 2]), { n: 3, p50: 2, p90: 3, max: 3 });
 });
