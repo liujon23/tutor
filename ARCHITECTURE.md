@@ -42,7 +42,8 @@ On disk, that's:
 my-data/     YOUR state — gitignored here, and its own git repo:
                data/  profile.md · curriculum.yaml · lesson-history.md
                       (+ unit-summaries.json — derived, viewer-only, regenerable)
-               transcripts/ · .app/
+               transcripts/   archived lessons, their images, the usage and feedback ledgers
+               .app/          session files, image cache, diagnostics — never in git
 core/        deterministic TS library — slicer, selector, validator, patcher
 scripts/     CLIs: start-lesson · commit-session · validate · export-lane
 server/      Fastify + Claude Agent SDK backend; serves the PWA
@@ -70,7 +71,7 @@ summary — is written ahead of time by `npm run unit-summaries` and cached in
 `data/unit-summaries.json` behind a structure hash, so serving a page never
 calls a model.
 
-Two invariants make the design hold:
+Three invariants make the design hold:
 
 1. **Everything writes through the same patcher.** The CLI (`commit-session`) and
    the app (`server/tutor-tool.ts`) both call `checkPatch` → `applySessionPatch`.
@@ -123,16 +124,12 @@ context and no write path — a spoken turn differs only in a `via: "spoken"` ta
 the server turns into a model-only prefix ("reply in spoken form"), and in
 counts on the usage ledger and markers in the archived transcript.
 
-The browser side lives in `web/src/lesson/audio/`. The rules are in four pure,
-import-free modules tested in `tests/audio.test.ts` — `text.ts` (markdown →
-speech), `endpoint.ts` (when the learner has finished answering),
-`drive-state.ts` (the turn-taking state machine) and `diag.ts` — and every
-browser API is confined to `adapter.ts`. On the server, `server/cleanup.ts`
-tidies a spoken answer's transcription with a small model before it's sent, and
-`server/diag.ts` writes the diagnostics both sides log to `.app/diag/`.
-
-[docs/drive-mode.md](docs/drive-mode.md) is the reference: how it works, what
-the phone was measured to do, the traps, and the decisions behind it.
+The browser side is `web/src/lesson/audio/`: four pure modules that hold the
+rules (and are tested in `tests/audio.test.ts`), with every browser API confined
+to `adapter.ts`. The server adds `server/cleanup.ts` (tidying a spoken answer's
+transcription) and `server/diag.ts` (the diagnostics log, read with
+`npm run drive-report`). [docs/drive-mode.md](docs/drive-mode.md) is the
+reference.
 
 ## Demo mode
 

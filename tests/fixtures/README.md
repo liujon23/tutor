@@ -1,13 +1,11 @@
 # Test fixtures
 
 A **fully synthetic** snapshot of `data/`, derived from the example course
-(`data/curriculum.yaml`/`profile.md`/`lesson-history.md` as shipped to new
-learners) and then hand-edited into a controlled scenario that
-`tests/core.test.ts` asserts against exactly. Nothing here is real learner
-data — no names, no real conversation history. Only the `shipped curriculum
-is valid` test still reads the real `data/curriculum.yaml`, and it only
-asserts structural invariants (validates, at least one lane), not exact
-content, because the real repo's data differs across checkouts.
+(`examples/starter-data/data/`, as shipped to new learners) and then hand-edited
+into a controlled scenario that `tests/core.test.ts` asserts against exactly.
+Nothing here is real learner data — no names, no real conversation history. The
+`shipped curriculum is valid` test reads the starter course itself and asserts
+only structural invariants (it validates, it has at least one lane).
 
 The controlled scenario, in `curriculum.yaml`:
 

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -389,6 +389,72 @@ test("a needle that misses lists the section's bullets; an empty one is refused"
   assert.match(miss, /"Preference guess: check-questions/);
   const [empty] = checkProfilePatch(paths.profile, { workingNotes: { removeContaining: ["  "] } });
   assert.match(empty, /empty removeContaining/);
+});
+
+const THEMED_NOTES = [
+  "**What makes teaching work**",
+  "- Build on the learner's earlier arguments.",
+  "- When they get stuck, the cause is usually a missing fact; supply it rather than",
+  "  test it.",
+  "",
+  "**Lanes**",
+  "- STS: ground it in their academic life.",
+  "",
+  "**Tooling**",
+  "",
+];
+
+/** The fixture profile with its Working notes replaced by a themed section. */
+function themedProfile(): DataPaths {
+  const paths = scratchCopy();
+  const lines = readFileSync(paths.profile, "utf8").split("\n");
+  const start = lines.findIndex((l) => l.startsWith("## Working notes"));
+  const end = lines.findIndex((l, i) => i > start && l.startsWith("## "));
+  lines.splice(start + 1, end - start - 1, ...THEMED_NOTES);
+  writeFileSync(paths.profile, lines.join("\n"), "utf8");
+  return paths;
+}
+
+test("a note added under a theme lands after that theme's last bullet", () => {
+  const paths = themedProfile();
+  applyProfilePatch(paths.profile, {
+    workingNotes: {
+      add: [
+        { under: "What makes teaching work", text: "Give the precise term when they are right but vague." },
+        { under: "lanes", text: "Art: say what each image argues." },
+        { under: "**Tooling**", text: "Mermaid doesn't render; use prose." },
+        "A note with no theme goes at the end.",
+      ],
+    },
+  });
+  const notes = readFileSync(paths.profile, "utf8").split("\n");
+  const at = (needle: string) => notes.findIndex((l) => l.includes(needle));
+  assert.ok(at("test it.") < at("Give the precise term") && at("Give the precise term") < at("**Lanes**"), "after the theme's wrapped last bullet, before the next theme");
+  assert.equal(notes[at("Give the precise term") + 1], "", "the blank line before the next theme is kept");
+  assert.ok(at("STS: ground it") < at("Art: say what") && at("Art: say what") < at("**Tooling**"), "theme names match without regard to case");
+  assert.equal(at("Mermaid doesn't render"), at("**Tooling**") + 1, "an empty theme takes its first bullet straight after its line");
+  assert.ok(at("A note with no theme") > at("Mermaid doesn't render") && at("A note with no theme") < at("## Update rules"));
+});
+
+test("an unknown theme rejects the patch and names the real ones; an empty note is refused", () => {
+  const paths = themedProfile();
+  const before = readFileSync(paths.profile, "utf8");
+  const [miss] = checkProfilePatch(paths.profile, { workingNotes: { add: [{ under: "Pedagogy", text: "x" }] } });
+  assert.match(miss, /no theme 'Pedagogy' in section '## Working notes'/);
+  assert.match(miss, /Its themes: "What makes teaching work" \| "Lanes" \| "Tooling"/);
+  const p = structuredClone(goodPatch);
+  p.profile = { workingNotes: { add: [{ under: "Pedagogy", text: "x" }] } };
+  assert.ok(checkPatch(paths, p).some((e) => e.startsWith("profile:") && e.includes("no theme")));
+  assert.equal(readFileSync(paths.profile, "utf8"), before, "nothing written");
+
+  const [empty] = checkProfilePatch(paths.profile, { workingNotes: { add: [{ under: "Lanes", text: "  " }] } });
+  assert.match(empty, /empty bullet/);
+
+  // A flat section (the starter profile) has no themes to file under, and says so.
+  const flat = scratchCopy();
+  const [none] = checkProfilePatch(flat.profile, { workingNotes: { add: [{ under: "Lanes", text: "x" }] } });
+  assert.match(none, /has no themes — add the note as plain text/);
+  assert.deepEqual(checkProfilePatch(flat.profile, { workingNotes: { add: ["plain still works"] } }), []);
 });
 
 test("a rejected patch (bad profile needle) leaves lesson-history.md and curriculum untouched — no partial apply", () => {

@@ -1,61 +1,13 @@
-# The app — setup & operations
+# The app — using and running it
 
-Lessons from any device (PC, phone, tablet) in a proper UI — rendered markdown and
-LaTeX, tap-to-select topics, streaming chat — on your own Claude subscription, with
-all bookkeeping done by the deterministic core.
+What a lesson in the app looks like, what it records, and how the server is
+configured and kept safe. Lessons run from any device (PC, phone, tablet) on
+your own Claude subscription, with all bookkeeping done by the deterministic
+core.
 
-> **New here? Start with SETUP.md** — a guided, no-CLI-experience-needed first-time
-> setup (`npm run setup`, then your phone). This file is the fuller ops reference.
-
-```
-server/    Fastify backend: /api/* + serves the PWA (one origin, no CORS)
-web/       Vite PWA: select / lesson / wrap-up screens (vanilla TS + marked + KaTeX
-           + DOMPurify + mermaid)
-.app/      per-lesson session files + image cache, under your data root (gitignored
-           — the git commit is the record; archived images live in transcripts/assets/)
-```
-
-## One-time setup (on the PC that hosts it)
-
-1. **Auth** — mint a subscription token and put it in the server's environment:
-
-   ```bash
-   claude setup-token          # prints CLAUDE_CODE_OAUTH_TOKEN
-   cp .env.example .env        # paste the token there (or export it in your shell)
-   ```
-
-   The token is a key to the whole subscription: it lives only on this PC — never in
-   the frontend, never in this repo. Fallback order if policy changes: set
-   `ANTHROPIC_API_KEY` instead (metered), or fall back to Claude Code interactive
-   lessons (CLI lessons still work unchanged — see CLI.md).
-
-2. **Verify the SDK path** before the first lesson:
-
-   ```bash
-   npm run echo-test                    # hello-world on the default model (opus)
-   npm run echo-test -- --model sonnet  # then the model toggle
-   ```
-
-3. **Build the frontend & start the server:**
-
-   ```bash
-   npm run build:web
-   npm run serve        # binds 127.0.0.1:4321 (TUTOR_PORT / TUTOR_HOST to change)
-   ```
-
-4. **Expose over the tailnet** (nothing public; Tailscale terminates TLS):
-
-   ```bash
-   tailscale serve --bg 4321
-   ```
-
-   Then open `https://<pc-name>.<tailnet>.ts.net/` on the phone/iPad and use the
-   browser's "Add to Home Screen" — the PWA manifest makes it install like an app.
-
-5. **Keep it running** — leave the server process up (e.g. the `restart-tutor`
-   launcher window). The server is stateless apart from `.app/` session files, so
-   restarts are safe: an in-flight lesson resumes via the SDK session id on the
-   next message.
+- **Installing it, auth, and reaching it from your phone:** [SETUP.md](SETUP.md).
+- **Restarting after a change:** [DEVELOPING.md](DEVELOPING.md).
+- **How the code fits together:** [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Daily flow
 
@@ -69,11 +21,8 @@ last touched (`TUTOR_STALE_DAYS`), and each cleanly-recalled warm-up multiplies 
 interval by 2.5 (`TUTOR_RECALL_GROWTH`, capped at a year) — so a topic you keep nailing
 goes quiet for months. Past its interval a topic is *sampled* (seeded per day, so a
 refresh doesn't reshuffle) rather than offered outright, which adds variety near the due
-date.
-Note the sampling has little effect once a lane has a large overdue backlog: candidates
-are ranked by how overdue they are and cut to three, and everything deep in a backlog
-draws a near-certain probability, so the same most-overdue few keep surfacing until
-they're actually recalled.
+date. (It has little effect on a large backlog — see
+[Known limitations](#known-limitations-not-by-design--worth-revisiting).)
 
 The lesson is a streaming chat with rendered math and code — plus
 embedded images (fetched through the server's validating proxy and cached under
@@ -84,9 +33,8 @@ verifies sources instead of citing from memory (`TUTOR_WEB_TOOLS=0` to disable).
 At commit time, embedded and inbound images are copied to
 `transcripts/assets/lesson-NNN/` and ride the same git commit as the transcript.
 
-The app now shows an "update available" toast whenever the server is running a
-newer build than the one the PWA has cached — no more reopen-twice ritual to pick
-up a fix.
+The app shows an "update available" toast whenever the server is running a
+newer build than the one the page loaded with; tapping it reloads onto the new one.
 
 ### Curriculum viewer and transcripts
 
@@ -217,9 +165,13 @@ lands in three places, all from one source:
 > focus mid-lesson, so a lesson can read as "long" without using any more of the
 > subscription. Still worth knowing; just don't treat it as spend.
 
-One small gap by design: the final wrap-up turn commits *before* its own result
-message arrives, so that last turn's tokens aren't counted — a tiny, consistent
-undercount.
+One gap: the final wrap-up turn commits *before* its own result message
+arrives, so the wrap-up panel and the transcript header don't count it — and it
+is the costliest turn of a lesson (the model writing the whole patch; 18% of
+cost across Lessons 29–50). The ledger does count it: when the result arrives
+the server appends a follow-up line for that lesson, which the report folds in.
+That line isn't part of the lesson's own git commit; it rides in the next one.
+Ledger lines written before this (through Lesson 50) lack the wrap-up turn.
 
 ### The analysis report
 

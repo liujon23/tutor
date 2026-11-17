@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import type { BulletEdits, ProfilePatch } from "./types.js";
+import type { BulletAdd, BulletEdits, ProfilePatch } from "./types.js";
 
 /**
  * profile.md is prose and stays markdown. We edit it *surgically*: bullets are
@@ -96,6 +96,54 @@ function bulletOpenings(work: string[], s: Section): string {
   return ` Its bullets begin: ${shown.join(" | ")}${openings.length > shown.length ? ` | …and ${openings.length - shown.length} more` : ""}.`;
 }
 
+/** A theme line inside a section: a bold phrase alone on its line (`**Lanes**`). */
+const THEME_RE = /^\*\*(.+?)\*\*\s*$/;
+
+/** The themes of a section, in order, with the line each sits on. */
+function themesOf(work: string[], s: Section): { name: string; line: number }[] {
+  const out: { name: string; line: number }[] = [];
+  for (let i = s.start + 1; i < s.end; i++) {
+    const m = work[i].match(THEME_RE);
+    if (m) out.push({ name: m[1].trim(), line: i });
+  }
+  return out;
+}
+
+/** The themes a section is grouped under (empty when it is a flat list). */
+export function sectionThemes(profileMarkdown: string, headingPrefix: string): string[] {
+  const lines = profileMarkdown.split("\n");
+  const s = findSection(lines, headingPrefix);
+  return s ? themesOf(lines, s).map((t) => t.name) : [];
+}
+
+/**
+ * Where an added bullet goes. Plain text: the end of the section. Under a
+ * theme: after that theme's last bullet (or straight after the theme line if
+ * it has none), so a themed section stays grouped — appended at the end,
+ * thirteen notes in a row landed under the last theme, "Tooling", whatever
+ * they were about (Lessons 44–50).
+ */
+function insertionPoint(work: string[], s: Section, headingPrefix: string, add: BulletAdd): number {
+  let from = s.start;
+  let to = s.end;
+  if (typeof add !== "string") {
+    const themes = themesOf(work, s);
+    const want = add.under.replace(/\*/g, "").trim().toLowerCase();
+    const at = themes.findIndex((t) => t.name.toLowerCase() === want);
+    if (at === -1) {
+      const known = themes.length
+        ? `Its themes: ${themes.map((t) => `"${t.name}"`).join(" | ")}.`
+        : "The section has no themes — add the note as plain text.";
+      throw new Error(`profile.md: no theme '${add.under}' in section '${headingPrefix}' — nothing added (patch aborted). ${known}`);
+    }
+    from = themes[at].line;
+    to = at + 1 < themes.length ? themes[at + 1].line : s.end;
+  }
+  let insertAt = to;
+  while (insertAt > from + 1 && work[insertAt - 1].trim() === "") insertAt--;
+  return insertAt;
+}
+
 function applyBulletEdits(lines: string[], headingPrefix: string, edits: BulletEdits): string[] {
   const sec = findSection(lines, headingPrefix);
   if (!sec) throw new Error(`profile.md: section starting with '${headingPrefix}' not found`);
@@ -118,12 +166,14 @@ function applyBulletEdits(lines: string[], headingPrefix: string, edits: BulletE
     work.splice(hit[0], hit[1] - hit[0]);
   }
 
-  // Additions at the end of the section (after the last bullet or comment)
-  for (const text of edits.add ?? []) {
+  // Additions: under their theme, or at the end of the section (after the last bullet or comment)
+  for (const add of edits.add ?? []) {
     const s = findSection(work, headingPrefix)!;
-    let insertAt = s.end;
-    while (insertAt > s.start + 1 && work[insertAt - 1].trim() === "") insertAt--;
-    work.splice(insertAt, 0, ...formatBullet(text));
+    const text = typeof add === "string" ? add : add.text;
+    if (typeof text !== "string" || !text.trim()) {
+      throw new Error(`profile.md: empty bullet added to section '${headingPrefix}' (patch aborted)`);
+    }
+    work.splice(insertionPoint(work, s, headingPrefix, add), 0, ...formatBullet(text));
   }
 
   return work;

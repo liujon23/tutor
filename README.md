@@ -107,11 +107,14 @@ and reaching the tutor from your phone: **[SETUP.md](SETUP.md)**.
 ## Docs
 
 - **[SETUP.md](SETUP.md)** — first-time setup, phone access, where your data lives
-- **[APP.md](APP.md)** — the full ops reference: auth, usage tracking, env knobs
+- **[APP.md](APP.md)** — using and running the app: the lesson flow, drive mode,
+  usage tracking, env knobs, the security model
+- **[DEVELOPING.md](DEVELOPING.md)** — what to restart after a change
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — how the code fits together, with a
   guided reading order
 - **[CLI.md](CLI.md)** — running lessons in the terminal instead, and the
   deterministic script toolbox (validation, exports, usage reports)
+- **[docs/drive-mode.md](docs/drive-mode.md)** — how the spoken, hands-free mode works
 
 ## License
 

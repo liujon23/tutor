@@ -219,11 +219,24 @@ Describe a confirmed pattern or preference by what to do, not by a coined label.
   agreed to in this conversation; `proposedConfirmedPatterns` only as the fallback when
   you didn't ask or they deferred. Never put the same item in both. You propose, the
   learner disposes.
-- **Working-notes hygiene** — the profile must not grow without bound. When the
-  packet's Working notes visibly repeat a finding (e.g. the same pattern re-confirmed
-  lane after lane), consolidate in this patch: `removeContaining` the redundant
-  bullets and `add` one merged bullet that names the finding and where it holds. A
-  guess with consistent evidence across several lessons is ready to raise for
+- **Working notes are instructions, not a log.** A working note tells the next
+  lesson's tutor what to do, in one or two plain lines ("When the learner is right
+  but vague, supply the precise term for what they described"). The whole profile is
+  read at the start of every lesson, so every note costs attention there. Before
+  adding one:
+  - What the learner worked out, or got wrong, in this lesson belongs in the lesson
+    entry's `performanceSketch`, not in the profile.
+  - One bullet per finding. When this lesson reinforces or sharpens a note that is
+    already there, `removeContaining` it and `add` it back with the new evidence
+    ("seen in L45, again in L50") or the better wording — never a second bullet
+    beside the first. Seeing it again is worth recording; it is how a guess earns
+    promotion. If a confirmed pattern already says it, add nothing.
+  - Say it in plain words. Don't coin a label for a move or a pattern, and don't
+    carry forward one coined earlier: a label in the notes ends up said to the learner.
+  - Nothing owed or planned goes here ("warm-up still due"); that is `nextUp.plan`.
+  - When the Working notes are grouped under bold theme lines, file each note under
+    the one it belongs to: `{ "under": "<theme>", "text": "…" }`.
+  A guess with consistent evidence across several lessons is ready to raise for
   promotion through the confirmed-pattern gate — promote-and-prune beats accretion.
 - **project** (project-bearing lanes only) — when the lesson evolved the design,
   include a `project` arm with `laneId` (= `lesson.laneId`) and `content` = the FULL

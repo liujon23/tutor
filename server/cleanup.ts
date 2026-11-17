@@ -15,6 +15,9 @@
 import { query, startup, type Options, type WarmQuery } from "@anthropic-ai/claude-agent-sdk";
 import { ROOT } from "../scripts/lib.js";
 
+/** Longest slice of an unused model reply kept for the diag log. */
+const REJECTED_LOG_CHARS = 300;
+
 export const CLEANUP_MODEL = "haiku";
 /** Past this the learner is sitting in silence; send the raw text instead. */
 export const CLEANUP_TIMEOUT_MS = 10_000;
@@ -76,6 +79,8 @@ export interface CleanupResult {
   ms: number;
   /** Why the raw text was kept, when it was. */
   fallback?: "timeout" | "error" | "rejected" | "empty";
+  /** The start of a reply that was rejected — for the diag log, not the client. */
+  rejected?: string;
 }
 
 /** Runs one cleanup prompt; injectable so tests needn't spawn a model. */
@@ -95,6 +100,8 @@ function cleanupOptions(abort?: AbortController): Options {
     cwd: ROOT,
     tools: [],
     allowedTools: [],
+    // No MCP servers at all: account connectors would add their tools to every call.
+    strictMcpConfig: true,
     maxTurns: 1,
     permissionMode: "dontAsk",
     thinking: { type: "disabled" },
@@ -139,6 +146,29 @@ async function takeSpare(): Promise<WarmQuery | null> {
   }
 }
 
+/** The slice of an SDK message replyText reads (declared, so tests needn't build a real one). */
+export interface ReplyLike {
+  type: string;
+  error?: string;
+  /** An assistant message holds content blocks; other message types hold other things. */
+  message?: unknown;
+}
+
+/**
+ * The model's reply in one SDK message, or null if the message isn't one.
+ * Throws on a failed request: that comes back as an assistant message whose
+ * text is the error itself ("Failed to authenticate: …", seen 2026-11-08) and
+ * must never stand in for what the learner said. Only the word-count check
+ * stopped it that day, and a 7–15 word answer would have passed.
+ */
+export function replyText(msg: ReplyLike): string | null {
+  if (msg.type !== "assistant") return null;
+  if (msg.error) throw new Error(`cleanup request failed: ${msg.error}`);
+  const content = (msg.message as { content?: unknown } | undefined)?.content;
+  const blocks = Array.isArray(content) ? (content as { type?: string; text?: string }[]) : [];
+  return blocks.map((b) => (b.type === "text" ? (b.text ?? "") : "")).join("");
+}
+
 /**
  * One no-tools Haiku turn through the Agent SDK (the machine's Claude Code
  * login). Returns on the assistant message — the session's closing
@@ -159,11 +189,8 @@ export const sdkCleanupRunner: CleanupRunner = async (prompt, abort) => {
     for (;;) {
       const { value: msg, done } = await it.next();
       if (done) return { text: "" };
-      if (msg.type !== "assistant") continue;
-      const text = msg.message.content
-        .map((b: { type: string; text?: string }) => (b.type === "text" ? (b.text ?? "") : ""))
-        .join("");
-      if (text.trim()) return { text };
+      const text = replyText(msg);
+      if (text?.trim()) return { text };
     }
   } finally {
     abort.signal.removeEventListener("abort", onAbort);
@@ -200,7 +227,7 @@ export async function cleanTranscript(
     ]);
     const text = tidyCleanup(out.text);
     if (!text) return keep("empty");
-    if (!acceptCleanup(raw, text)) return keep("rejected");
+    if (!acceptCleanup(raw, text)) return { ...keep("rejected"), rejected: text.slice(0, REJECTED_LOG_CHARS) };
     return { text, cleaned: true, ms: Date.now() - started };
   } catch {
     return keep(timedOut ? "timeout" : "error");

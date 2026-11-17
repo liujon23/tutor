@@ -1,12 +1,12 @@
 # First-time setup
 
 Start-to-finish guide for standing up the tutor on your own machine and (optionally)
-reaching it from your phone. Assumes no command-line comfort. The fuller ops
-reference is **APP.md**.
+reaching it from your phone. Assumes no command-line comfort. Using and running
+the app day to day is **APP.md**.
 
 ## What you need
 
-- **Node.js 20.12+** (includes `npm`) — the setup script checks and will tell you
+- **Node.js 20.12 or newer** (includes `npm`; the server loads `.env` with an API added in 20.12) — the setup script checks and will tell you
   if yours is too old.
 - **A Claude subscription** (Pro/Max) or an Anthropic API key. Lessons in the app
   run on *your* account; nothing is shared.
@@ -39,7 +39,8 @@ Set `ANTHROPIC_API_KEY` instead (metered billing). Verify before the first
 lesson:
 
 ```bash
-npm run echo-test
+npm run echo-test                     # a hello on the default model (opus)
+npm run echo-test -- --model sonnet   # and on the other one
 ```
 
 ## Step 3 — Try the app on the PC

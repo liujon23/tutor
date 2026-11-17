@@ -5,7 +5,7 @@ lives in the tutor checkout next door; nothing in here is executable.
 
 - `data/curriculum.yaml` — your courses: lanes, units, topics, and their state
 - `data/profile.md` — who you are as a learner, and the patterns you've confirmed
-- `data/lesson-history.md` — one entry per lesson, newest last
+- `data/lesson-history.md` — one entry per lesson, newest first
 - `transcripts/` — the full text of each lesson, plus the usage and feedback ledgers
 
 It starts as a copy of the tutor's three example courses (how modern LLMs work,

@@ -12,7 +12,7 @@ import { serverDiag } from "./diag.js";
 import { END_TURN_TEXT, SESSION_EXPIRY_MS } from "./params.js";
 import { createTutorServer, COMMIT_TOOL_NAME } from "./tutor-tool.js";
 import { appendTranscript, listSessions, loadSession, newMessageId, saveSession, touchSession } from "./store.js";
-import { costDelta, usageFromResult } from "./usage.js";
+import { appendUsageFollowUp, costDelta, usageFromResult } from "./usage.js";
 import type {
   CommitResult,
   InboundImage,
@@ -145,6 +145,42 @@ export function endAlreadyPending(transcript: TranscriptEntry[]): boolean {
   return lastUnansweredUser(transcript)?.text === END_TURN_TEXT;
 }
 
+/** The built-in tools a lesson may see when web tools are on. */
+const WEB_TOOLS = ["WebSearch", "WebFetch"];
+
+/**
+ * What the SDK reported at init that a lesson should never have: any tool
+ * beyond the web tools and commit_session, any MCP server but `tutor`. An
+ * extra tool that joins after the first API call changes the prompt prefix
+ * and re-writes the whole cache on the next one — on Lessons 29–44 the
+ * claude.ai account connector "Claude Docs" did exactly that (3 tools on the
+ * first call, 11 on the second). Empty arrays mean the session is as pinned.
+ */
+export function unexpectedAtInit(
+  tools: readonly string[] | undefined,
+  servers: readonly { name: string; status: string }[] | undefined
+): { tools: string[]; servers: string[] } {
+  const allowed = new Set([...WEB_TOOLS, COMMIT_TOOL_NAME]);
+  return {
+    tools: (tools ?? []).filter((t) => !allowed.has(t)),
+    servers: (servers ?? []).filter((s) => s.name !== "tutor").map((s) => `${s.name}=${s.status}`),
+  };
+}
+
+/** How a turn is sent (LessonRunner.send). */
+export interface SendOptions {
+  /** Server-generated text (the kickoff, a nudge): stored, never shown. */
+  hidden?: boolean;
+  images?: InboundImage[];
+  /** What the model receives, when it differs from the stored `text` (tags, the
+   *  wrap-up checklist, the feedback hand-off riding a short human line). */
+  modelText?: string;
+  /** How the learner sent it; omitted for server-made turns that don't change the channel. */
+  via?: Via;
+  /** A cleaned spoken turn's raw speech recognition (server/cleanup.ts). */
+  heard?: string;
+}
+
 /** What GET /api/lesson/:id/health reports — the client watchdog asks this before acting. */
 export interface RunnerHealth {
   alive: boolean;
@@ -180,8 +216,7 @@ export class LessonRunner {
   // Turn tracking for health and GET's turnInFlight. Sends not yet answered by
   // a `result`. On each result this resets to the messages the SDK hasn't been
   // handed yet: a turn can absorb several queued sends, so counting down one
-  // per result could leave it stuck above zero. The SDK's own
-  // session_state_changed is logged beside it to check this rule against.
+  // per result could leave it stuck above zero.
   private pendingTurns = 0;
   private lastSdkMessageAt = Date.now();
   private streamIds = new StreamIds();
@@ -210,11 +245,13 @@ export class LessonRunner {
       cwd: ROOT,
       // The model must not touch the repo directly — its only tools are
       // commit_session plus web search/fetch for sourcing.
-      tools: webTools ? ["WebSearch", "WebFetch"] : [],
+      tools: webTools ? WEB_TOOLS : [],
       mcpServers: { tutor: tutorServer },
-      allowedTools: webTools
-        ? [COMMIT_TOOL_NAME, "WebSearch", "WebFetch"]
-        : [COMMIT_TOOL_NAME],
+      // Only the server above: no .mcp.json, user settings, plugins or account
+      // connectors. One that connects after the first API call changes the
+      // tool list and costs a full cache re-write (see unexpectedAtInit).
+      strictMcpConfig: true,
+      allowedTools: webTools ? [COMMIT_TOOL_NAME, ...WEB_TOOLS] : [COMMIT_TOOL_NAME],
       permissionMode: "dontAsk",
       includePartialMessages: true,
       resume: session.sdkSessionId ?? undefined,
@@ -253,13 +290,9 @@ export class LessonRunner {
     this.emitRaw(ev);
   }
 
-  /** Enqueue a user turn. `hidden` marks server-generated kickoff text.
-   *  `modelText`, when given, is what the model receives — the transcript
-   *  still persists `text` (used to ride machinery like the feedback hand-off
-   *  along a short human-readable message). `via` records how the learner
-   *  sent it; omitted for server-made turns that don't change the channel.
-   *  `heard` is a cleaned spoken turn's raw speech recognition (server/cleanup.ts). */
-  send(text: string, hidden = false, images: InboundImage[] = [], modelText?: string, via?: Via, heard?: string): void {
+  /** Enqueue a user turn. The transcript persists `text`; see SendOptions for the rest. */
+  send(text: string, opts: SendOptions = {}): void {
+    const { hidden = false, images = [], modelText, via, heard } = opts;
     if (this.closed) throw new Error("lesson session is closed");
     // Image bytes go to .app/assets/, never into the session JSON — the
     // transcript entry carries only the filenames.
@@ -308,7 +341,7 @@ export class LessonRunner {
     // second kick, `pending` is the first kick's nudge, which carries none.
     const via = lastVia(this.session.transcript);
     this.turnVia = via;
-    this.send(KICK_NUDGE, true, [], withTurnTag(KICK_NUDGE, turnTag(via, "typed")));
+    this.send(KICK_NUDGE, { hidden: true, modelText: withTurnTag(KICK_NUDGE, turnTag(via, "typed")) });
     this.diag("kick-nudge", { answering: pending.id ?? null, via });
   }
 
@@ -337,7 +370,7 @@ export class LessonRunner {
         `Acknowledge briefly, course-correct now, and don't over-apologize. ` +
         `This is the only rating that reaches you mid-lesson; draw no conclusions ` +
         `about unrated messages.]`,
-      true
+      { hidden: true }
     );
   }
 
@@ -405,19 +438,21 @@ export class LessonRunner {
 
   /**
    * Hold the runner's first message until the in-process `tutor` MCP server
-   * reports connected. Lessons 29–40 show the first API call of every runner
-   * going out with a different tool list from the calls after it: the second
-   * call never reads the first one's cache and re-writes the whole ~40k-token
-   * prompt a minute or two later (~$0.35 each, at every start and revival).
-   * Probed: once the CLI answers it lists no MCP servers for ~0.5s, then
-   * `tutor` as connected, and a message already queued is sent in that gap.
-   * The wait mostly overlaps CLI startup the first message waits out anyway;
-   * the cap only matters if the server never connects. Logged either way.
+   * reports connected and no other server is still connecting. A message sent
+   * while a server is pending goes out with a shorter tool list than the calls
+   * after it, so the second call can't read the first one's cache and
+   * re-writes the whole prompt a minute or two later. Once the CLI answers it
+   * lists no MCP servers for ~0.5s, then `tutor` as connected. (The misses on
+   * Lessons 29–44 were an account connector joining late, which
+   * `strictMcpConfig` now keeps out; this wait covers `tutor` itself.) It
+   * takes 3–4s, overlapping the CLI startup the first message waits out
+   * anyway; the cap only matters if a server never connects. Logged either way.
    */
   private async awaitTutorServer(): Promise<void> {
     const started = Date.now();
     const deadline = started + MCP_READY_WAIT_MS;
     let status = "unknown";
+    let stillPending: string[] = [];
     await Promise.resolve(); // `this.q` is assigned after query() returns
     while (!this.closed && Date.now() < deadline) {
       const statuses = await Promise.race([
@@ -429,10 +464,16 @@ export class LessonRunner {
       ]);
       const tutor = statuses?.find((s) => s.name === "tutor");
       if (tutor) status = tutor.status;
-      if (status !== "pending" && status !== "unknown") break;
+      stillPending = (statuses ?? []).filter((s) => s.name !== "tutor" && s.status === "pending").map((s) => s.name);
+      if (status !== "pending" && status !== "unknown" && stillPending.length === 0) break;
       await sleep(100);
     }
-    this.diag("mcp-ready", { status, waitedMs: Date.now() - started }, status === "connected" ? "info" : "anomaly");
+    const ok = status === "connected" && stillPending.length === 0;
+    this.diag(
+      "mcp-ready",
+      { status, waitedMs: Date.now() - started, ...(stillPending.length ? { stillPending } : {}) },
+      ok ? "info" : "anomaly"
+    );
   }
 
   private onCommitted(commit: CommitResult): void {
@@ -491,6 +532,8 @@ export class LessonRunner {
             tools: msg.tools,
             mcpServers: msg.mcp_servers,
           });
+          const extra = unexpectedAtInit(msg.tools, msg.mcp_servers);
+          if (extra.tools.length || extra.servers.length) this.diag("sdk-init-unexpected", extra, "anomaly");
           this.emit({ type: "ready", model: msg.model });
         } else if (msg.subtype === "api_retry") {
           // The SDK is retrying an API call: progress, not a hang (health's
@@ -500,9 +543,6 @@ export class LessonRunner {
             { attempt: msg.attempt, of: msg.max_retries, delayMs: msg.retry_delay_ms, status: msg.error_status, error: msg.error },
             "anomaly"
           );
-        } else if (msg.subtype === "session_state_changed") {
-          // Logged beside our own pendingTurns, to check that rule against the SDK's view.
-          this.diag("sdk-state", { state: msg.state, pendingTurns: this.pendingTurns });
         }
         break;
       }
@@ -518,7 +558,6 @@ export class LessonRunner {
             this.diag("first-delta", {
               id,
               msSinceSend: this.turnSendAt === null ? null : Date.now() - this.turnSendAt,
-              ttftMs: msg.ttft_ms ?? null,
             });
           }
           if (id) this.deltasById.set(id, (this.deltasById.get(id) ?? 0) + 1);
@@ -602,6 +641,17 @@ export class LessonRunner {
         const usage = (this.session.usage ??= []);
         usage.push(record);
         saveSession(this.session);
+        // A result that lands after the commit — the wrap-up turn itself, whose
+        // patch is the costliest output of the lesson — missed the ledger line
+        // written inside commit_session. Add it as a follow-up line.
+        if (this.session.commit) {
+          try {
+            appendUsageFollowUp(this.session.commit.lessonNumber, record);
+            this.diag("usage-follow-up", { lessonNumber: this.session.commit.lessonNumber, costUsd: record.costUsd });
+          } catch (e) {
+            this.diag("usage-follow-up-failed", { error: (e as Error).message }, "anomaly");
+          }
+        }
         // Sends the SDK hasn't been handed yet are still owed a turn; every
         // send it has seen is answered by this result.
         const before = this.pendingTurns;
@@ -721,7 +771,7 @@ export class LessonManager {
     saveSession(session);
     const runner = new LessonRunner(session, (ev) => this.dispatch(session.id, ev), "start");
     this.runners.set(session.id, runner);
-    runner.send(kickoff, true, [], kickoffModelText, via);
+    runner.send(kickoff, { hidden: true, modelText: kickoffModelText, via });
     return runner;
   }
 

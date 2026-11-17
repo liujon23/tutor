@@ -1,161 +1,160 @@
 # Drive mode — two-way spoken lessons
 
-Drive mode turns the lesson screen into a hands-free, spoken lesson for J's
+Drive mode turns the lesson screen into a hands-free, spoken lesson for a
 ~30-minute car commute: the tutor talks, J answers out loud, it adapts. It is a
-**rendering mode on the existing lesson screen**, not a separate screen, so a
+**rendering mode of the existing lesson screen**, not a separate one, so a
 lesson moves freely between voice and text — start it in the car, finish it at
-a desk — with no resume plumbing and no second session.
+a desk — with no second session.
 
-This doc is the reference: how it works, what the phone measurably does, the
-traps, and the decisions behind it. It replaces the build plan it grew from
-(`docs/drive-mode-plan.md`, in git history before the merge), keeping the
-findings and dropping the plan.
-
-For using it, see [APP.md](../APP.md#drive-mode).
+This is the reference: how it works and the rule behind each choice, each with
+the observation that led to it. Using it is in [APP.md](../APP.md#drive-mode).
+Numbers come from J's iPhone (iOS 18.7, Safari 18.7.5) and the diagnostics
+through Lesson 50; `npm run drive-report` recomputes them.
 
 ## Constraints
 
-Settled with J before building, and still true:
-
 - **iPhone, mounted, plugged in, unlocked, Safari.** Opened while parked, so
   startup needn't be hands-free; an occasional single tap while driving is fine.
-- **Full lessons** that commit to history and advance the curriculum as usual,
-  usually *mixed* — partly spoken, partly typed.
+- **Full lessons** that commit and advance the curriculum as usual, usually
+  mixed — partly spoken, partly typed.
 - **Browser-native speech only** (`speechSynthesis`, `webkitSpeechRecognition`):
-  no cloud TTS/STT vendor, key or per-lesson cost. The one paid extra is a Haiku
-  call per spoken answer (see Cleanup), on the same Claude login as the tutor.
-- **Single user, diagnostics deliberately over-built.** Anything can be stripped
-  later; a feature that silently breaks over many drives can't be un-broken.
+  no cloud speech vendor, key or per-lesson cost. The one paid extra is a Haiku
+  call per spoken answer (Cleanup), on the same Claude login as the tutor.
+- **Single user, diagnostics deliberately over-built.** A feature that silently
+  breaks over many drives can't be un-broken; a log line costs nothing.
 
 ## Modules
 
-Rule-bound logic is pure and testable; browser APIs are confined to one file.
+Rules are pure and tested; browser APIs are confined to one file.
 
-| File | Purity | Job |
-|---|---|---|
-| `web/src/lesson/audio/text.ts` | pure | markdown + LaTeX → speakable text; the streaming chunker |
-| `web/src/lesson/audio/endpoint.ts` | pure | the endpointer: when has J finished answering |
-| `web/src/lesson/audio/drive-state.ts` | pure | the turn-taking state machine: events, reconcile, recogniser/synth callbacks and taps in → actions out |
-| `web/src/lesson/audio/diag.ts` | pure | client diagnostics: ring buffer, counters, soft invariants |
-| `web/src/lesson/audio/adapter.ts` | impure | the **only** file touching `speechSynthesis`, `SpeechRecognition`, `wakeLock`, `AudioContext`, `navigator.audioSession` |
-| `web/src/lesson/audio/panel.ts` | impure | the overlay, debug strip, pre-drive check output |
-| `web/src/lesson/audio/controller.ts` | impure | glue: machine ↔ adapter ↔ overlay ↔ diag ↔ lesson screen; timers, storage, uploads, the cleanup call |
-| `web/src/lesson/send.ts` | — | one learner turn, shared by the composer and drive mode |
-| `server/cleanup.ts` | — | spoken-answer cleanup (Haiku, kept warm) |
-| `server/diag.ts` | — | server diagnostics sink |
+| File | Job |
+|---|---|
+| `web/src/lesson/audio/text.ts` | pure — markdown + LaTeX → speakable text; the streaming chunker |
+| `web/src/lesson/audio/endpoint.ts` | pure — when J has finished answering |
+| `web/src/lesson/audio/drive-state.ts` | pure — the turn-taking state machine: events, reconcile, recogniser and speech callbacks and taps in → actions out |
+| `web/src/lesson/audio/diag.ts` | pure — client diagnostics: ring buffer, counters, batches |
+| `web/src/lesson/audio/adapter.ts` | the **only** file touching `speechSynthesis`, `SpeechRecognition`, `wakeLock`, `AudioContext`, `navigator.audioSession` |
+| `web/src/lesson/audio/panel.ts` | the overlay, debug strip, pre-drive check output |
+| `web/src/lesson/audio/controller.ts` | glue: machine ↔ adapter ↔ overlay ↔ diag ↔ lesson screen; timers, storage, uploads |
+| `web/src/lesson/send.ts` | one learner turn, shared by the composer and drive mode |
+| `server/cleanup.ts` | spoken-answer cleanup (Haiku, kept warm) |
+| `server/diag.ts`, `server/drive-report.ts` | the diagnostics sink and its report |
 
-The four pure modules import only each other (with `.js` specifiers) and are
-listed in the root `tsconfig.json` `include`, like `web/src/lesson/reconcile.ts`,
-so `tests/` can reach them (see Traps). `drive-state.ts` declares the slice of
-`LessonEvent` it consumes structurally and reports through `diag` *actions*, so
-its invariants are assertable in `tests/audio.test.ts`.
-
-Audio state hangs on `LessonCtx` as one opaque field, `audio: AudioController | null`.
+The four pure modules import only each other and are listed in the root
+`tsconfig.json` `include` so `tests/audio.test.ts` can reach them (see Traps).
+Audio state hangs on `LessonCtx` as one field, `audio: AudioController | null`.
 
 ## Turn-taking
 
 **Half-duplex.** Recognition is stopped while speaking. The mic opens only when
-**the utterance queue has drained *and* `turn_done` has arrived** for the latest
-turn — draining alone isn't enough: a turn with web tools emits "Let me check
-that.", then a 5–100s tool call, then more text. Barge-in is a tap, not voice.
-(Recognition heard nothing of the tutor through the phone speaker in one test,
-so full-duplex looks feasible — unverified.)
+the utterance queue has drained **and** `turn_done` has arrived: a turn with web
+tools says "Let me check that.", runs a tool for up to a minute, then says more.
+Barge-in is a tap, not voice.
 
-Drive mode **starts assuming a turn is running** and lets the server's health
-answer open the mic: guessing "idle" opened the mic mid-kickoff in the first
-browser run.
-
-The **listening cue fires on `audiostart`**, not `start()`: a cold start took
-3.65s, and words spoken before `audiostart` are lost.
+- Drive mode **starts assuming a turn is running** and lets the server's health
+  answer open the mic. Guessing "idle" opened the mic mid-kickoff.
+- The **listening cue fires on `audiostart`**, not `start()`: a cold start took
+  3.6s, and words spoken before `audiostart` are lost.
 
 ### Endpointing
 
-`SpeechRecognition` ends its own session after ~1–2s of silence, so `end` means
-"the recogniser gave up", not "J finished". The adapter restarts it and the
-endpointer keeps accumulating into one answer. Our clocks:
+`SpeechRecognition` ends its own session after a few seconds (median ~9s, up to
+~50s), so `end` means "the recogniser gave up", not "J finished". The adapter
+restarts it and the endpointer keeps accumulating one answer.
 
 | Situation | Rule |
 |---|---|
-| Nothing heard yet | **Wait indefinitely.** An empty buffer never submits — thinking time is free, which is what makes recall warm-ups work unchanged. |
+| Nothing heard yet | **Wait indefinitely.** Thinking time is free, which is what makes recall warm-ups work unchanged. |
 | J has spoken, then gone quiet | Submit after **4s** with no new interim or final — **7s** when the last word can't end a sentence ("the", "to", "which"…). |
 | Answer running long | From **3 minutes**, submit at the next **1.5s** pause; **hard at 4 minutes** (speech that never pauses — a radio). |
 | **Done** tap | Submit now. A no-op on an empty buffer. |
 
-The silence clock follows **interims, not finals** (finals land 1.2–2.1s after J
-stops). On submit, if the newest words exist only as an interim, the recogniser
-is stopped and its final awaited for up to 1s. An interim left dangling when a
-session ends is promoted to a final, or the next session's first interim would
-overwrite it.
+- The silence clock follows **interims, not finals**: finals land 1.2–2.1s after
+  J stops.
+- On submit, if the newest words exist only as an interim, the recogniser is
+  stopped and its final awaited for up to 1s. An interim left dangling when a
+  session ends is promoted to a final, or the next session's first interim
+  would overwrite it.
+- The clocks are long on purpose. 2.5s cut off two of four answers on the first
+  run (J thinks aloud, with pauses up to ~2.7s) and a 90s cap cut one off
+  mid-sentence: **J would rather wait than feel rushed.** In use, 87% of answers
+  end on the silence clock and 13% on a Done tap; the median answer runs 40s.
 
-History: 2.5s flat cut off two of four answers on the first run (J thinks aloud
-with pauses up to ~2.7s); a 90s hard cap cut one off mid-sentence in the first
-commuting week. **J would rather wait than feel rushed.**
+### Adapter rules
 
-### Adapter rules (each learned the hard way)
-
-- **Always stop before starting; never `start()` a running recogniser.** The
-  spike did, and threw `InvalidStateError` ~100 times a run. An explicit
-  `starting | running | stopping | stopped` state guards it.
+- **Always stop before starting; never `start()` a running recogniser** (it
+  throws `InvalidStateError`). An explicit `starting | running | stopping |
+  stopped` state guards it.
 - **One `SpeechRecognition`, ever** — constructing another plays the system chime.
 - Reset the "started at" timestamp per session, or `audiostart` latency measures
-  from an earlier session (the spike logged a fictitious 50,596ms stall).
+  from an earlier session.
 - `no-speech` and `aborted` are the **normal** end path with `continuous = false`
   (iOS reports silence as `aborted` / "No speech detected"). `network` and
-  `audio-capture` back off (1, 2, 5, 10, 30s).
+  `audio-capture` back off (1, 2, 5, 10, 30s); the first start in a lesson
+  sometimes fails with `audio-capture` ("Source is muted") and retries fine.
 - **A final can arrive after `stop()`** — logged as `late-final`, never fed into
   the next answer.
 - **Recogniser watchdog:** iOS can stop `onresult` with neither `onerror` nor
-  `onend`. No event for 30s while listening (8s while starting) → abort, restart,
-  say "The mic stalled. Listening again.", keeping any half-said answer.
-- **No auto-resume after an interruption.** Hidden → hard PAUSED, one tap to
-  resume. A phone call breaks the gesture chain; auto-resuming yields a silent car.
+  `onend`. No event for 30s while listening (8s while starting) → abort and
+  restart. A running recogniser that has heard nothing is restarted without a
+  word: it can't be told from J thinking, and half the early firings were that.
+  A mic that never opened also says "The mic stalled. Listening again."
+- **No auto-resume after an interruption.** Hidden → PAUSED, one tap to resume:
+  a phone call breaks the gesture chain, and auto-resuming yields a silent car.
 - **Never start recognition while speech is playing** — the machine's own *or*
-  untracked speech (the select screen's "Starting.", spoken cues with tones off).
-  Safari fails the mic permission check without showing its prompt, and the
-  refusal then sticks for the page. `startRecognizer` waits for
-  `speechSynthesis` to go quiet (logged `rec-start-deferred`; gives up after 5s).
-- **A refused mic offers Reload.** A Safari `not-allowed` puts the overlay in
-  MIC BLOCKED with a Reload button (the tap reloads); the reload comes back via
-  the pending-drive record, paused, and the tap that resumes it leads to the
-  prompt. A browser that can't recognise speech at all (`unsupported`, incl.
-  Chrome on iOS) just pauses with the needs-Safari line.
+  untracked speech (the select screen's "Starting.", spoken cues). Safari then
+  refuses the mic ~1.2s in without showing its prompt (`not-allowed`, "User
+  permission check has failed") and keeps refusing for the life of the page.
+  `startRecognizer` waits for `speechSynthesis` to go quiet (up to 5s).
+- **A refused mic offers Reload.** Only a fresh page makes Safari ask again, so
+  `not-allowed` puts the overlay in MIC BLOCKED with a Reload button; the reload
+  comes back paused via the pending-drive record. A browser that can't
+  recognise speech at all (Chrome, Firefox and Edge on iOS expose the API and
+  fail at once) pauses with the needs-Safari line.
 
 ## Speaking
 
 - **Chunks at paragraph / 2–3-sentence granularity**, one utterance at a time off
-  `onend`, with a timeout of 2× the estimated length + 5s. More `speak()` calls
-  means more chances to hit iOS's stalled queue.
-- **The chunker only cuts at safe boundaries** of streaming markdown, and is
+  `onend`, with a timeout of 2× the estimated length + 5s (actual length runs a
+  median 88% of the estimate). More `speak()` calls means more chances to hit
+  iOS's stalled queue.
+- **The chunker only cuts at safe boundaries** of streaming markdown and is
   message-scoped: each `assistant` event flushes its own residual (never
-  `ev.text`, which would repeat it) and inserts a boundary. Every `delta` carries
-  its message id, so reconcile can resume a half-spoken message from its offset.
-- Keep a **strong reference** to the speaking utterance (iOS can GC it before
-  `onend`) and stamp each with a **generation**: `cancel()` can fire
+  `ev.text`, which would repeat it). Every `delta` carries its message id, so
+  reconcile can resume a half-spoken message from its offset.
+- Keep a **strong reference** to the speaking utterance (iOS can collect it
+  before `onend`) and stamp each with a **generation**: `cancel()` can fire
   `onend`/`onerror` for the cancelled one, which must not advance the queue.
-- **The first `speak()` must run synchronously inside a tap** — anything after an
-  `await` is silently dropped by iOS. The select screen's Start and the
-  headphones button both say "Starting." in the handler itself.
-- **Voice: Samantha (en-US), outright.** The automatic "best voice" pick landed on
-  Eloquence novelty voices twice (Reed, then Flo), so there's no automatic
-  option; `defaultVoice` falls back to scoring only when Samantha is missing. A
-  voice + speed picker is in the debug strip, remembered per device
-  (`tutor.voice.v2`).
+- **The first `speak()` must run synchronously inside a tap** — iOS silently
+  drops anything after an `await`. The select screen's Start and the headphones
+  button both say "Starting." in the handler itself.
+- **Voice: Samantha (en-US), outright.** The automatic "best voice" pick landed
+  on novelty voices twice, so there is no automatic option; `defaultVoice` falls
+  back to scoring only when Samantha is missing. Voice and speed are in the
+  debug strip, remembered per device.
 - **Cues are Web Audio tones** (the CSP blocks `data:` audio): a lead-in before
-  speech after ≥1.5s of quiet (the waking route clips the first ~100–300ms), a
-  turn-start tone, and "still working" every 20s of a turn in flight. With tones
-  off, "Okay." / "Still working." are spoken; the listening cue is then silent.
-  iOS suspends an idle `AudioContext` ~8s after its last sound, so a tone resumes
-  it first (≤500ms) and speech waits for the tone.
+  speech after ≥1.5s of quiet (the waking audio route clips the first
+  ~100–300ms), a turn-start tone, and "still working" every 20s of a turn in
+  flight. With tones off, "Okay." / "Still working." are spoken and the
+  listening cue is silent. iOS suspends an idle `AudioContext` ~8s after its
+  last sound, so a tone resumes it first (≤500ms) and speech waits for the tone.
+- **Audio session: `"playback"` while speaking, `"auto"` before the mic** (a
+  setting, on by default). Left on `"auto"` throughout, speech came out quieter
+  on some drives. `"play-and-record"` is never set: it made the speaker quieter
+  and switched the car's Bluetooth source.
+- **The phone speaker is the default.** Any open Bluetooth mic forces the
+  call (HFP) profile, and a web page can't choose the built-in mic instead.
 
 ### What gets said
 
 `text.ts` turns markdown into speech: tables, display math, code fences, mermaid
 and images become "there's a table here, it's in the app"; inline math gets a
 light verbaliser (Greek by name, `x_t` → "x sub t", `x^2` → "x squared",
-`\frac{a}{b}` → "a over b"); ordered lists read "One," / "Two,"; link text without
-the URL; currency ("$5 to $10" → "5 dollars to 10 dollars"). Abbreviations are
-left to the voice, but the sentence splitter never breaks on them. Nothing spoken
-may contain a markdown sigil — the diag log flags any that does.
+`\frac{a}{b}` → "a over b"); ordered lists read "One," / "Two,"; link text
+without the URL; currency ("$5 to $10" → "5 dollars to 10 dollars").
+Abbreviations are left to the voice, but the sentence splitter never breaks on
+them. Nothing spoken may contain a markdown sigil — the diag log flags any that
+does.
 
 ## Controls
 
@@ -170,71 +169,71 @@ may contain a markdown sigil — the diag log flags any that does.
 | PAUSED | resume |
 | STUCK | retry (kick the runner) |
 
-Taps are ignored for 400ms after any phase change (a skip landing as the phase
-flips must not become a half-answer submit).
-
-- **Again** replays all tutor text since J's last turn (not the last `assistant`
-  event — one turn emits several around web tools). It reads the transcript when
-  drive mode starts, so it works when drive mode came on mid-lesson; from PAUSED
-  it also resumes. Local replay, no model turn.
-- **There is no End in the overlay.** On the first run End was tapped twice, then
-  ✕ — they read as the same thing. Ending is a text-mode action; a drive ends with
-  Exit and the lesson stays in progress.
+- Taps are ignored for 400ms after any phase change, so a skip landing as the
+  phase flips can't become a half-answer submit.
+- **Again** replays all tutor text since J's last turn (one turn emits several
+  `assistant` events around web tools). It reads the transcript when drive mode
+  starts, so it works when drive mode came on mid-lesson; from PAUSED it also
+  resumes. Local replay, no model turn.
+- **There is no End in the overlay**: on the first run End and ✕ read as the
+  same thing. Ending is a text-mode action; a drive ends with Exit and the
+  lesson stays in progress.
 - **Listen** on the select screen (per device) starts lessons — and opens
-  In-progress / Needs-attention lessons — in drive mode, so the opening is spoken.
+  in-progress ones — in drive mode, so the opening is spoken.
 - The overlay is always dark (glare). The **debug strip** (collapsed) holds the
   build id, wake-lock dot, voice/speed/tones, the playback-mode toggle, the
   pre-drive check and the live diag tail.
-- Errors are **spoken**: `closed`, `api_error`, `error`, `rate_limit`
-  (rejected/warning, once per change). Everything else is silent and logged.
+- Errors are **spoken**: `closed`, `api_error`, `error`, `rate_limit` (once per
+  change). Everything else is silent and logged.
 
 ## Telling the model it's a spoken turn
 
-The system prompt is built once per session and never rebuilt, so the channel
-rides on each turn: **`via: "typed" | "spoken"`** on the message, create
-(kickoff) and end routes becomes a `modelText` prefix the transcript never shows.
-The tag carries the rule, adjacent to the content it governs:
+The system prompt is built once per session, so the channel rides on each turn:
+`via: "typed" | "spoken"` on the message, create and end routes becomes a
+`modelText` prefix the transcript never shows:
 
 `[spoken turn — transcribed from speech; reply in spoken form: no markdown, no LaTeX, no URLs read aloud]`
 
 A typed turn is tagged only right after a spoken one; the mode holds until the
-next tag. The spoken rules live in `server/prompt.ts` (not the shared teaching
-contract — the CLI consumer can never be audio): write for the ear; announce
-the shape of long blocks and recap at the seams; math as intuition, derivations
-parked into `nextUp`; never read a URL; questions answerable out loud; J's turns
-are speech recognition, so never grade a transcription artifact.
+next tag. The spoken rules live in `server/prompt.ts`, not the shared teaching
+contract (the CLI can never be audio): write for the ear; announce the shape of
+long blocks and recap at the seams; math as intuition, derivations parked into
+`nextUp`; never read a URL; questions answerable out loud; J's turns are speech
+recognition, so never grade a transcription artifact.
 
 ## Cleanup — what J actually said
 
-Before a spoken answer is sent, `POST /api/lesson/:id/clean` asks Haiku for its
-best guess at the exact words, using the tutor's last message as context
-("tension" → "attention", "wait them" → "weight them", "but" → "BERT"). The
-bubble, transcript and tutor get the cleaned text; the raw recognition is kept
-as `heard` on the transcript entry and follows the text for the tutor only, in
+Recognition at highway speed through the phone's own mic is good; its mistakes
+are jargon and homophones ("tension" for "attention", "but" for "BERT"). Before
+a spoken answer is sent, `POST /api/lesson/:id/clean` asks Haiku for its best
+guess at the exact words, with the tutor's last message as context. The bubble,
+transcript and tutor get the cleaned text; the raw recognition is kept as
+`heard` on the transcript entry and follows the text for the tutor, in
 brackets, so a wrong guess is recoverable.
 
-- **Latency 0.7–2.8s** (median ~1.5s) — achieved by keeping one CLI subprocess
-  warm (`startup()`; warmed at drive start via `/clean/warm`, replaced after each
-  use, closed after 15 idle minutes) and **thinking off**. Cold, it was ~5s of
-  spawn plus 36s of Haiku *thinking* on a seven-word answer.
+- **Median 1.4s, never over 4s** — by keeping one CLI subprocess warm (spawned
+  at drive start, replaced after each use, closed after 15 idle minutes) and
+  **thinking off**. Cold, it was ~5s of spawn plus 36s of Haiku thinking on a
+  seven-word answer.
 - Read the iterator by hand: leaving a `for await` calls `return()`, which waits
   out the subprocess's shutdown (~3s).
-- **Never costs the turn:** a timeout (10s server, 15s client), error, empty
-  reply, or a "repair" whose word count drifts past max(4, 25%) — an answer or a
-  summary, not a transcription — sends the raw text.
+- **Never costs the turn:** a timeout (10s server, 15s client), an error, an
+  empty reply, or a "repair" whose word count drifts past max(4, 25%) sends the
+  raw text. A failed request's error text is never taken for a reply — on one
+  auth failure only the word count stood between it and the transcript.
 
 ## Recording that a lesson was spoken
 
 A lesson is usually mixed, so counts, not a flag: `spokenTurns` / `typedTurns`
-on the usage ledger's `LedgerMeta`, `via` on each `UsageRecord` (exact spoken vs
-typed cost per turn), a header line and `### J (spoken)` markers in the archived
-transcript, threaded through the lesson index to the viewer. Not in `core/` — a
-lesson-record field there is invisible to the model (see Traps).
+on the usage ledger, `via` on each usage record, a header line and
+`### J (spoken)` markers in the archived transcript, threaded through the lesson
+index to the viewer. Not in `core/` — a lesson-record field there is invisible
+to the model (see Traps).
 
 ## Resilience
 
-The car is on cellular, through the tailnet, to a PC at home — the stream will
-drop. Network loss is the most likely way this fails, not an edge case.
+The car is on cellular, through the tailnet, to a PC at home: the stream will
+drop. 9% of events are sent while no client is listening.
 
 - **Reconcile feeds audio.** SSE has no replay; `reconcile()` hands missed
   entries to the machine, which speaks each unspoken one once and resumes a
@@ -243,9 +242,12 @@ drop. Network loss is the most likely way this fails, not an edge case.
 - **Real heartbeat events** every 15s (SSE comments are invisible to
   `EventSource`); 60s without any server event → "Lost the connection.
   Reconnecting." A `CLOSED` `EventSource` is recreated with backoff.
+- **An answer that isn't echoed reopens the stream.** 10s after a submit with no
+  `user` event back, the `EventSource` is recreated without a word: the stream
+  can die before the answer is sent, and the reply then waits out the 60s clock.
 - **Reply watchdog:** no progress for 120s → ask `/health` first (never blindly
   re-POST — that duplicates the answer). Alive but silent → auto-kick once
-  (`/kick` revives the runner and sends a hidden nudge, not the turn again — the
+  (`/kick` revives the runner and sends a hidden nudge, not the turn again: the
   stuck session had already recorded it); a second stall → STUCK, tap to retry.
 - **A failed send is verified** before "That answer didn't reach the tutor": the
   POST's response can be lost after the server stored the answer.
@@ -253,72 +255,57 @@ drop. Network loss is the most likely way this fails, not an edge case.
   on; a reload reopens that lesson in drive mode, PAUSED, waiting for the tap
   that re-unlocks audio.
 - `ending` is sticky until commit; idle sessions expire after 7 days (lessons
-  span 22–51 hours of wall clock); session writes are atomic.
+  run over several days of wall clock); session writes are atomic.
+
+## Latency and cost
+
+- **The tutor's first word comes a median ~24s after an answer is submitted**
+  (p90 ~45s), on top of the 4s silence clock: ~2.4s cleanup and send, ~15s to
+  the model's first text, ~2.5s to speech. About 1,000 of a spoken reply's
+  ~1,360 output tokens are thinking. Lower effort for spoken turns would
+  shorten it at some cost to teaching; J's call is to leave it.
+- Turns with web tools take a median 54s; the commit turn ~2 minutes.
+- **The prompt cache lasts an hour.** A turn more than an hour after the last
+  re-writes the whole prompt (7% of turns, ~20% of spend): a lesson spread over
+  days pays for it each time it's picked up.
+- **The tool list must not change after a runner's first call**, or the next
+  call re-writes the cache while it is still warm. Two things hold it still:
+  `strictMcpConfig` (only the `tutor` server — on the Claude Code login, an
+  account connector that finished connecting after the first call added eight
+  tools and cost ~$0.45 at every start and revival), and the runner holding its
+  first message until `tutor` is connected and nothing is pending.
+  `sdk-init-unexpected` in the log means the list has something it shouldn't.
+  In the ledger, turn 1's `cacheRead` should be about turn 0's `cacheCreation`.
 
 ## Diagnostics
 
-J's standing instruction: **build in far too many, strip later.** One seam per
-side (`diag.ts` in the client, `server/diag.ts`); stripping means making them
-no-ops. **Soft invariants** log and count, never throw. Audibly, the app speaks
-only when it's *acting* on a problem.
+One seam per side (`diag.ts` in the client, `server/diag.ts`); stripping them
+means making them no-ops. **Soft invariants** log and count, never throw.
+Audibly, the app speaks only when it's *acting* on a problem.
 
+- **Reading it:** `npm run drive-report` (one session by id prefix, `--since`,
+  or all): broken rules, anomalies, the wait for a reply split into its parts,
+  cache misses, events lost to a stream gap and recovered.
 - **Sink:** client batches go to `POST /api/diag/:sessionId` every 15s and on
   hide / `pagehide` (`sendBeacon`), mirrored in localStorage until acknowledged
   (~2MB cap). The server appends client and server records to
   `<data root>/.app/diag/<sessionId>.jsonl` (25MB cap; never in git).
-- **Client records:** every recogniser event with latencies; per utterance the
-  markdown slice, spoken text, estimated vs actual duration, and the audio
-  session and `AudioContext` state at its start; endpointer decision traces
-  (which clock fired, timings); taps; SSE open/error/reconcile; wake lock,
-  visibility, navigation type; voice choice and why; cleanup result and time;
-  audio-session switches.
+- **Client records:** every recogniser event with latencies (an interim result
+  as its length and last 40 characters — in full they were half the log); per
+  utterance the markdown slice, spoken text, estimated vs actual duration and
+  the audio state at its start; endpointer decision traces; taps; SSE
+  open/error/reconcile; wake lock, visibility, navigation type; voice choice;
+  cleanup result and time.
 - **Invariants:** never `start()` while speaking or recognising; never submit
   during a turn or an empty buffer; never speak a sigil.
 - **Server records:** runner start/revive/close, the tool list and MCP state at
-  SDK init, how long the runner waited for the `tutor` tool server
-  (`mcp-ready`), SSE connect/disconnect, every
-  dispatched event with its listener count (0 = lost to a gap), turn timing
-  (send → first delta → result), full `rate_limit_info`, cleanup, kicks, ending.
+  SDK init, the wait for the `tutor` tool server (`mcp-ready`), SSE
+  connect/disconnect, every dispatched event with its listener count (0 = lost
+  to a gap), turn timing (send → first delta → result), `rate_limit_info`,
+  cleanup, kicks, ending.
 - **Pre-drive check** (debug strip, run parked): Safari, HTTPS, recognition,
   voices, wake lock, server health, heartbeat, current build, a tone then speech
   at equal volume, and a mic round trip — spoken and listed.
-
-## What the phone actually does
-
-Measured on J's iPhone (iOS 18.7, Safari 18.7.5) in the car — a small sample;
-the diagnostics widen it.
-
-- **Recognition works in Safari only.** Chrome/Firefox/Edge on iOS expose
-  `webkitSpeechRecognition` but fail at once with `not-allowed`.
-- **A mic request over playing speech is refused without a prompt**, ~1.2s in
-  (`not-allowed`, "User permission check has failed") — and every later start
-  in that page fails in ~2ms, until a reload. A request after speech ends shows
-  the prompt as normal (2026-10-10, 2026-10-19).
-- **Restart gap ~110ms once warm; a cold start 1.4–3.6s** to `audiostart`. The
-  first start in a lesson sometimes fails ~1s in with `audio-capture` ("Source is
-  muted") and retries fine.
-- **Sessions end on their own after 4–79s** (median ~12.6s). Finals arrive
-  1.2–2.1s after the last interim. Spoken numbers come back as digits
-  ("one, two, three" → `123`).
-- **Transcription at highway speed through the phone's speaker and mic is
-  excellent**; road noise was not a problem. Mistakes are jargon and homophones —
-  hence Cleanup.
-- **Speech volume.** `audioSession.type = "play-and-record"` made the speaker
-  quieter and switched the car's Bluetooth source. Left on `"auto"`, speech came
-  out quieter on some drives and not others. Setting **`"playback"` while
-  speaking and `"auto"` before the mic** (a setting, on by default) gave steady
-  volume on the first drives with it, and the `AudioContext` stopped suspending.
-  `audioSession.state` reads null on iOS 18.7.
-- **Bluetooth:** any open Bluetooth mic forces the call (HFP) profile — "phone
-  mode" — and a web page can't choose the built-in mic instead. With playback
-  mode the tutor's voice can use media audio; the car still switches while J
-  answers. **The phone speaker remains the default.**
-- **Latency:** the tutor's first word arrives a median ~14s after an answer
-  (p90 ~25s); turns with web tools run to ~100s.
-- Wake lock acquires and holds; `speechSynthesis` reports 223 voices at load.
-
-**Not yet measured:** standalone-PWA mode (recognition is reported to fail
-there), navigation prompts interrupting speech, Low Power Mode and the wake lock.
 
 ## Traps
 
@@ -327,22 +314,19 @@ there), navigation prompts interrupting speech, Low Power Mode and the wake lock
   `markdown.ts` (katex CSS) or `__DEMO__`. `npm test` won't catch it — only
   `npm run typecheck` does. Keep the pure audio modules import-free beyond each
   other.
-- **Never set `navigator.audioSession.type` to `"play-and-record"`** (above).
 - **`web/src/markdown.ts`'s `extractMath` eats currency** — "$50 to $100" loses
-  everything between the dollar signs. `text.ts` has its own handling and a
-  currency test.
+  everything between the dollar signs. `text.ts` has its own handling and a test.
 - **Never trigger speech from bubble rendering:** `showLesson` renders the whole
   history through `addBubble`. Speech is fed from SSE events plus the reconcile
   feed.
-- **Don't reintroduce index-based reconciliation** (`renderedIds` +
-  `pendingSends`, `web/src/lesson/reconcile.ts`) — a count drifts on a second
-  device and re-speaks the last reply on every wake.
+- **Don't reintroduce index-based reconciliation** (`web/src/lesson/reconcile.ts`
+  keys on ids): a count drifts on a second device and re-speaks the last reply
+  on every wake.
 - **A reconnecting `EventSource` doesn't revive a wound-down runner, and a POST
   doesn't replace a hung one** (`runnerFor` returns any non-closed runner) —
   hence health + kick.
 - **`condenseEntry` keeps three whitelisted lines of each past lesson**, so a new
   lesson-record field in `core/` is invisible to the model.
-- **One logical turn emits several `assistant` events** around web tools.
 - **`web/src/demo/replay.ts` implements `Api` and builds `Status`**: a new
   required field or method breaks the GitHub Pages build.
 - **The pending send must hold exactly the trimmed text the server stores**, or
@@ -352,66 +336,23 @@ there), navigation prompts interrupting speech, Low Power Mode and the wake lock
   `data:` audio. **Secure context required** — use the tailnet HTTPS URL.
 - **The service worker serves pages network-first** (`tests/sw.test.ts`); check
   the build id in the debug strip before trusting a test on the phone.
-- **Prompt caching is automatic** through the Agent SDK; read `cacheRead` /
-  `cacheCreation` when reasoning about the cost of many short spoken turns. A
-  turn with `cacheRead` 0 less than an hour after the previous one is a broken
-  prefix, not an expired cache — something before the messages changed.
-- **A new runner's first message must wait for the `tutor` MCP server.** Once
-  the CLI answers, it lists no MCP servers for ~0.5s; a message already queued
-  goes out in that gap without `commit_session`, so the next call's prompt
-  doesn't match and re-writes the whole cache (see the decisions log).
-
-## Decisions log
-
-J's calls, in order, with the evidence behind them.
-
-- **Overlay** (2026-10-06): big state word + hint; heard words in large text;
-  Again / Exit corners; collapsed debug strip; a headphones toggle beside "+";
-  Listen on the select screen; tones for cues.
-- **Typed turns tagged only right after a spoken one.** A kick sends a hidden
-  nudge, not the turn again (the model saw it twice). "Still working" at 20s.
-- **First iPhone run** (2026-10-09): End dropped from the overlay; silence clocks
-  4s / 7s mid-sentence; Samantha with tones on by default.
-- **First commuting week** (2026-10-09/10, Lessons 29–31): cleanup with raw
-  attached; Again from the transcript; Samantha outright; soft 3-minute cap; the
-  heard text bottom-anchored (oldest lines fade off the top); playback mode as a
-  default-on experiment; tones wait for a suspended context.
-- **With those changes** (2026-10-13, Lesson 32; J: "it worked better"): playback
-  mode held on every utterance, cleanup never fell back, two answers ran past the
-  old cap. Profile bullet removals now match across line wraps (Lessons 29 and
-  32 had commits rejected 2–3 times on it); a failed send is verified first.
-- **Mic refused without a prompt** (2026-10-19): reopening a lesson that waited
-  on J, with Listen on, opened the mic during "Starting."; Safari refused it and
-  kept refusing until J closed and reopened the app. Recognition now waits for
-  speech to end; a refusal shows a Reload button (J's call, over reloading by
-  itself or only saying so).
-
-- **Cache misses after every runner start** (2026-10-29, from the usage ledger
-  for Lessons 29–40): the second call of every runner (J's first answer after
-  the kickoff, and the first answer after each revival) read nothing from the
-  cache 1–4 minutes after the first, re-writing ~40k tokens (~$0.35 each,
-  roughly a quarter of a lesson's cost; 38 of 167 turns missed, 60% of spend,
-  most of it unavoidable revivals after a gap of over an hour). Each time it
-  wrote ~3.1k tokens more than the previous turn explains. A probe showed the
-  `tutor` server joining ~0.5s after the CLI starts answering, so the runner
-  now holds its first message until `tutor` reports connected (≤10s, logged as
-  `mcp-ready`). Check it in the ledger: turn 1's `cacheRead` should be about
-  turn 0's `cacheCreation`.
+- **A cache miss under an hour after the previous turn is a broken prefix**, not
+  an expired cache — something before the messages changed (see Latency and
+  cost).
 
 ## Open items
 
 - **How the curriculum viewer shows spoken turns.** The counts reach
   `CurriculumUnitLesson`; nothing renders them yet.
 - **A math-heavy warning on the select screen** when Listen is on — how to judge
-  "math-heavy" (the lane, or math density in past transcripts) is undecided.
-- **Offline tools never built:** `drive-report` (summarise a session's diag log)
-  and `speech-audit` (run `text.ts` over every archived tutor message).
-- **Cost per lesson** — `via` on usage records makes spoken vs typed cost exact;
-  worth a look once there are more drives.
-- **Thinking before the first word.** A spoken reply is ~230 words (~300 tokens)
-  but ~1,400 output tokens: most of the wait after an answer is thinking. Lower
-  effort for spoken turns would shorten it, at some cost to teaching; changing
-  it mid-lesson also drops the message cache. Untried.
-- **Wrap-up by voice** is out of drive mode by design; revisit if it gets
-  annoying.
-- **Full-duplex barge-in** looks feasible but is unverified.
+  "math-heavy" is undecided.
+- **`speech-audit`** (run `text.ts` over every archived tutor message) was never
+  built.
+- **Backgrounding mid-turn.** 23 of 37 hides came while waiting for a reply
+  (median 8s), each needing a tap to resume. By design; revisit if it grates.
+- **Not yet measured:** standalone-PWA mode (recognition is reported to fail
+  there), navigation prompts interrupting speech, Low Power Mode and the wake
+  lock.
+- **Wrap-up by voice** is out of drive mode by design. **Full-duplex barge-in**
+  looks feasible (recognition heard nothing of the tutor through the phone
+  speaker in one test) but is unverified.

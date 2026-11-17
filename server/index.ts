@@ -273,7 +273,7 @@ app.post<{
       // AFTER runnerFor: read the live runner's record, not a stale copy.
       const tag = turnTag(via, lastVia(runner.sessionRecord.transcript));
       const body = withHeard(text, heard);
-      runner.send(text, false, images, tag || heard ? withTurnTag(body, tag) : undefined, via, heard);
+      runner.send(text, { images, modelText: tag || heard ? withTurnTag(body, tag) : undefined, via, heard });
     } catch (e) {
       return reply.code(409).send({ error: (e as Error).message });
     }
@@ -329,7 +329,7 @@ app.post<{ Params: { id: string }; Body: { via?: Via } | undefined }>("/api/less
   // by a spoken client.
   const checklist = handoff ? `${endText}\n\n${handoff}` : endText;
   const tag = turnTag(via, lastVia(session.transcript));
-  runner.send(END_TURN_TEXT, false, [], withTurnTag(checklist, tag), via);
+  runner.send(END_TURN_TEXT, { modelText: withTurnTag(checklist, tag), via });
   return { ok: true };
 });
 
@@ -398,8 +398,12 @@ app.post<{ Params: { id: string }; Body: { text?: unknown } | undefined }>(
       fallback: r.fallback ?? null,
       raw: raw.trim(),
       text: r.text,
+      // What the model wrote when it wasn't used — the only way to judge a rejection afterwards.
+      ...(r.rejected ? { rejected: r.rejected } : {}),
     }, r.cleaned ? "info" : "anomaly");
-    return r;
+    // The client gets the verdict and the text; the unused output stays in the log.
+    const { rejected: _rejected, ...out } = r;
+    return out;
   }
 );
 

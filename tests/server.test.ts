@@ -150,7 +150,8 @@ test("lesson prompt splices the shared teaching contract", () => {
   assert.ok(systemPrompt.includes("Session-size anchors"), "size anchors");
   assert.ok(systemPrompt.includes("## Reading the primary source first"), "primary-source rule shared with the app");
   assert.ok(systemPrompt.includes("## Synthesis capstone"), "synthesis capstone");
-  assert.ok(systemPrompt.includes("Working-notes hygiene"), "consolidation rule");
+  assert.ok(systemPrompt.includes("Working notes are instructions, not a log"), "working-notes rule");
+  assert.ok(systemPrompt.includes(`{ "under": "<theme>", "text": ".." }`), "themed add in the patch shape");
   // The contract file's human-readers preamble must NOT ship in the prompt.
   assert.ok(!systemPrompt.includes("Edit here once"), "file preamble stripped");
 });
