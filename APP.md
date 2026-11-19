@@ -54,17 +54,22 @@ topic's last-touched lesson is a link too, which matters when a topic was last
 exercised as a recall warm-up inside *another* lane's lesson.
 
 **By date** (the switch at the top) lists every lesson, newest first, across all
-lanes, with a lane filter and a search box. Search matches every word you type
+lanes, with a lane filter and a search box; a lesson with key points shows the
+first one under its topics. Search matches every word you type
 in the same message, each at the start of a word, and shows up to three matching
 messages per lesson; tapping one opens the transcript at that message with the
 words marked. Back returns to the list as you left it.
 
-The transcript reader opens with the lesson's lane, unit, topics and what
-happened, then three sections you can open: **Sources** (every link the tutor
-gave, each with a way to the message that gave it, plus what the lesson history
-names; "Copy all" copies them), **How it went** (the performance sketch, what you
-asked for, your ratings, feedback noted) and **Details** (size, model, cost,
-timings). The conversation follows as bubbles, rendered with math, code and the
+The transcript reader opens with the lesson's lane, unit and topics, then its
+**key points**: the 3–6 conclusions the tutor recorded at commit. A lesson
+without them shows the history's "What happened" there instead. Three sections
+you can open follow: **Sources** (the sources the tutor listed at commit, each
+with what it supported, a "not checked" tag when it was named from memory rather
+than looked up, and a way to the message that gave its link; for a lesson
+without that list, every link the tutor gave plus what the lesson history names;
+"Copy all" copies them), **How it went** ("What happened" when key points took
+its place, the performance sketch, what you asked for, your ratings, feedback
+noted) and **Details** (size, model, cost, timings). The conversation follows as bubbles, rendered with math, code and the
 lesson's artwork; each tutor message has a Copy button for its markdown. Previous
 and next go by lesson number across all lanes.
 

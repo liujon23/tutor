@@ -202,6 +202,22 @@ Describe a confirmed pattern or preference by what to do, not by a coined label.
 - **lesson** — honest, compact entry. Performance graded *fairly*, never generously.
   Keep `whatHappened` to the load-bearing arc — what the next lesson needs, not a
   blow-by-blow; the transcript is the full record.
+- **keyPoints** — the conclusions this lesson reached, 3–6 lines, for the learner
+  reading the lesson back. Each line states the claim itself, in plain words, as it
+  would sit on a revision card: "Training on human approval produces approval-seeking,
+  and a more capable system is better at exploiting the gap", not "Discussed outer
+  alignment". One conclusion per line, at most about 30 words. Where the lesson
+  corrected a claim, record the corrected version. Where it ended on a genuinely open
+  question, the last line may state the question. Leave out who worked what out, how
+  it went and what comes next: that belongs in `performanceSketch` and `nextUp`.
+- **sources** — one entry for each work the lesson drew on, cited or named: `title`
+  names it as a citation would (author, title, year when known); `url` only when the
+  lesson actually gave that link, never one recalled from memory; `usedFor` is a few
+  words on what it supported in this lesson; `checked` is true only when this lesson
+  looked the source up (a search or a fetch), false when it was named from memory. An
+  empty list when nothing was named. `sourcesUsed` is now one line on how the sources
+  were handled (searched live, named from memory and not re-checked, paraphrased
+  because in copyright, links still owed) rather than the list itself.
 - **topicUpdates** — state changes for everything genuinely touched. Every recall
   warm-up gets a `recall: clean|rusty|miss` grade (see the warm-up section); topics
   that were taught rather than recalled omit `recall`. Trim notes on now-comfortable

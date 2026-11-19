@@ -11,6 +11,7 @@ import { parseTranscript, transcriptLinks } from "../web/src/curriculum/transcri
 import { docFromMarkdown, plainText, searchDocs, searchTranscripts, snippetAround, termPattern } from "../server/lesson-search.js";
 import { buildLessonDetail, parseHistoryFields, type LessonDetailPaths } from "../server/lesson-detail.js";
 import { buildLessonIndex } from "../server/lesson-index.js";
+import { saveDigests } from "../core/lesson-digests.js";
 
 // ---------------------------------------------------------------------------
 // A transcript in the shape renderTranscript writes
@@ -236,7 +237,18 @@ function detailFixture(): LessonDetailPaths {
     ].join("\n"),
     "utf8"
   );
-  return { curriculum, history, transcriptsDir, usageLedger, feedbackLedger };
+  const lessonDigests = join(dir, "lesson-digests.json");
+  saveDigests(lessonDigests, {
+    version: 1,
+    lessons: {
+      "9": {
+        keyPoints: ["The teacher becomes a gatekeeper.", "Second.", "Third."],
+        sources: [{ title: "A primer", url: "https://example.org/primer", checked: true }],
+        origin: "commit",
+      },
+    },
+  });
+  return { curriculum, history, transcriptsDir, usageLedger, feedbackLedger, lessonDigests };
 }
 
 test("history fields: labelled lines, with unlabelled lines continuing the field above", () => {
@@ -263,6 +275,14 @@ test("lesson detail: names, history, this lesson's ratings, usage and neighbours
   assert.equal(d.next, null);
   assert.equal(buildLessonDetail(3, paths)!.prev, null);
   assert.equal(buildLessonDetail(42, paths), null);
+});
+
+test("lesson detail: carries the digest when there is one, null otherwise", () => {
+  const paths = detailFixture();
+  const d = buildLessonDetail(9, paths)!;
+  assert.equal(d.digest?.keyPoints[0], "The teacher becomes a gatekeeper.");
+  assert.deepEqual(d.digest?.sources, [{ title: "A primer", url: "https://example.org/primer", checked: true }]);
+  assert.equal(buildLessonDetail(3, paths)!.digest, null);
 });
 
 test("lesson index: a transcript-only lesson's topic ids show as names", () => {

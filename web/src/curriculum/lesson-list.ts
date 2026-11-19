@@ -25,6 +25,8 @@ export interface DateRow {
   topicsLabel: string;
   topicsFull: string;
   hasTranscript: boolean;
+  /** The lesson's first key point, when it has one. */
+  keyPoint?: string;
 }
 
 const shortLane = (name: string) => name.replace(/\s+Lane$/, "");
@@ -45,6 +47,7 @@ export function lessonRows(view: CurriculumView): DateRow[] {
           topicsLabel: l.topicsLabel,
           topicsFull: l.topicsFull,
           hasTranscript: l.hasTranscript,
+          ...(l.keyPoint ? { keyPoint: l.keyPoint } : {}),
         });
       }
     }
@@ -92,7 +95,8 @@ function dateRow(r: DateRow, open: (n: number) => void): HTMLElement {
     "button",
     { class: "date-row", type: "button", onclick: () => open(r.lessonNumber) },
     h("div", { class: "date-row-head" }, ...rowHead(r)),
-    topics
+    topics,
+    r.keyPoint ? h("span", { class: "date-row-point", title: r.keyPoint }, r.keyPoint) : null
   );
 }
 

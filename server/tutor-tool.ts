@@ -51,6 +51,15 @@ const lessonShape = z.object({
   sourcesUsed: z.string(),
   feedbackCaptured: z.string(),
   askedAbout: z.string(),
+  keyPoints: z.array(z.string()),
+  sources: z.array(
+    z.object({
+      title: z.string(),
+      url: z.string().optional(),
+      usedFor: z.string().optional(),
+      checked: z.boolean(),
+    })
+  ),
 });
 
 // The distilled per-message feedback log — app-only, never seen by the core

@@ -42,6 +42,7 @@ On disk, that's:
 my-data/     YOUR state — gitignored here, and its own git repo:
                data/  profile.md · curriculum.yaml · lesson-history.md
                       (+ unit-summaries.json — derived, viewer-only, regenerable)
+                      (+ lesson-digests.json — key points + sources per lesson, viewer-only)
                transcripts/   archived lessons, their images, the usage and feedback ledgers
                .app/          session files, image cache, diagnostics — never in git
 core/        deterministic TS library — slicer, selector, validator, patcher
@@ -67,10 +68,13 @@ The curriculum viewer sits on that path. `core/layout.ts` turns a lane's unit
 every lesson ever taught by merging three records that accumulated over time
 (`usage.jsonl`, transcript headers, and `lesson-history.md` for the oldest
 lessons, which predate both). The transcript reader and the By date view add
-`/api/lessons/:n` (`server/lesson-detail.ts`: the history entry, ratings, cost
-and neighbours of one lesson) and `/api/lessons/search` (`server/lesson-search.ts`).
+`/api/lessons/:n` (`server/lesson-detail.ts`: the key points and sources, the
+history entry, ratings, cost and neighbours of one lesson) and `/api/lessons/search` (`server/lesson-search.ts`).
 Both read transcripts through `web/src/curriculum/transcript-parse.ts`, so a
-search hit's message number is the one the reader shows. The one piece of
+search hit's message number is the one the reader shows. Key points and sources
+are written by the tutor in the session patch (`lesson.keyPoints`,
+`lesson.sources`, checked by `core/lesson-digests.ts`) and stored in
+`data/lesson-digests.json`, which no lesson packet ever reads. The one piece of
 generated prose — each unit's
 summary — is written ahead of time by `npm run unit-summaries` and cached in
 `data/unit-summaries.json` behind a structure hash, so serving a page never

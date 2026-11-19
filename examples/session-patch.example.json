@@ -7,9 +7,17 @@
     "topicIds": ["ai-nn-foundations-loss"],
     "whatHappened": "2–4 sentences: what was actually taught, how it went.",
     "performanceSketch": "Coarse, fair read of where the learner landed — what clicked, what didn't.",
-    "sourcesUsed": "Named sources drawn on, or 'None named.'",
+    "sourcesUsed": "How the sources were handled: searched live, or named from memory and not re-checked.",
     "feedbackCaptured": "What the learner said in the wrap-up, or 'skipped'.",
-    "askedAbout": "Which feedback topics were probed, so future sessions don't re-ask."
+    "askedAbout": "Which feedback topics were probed, so future sessions don't re-ask.",
+    "keyPoints": [
+      "Each line is one conclusion the lesson reached, stated as the claim itself.",
+      "3–6 of them; plain words, no lesson numbers, nothing about how it went.",
+      "Where the lesson corrected a claim, the corrected version."
+    ],
+    "sources": [
+      { "title": "Author, Title (year)", "url": "https://example.org/only-when-the-lesson-gave-the-link", "usedFor": "what it supported", "checked": true }
+    ]
   },
   "curriculum": {
     "topicUpdates": [

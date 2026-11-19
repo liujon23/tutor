@@ -1724,6 +1724,15 @@ input.hidden[type="file"] {
   overflow: hidden;
 }
 
+.date-row-point {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hit {
   display: flex;
   flex-direction: column;
@@ -1886,6 +1895,35 @@ input.hidden[type="file"] {
 .source-host {
   font-size: 12px;
   color: var(--muted);
+}
+
+.source-title {
+  overflow-wrap: anywhere;
+}
+
+.source-unchecked {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  padding: 0 7px;
+}
+
+.source-use {
+  flex-basis: 100%;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.reader-keypoints {
+  margin: 0;
+  padding-left: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 .source-jump,

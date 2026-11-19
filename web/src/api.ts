@@ -203,6 +203,8 @@ export interface CurriculumUnitLesson {
   topicsLabel: string;
   topicsFull: string;
   hasTranscript: boolean;
+  /** The lesson's first key point, when it has a digest. */
+  keyPoint?: string;
   /** Learner turns spoken in drive mode; absent for lessons before it. */
   spokenTurns?: number;
   typedTurns?: number;
@@ -253,6 +255,12 @@ export interface LessonDetail {
   unitName: string;
   topics: string;
   hasTranscript: boolean;
+  /** Key points and sources; null for a lesson committed before them and not yet backfilled. */
+  digest: {
+    keyPoints: string[];
+    sources: { title: string; url?: string; usedFor?: string; checked: boolean }[];
+    origin: "commit" | "backfill";
+  } | null;
   history: {
     whatHappened: string;
     performanceSketch: string;

@@ -1,9 +1,10 @@
 // The transcript reader: an archived lesson, laid out for reading back.
 //
-// Top to bottom: what the lesson was, its summary, its sources, how it went,
-// the bookkeeping, then the conversation as bubbles and a way to the lessons
-// either side. The transcript file is the source of the conversation; the
-// lesson's history entry, ratings and cost come from /api/lessons/:n, and the
+// Top to bottom: what the lesson was, its key points (or, for a lesson without
+// them, the history's "What happened"), its sources, how it went, the
+// bookkeeping, then the conversation as bubbles and a way to the lessons either
+// side. The transcript file is the source of the conversation; the key points,
+// sources, history entry, ratings and cost come from /api/lessons/:n, and the
 // reader still works without them (the demo build has none).
 import { h, clear } from "../dom.js";
 import { api } from "../api.js";
@@ -119,11 +120,61 @@ function field(label: string, value: string | undefined | null): HTMLElement | n
   return h("div", { class: "reader-field" }, h("div", { class: "detail-label" }, label), proseBlock(value));
 }
 
+type Digest = NonNullable<LessonDetail["digest"]>;
+
+/** The sources the tutor listed at commit, each linked to where it came up when the transcript has its link. */
+function listedSources(
+  sources: Digest["sources"],
+  links: TranscriptLink[],
+  prose: string | undefined,
+  proseLabel: string,
+  jump: (turn: number) => void
+): HTMLElement {
+  const turnOf = new Map(links.map((l) => [l.url, l.turn]));
+  const list = h(
+    "ul",
+    { class: "source-list" },
+    ...sources.map((s) => {
+      const turn = s.url ? turnOf.get(s.url) : undefined;
+      return h(
+        "li",
+        {},
+        s.url ? h("a", { href: s.url, target: "_blank", rel: "noopener" }, s.title) : h("span", { class: "source-title" }, s.title),
+        s.url ? h("span", { class: "source-host" }, hostOf(s.url)) : null,
+        s.checked ? null : h("span", { class: "source-unchecked", title: "Named from memory; not looked up in this lesson" }, "not checked"),
+        s.usedFor ? h("div", { class: "source-use" }, s.usedFor) : null,
+        turn !== undefined
+          ? h("button", { class: "source-jump", type: "button", onclick: () => jump(turn) }, "where it came up")
+          : null
+      );
+    })
+  );
+  const copyText = () =>
+    [
+      sources
+        .map((s) => `- ${s.title}${s.url ? `: ${s.url}` : ""}${s.usedFor ? ` (${s.usedFor})` : ""}${s.checked ? "" : " [not checked]"}`)
+        .join("\n"),
+      prose ?? "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  return section(
+    `Sources (${sources.length})`,
+    list,
+    field(proseLabel, prose),
+    h("div", { class: "reader-actions" }, copyButton("Copy all", copyText))
+  );
+}
+
 function sourcesSection(
+  digest: Digest | null,
   links: TranscriptLink[],
   prose: string | undefined,
   jump: (turn: number) => void
 ): HTMLElement | null {
+  // A backfilled lesson's "Sources used" is the old prose list, not a note on handling.
+  if (digest && digest.sources.length > 0)
+    return listedSources(digest.sources, links, prose, digest.origin === "commit" ? "How they were handled" : "Also named", jump);
   if (links.length === 0 && !prose) return null;
   const list = links.length
     ? h(
@@ -155,6 +206,8 @@ function howItWent(detail: LessonDetail | null): HTMLElement | null {
   const hist = detail?.history;
   const ratings = detail?.ratings ?? [];
   if (!hist && ratings.length === 0) return null;
+  // With key points at the top, the full account moves down here.
+  const whatHappened = detail?.digest ? hist?.whatHappened : undefined;
   const ratingList = ratings.length
     ? h(
         "div",
@@ -176,6 +229,7 @@ function howItWent(detail: LessonDetail | null): HTMLElement | null {
     : null;
   return section(
     "How it went",
+    field("What happened", whatHappened),
     field("Performance", hist?.performanceSketch),
     field("What you asked for", hist?.askedAbout),
     ratingList,
@@ -267,7 +321,18 @@ export async function showTranscript(
   const date = detail?.date ?? parsed.date;
   const where = detail ? `${detail.laneName.replace(/\s+Lane$/, "")} · ${detail.unitName}` : parsed.fields["Lane / Unit"];
   const topics = detail?.topics || parsed.fields["Topics"];
+  const digest = detail?.digest ?? null;
   const summary = detail?.history?.whatHappened || parsed.summary;
+  const top = digest?.keyPoints.length
+    ? h(
+        "div",
+        { class: "reader-summary" },
+        h("div", { class: "detail-label" }, "Key points"),
+        h("ul", { class: "reader-keypoints" }, ...digest.keyPoints.map((p) => h("li", {}, p)))
+      )
+    : summary
+      ? h("div", { class: "reader-summary" }, h("div", { class: "detail-label" }, "What happened"), proseBlock(summary))
+      : null;
 
   const nav =
     detail && (detail.prev || detail.next)
@@ -292,11 +357,11 @@ export async function showTranscript(
       where ? h("div", { class: "reader-where" }, where) : null,
       topics ? h("div", { class: "reader-topics" }, topics) : null
     ),
-    summary ? h("div", { class: "reader-summary" }, h("div", { class: "detail-label" }, "What happened"), proseBlock(summary)) : null,
+    top,
     h(
       "div",
       { class: "reader-sections" },
-      sourcesSection(links, detail?.history?.sourcesUsed, jump),
+      sourcesSection(digest, links, detail?.history?.sourcesUsed, jump),
       howItWent(detail),
       detailsSection(parsed, detail)
     ),

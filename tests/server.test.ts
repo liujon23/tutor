@@ -276,6 +276,8 @@ test("commit_session's ALREADY-COMMITTED guard blocks a retry before touching da
           sourcesUsed: "z",
           feedbackCaptured: "skipped",
           askedAbout: "nothing",
+          keyPoints: ["First conclusion.", "Second conclusion.", "Third conclusion."],
+          sources: [],
         },
       },
     },
@@ -310,6 +312,8 @@ test("renderTranscript archives the human-readable conversation", () => {
       sourcesUsed: "None.",
       feedbackCaptured: "skipped",
       askedAbout: "nothing new",
+      keyPoints: ["First conclusion.", "Second conclusion.", "Third conclusion."],
+      sources: [],
     },
   };
   const md = renderTranscript(session, patch, 4);
@@ -338,6 +342,8 @@ test("renderTranscript includes a commit-timing block when given one", () => {
       sourcesUsed: "z",
       feedbackCaptured: "skipped",
       askedAbout: "nothing",
+      keyPoints: ["First conclusion.", "Second conclusion.", "Third conclusion."],
+      sources: [],
     },
   };
   const md = renderTranscript(session, patch, 4, undefined, undefined, {
@@ -416,6 +422,8 @@ test("renderTranscript points archived images at their copies", () => {
       sourcesUsed: "Wikimedia.",
       feedbackCaptured: "skipped",
       askedAbout: "nothing",
+      keyPoints: ["First conclusion.", "Second conclusion.", "Third conclusion."],
+      sources: [],
     },
   };
   const map = new Map([["https://example.org/sunrise.jpg", "assets/lesson-009/deadbeef.jpg"]]);
@@ -470,6 +478,8 @@ test("renderTranscript rides inbound photos above the message text", () => {
       sourcesUsed: "None.",
       feedbackCaptured: "skipped",
       askedAbout: "nothing",
+      keyPoints: ["First conclusion.", "Second conclusion.", "Third conclusion."],
+      sources: [],
     },
   };
   // Archived copy known → relative path used.
@@ -849,6 +859,8 @@ test("renderTranscript marks fired -2 flags and nothing else", () => {
       sourcesUsed: "None.",
       feedbackCaptured: "per-message",
       askedAbout: "nothing",
+      keyPoints: ["First conclusion.", "Second conclusion.", "Third conclusion."],
+      sources: [],
     },
   };
   const md = renderTranscript(session, patch, 12);

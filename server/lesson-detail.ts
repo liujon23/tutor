@@ -1,10 +1,12 @@
 // Everything about one past lesson that its archived transcript doesn't carry:
-// the lesson-history fields, the ratings distilled at commit, cost including
+// its key points and sources (lesson-digests.json), the lesson-history fields,
+// the ratings distilled at commit, cost including
 // the commit turn, names instead of ids, and its neighbours. Feeds the
 // transcript reader; zero AI tokens.
 import { existsSync, readFileSync } from "node:fs";
 import { allUnits, loadCurriculum } from "../core/curriculum.js";
 import { parseHistory } from "../core/history.js";
+import { digestFor, loadDigests, type LessonDigest } from "../core/lesson-digests.js";
 import { PATHS } from "../scripts/lib.js";
 import { buildLessonIndex, DEFAULT_INDEX_PATHS, type LessonIndexPaths } from "./lesson-index.js";
 import { readLedger } from "./usage-report.js";
@@ -12,11 +14,13 @@ import { usageHeadline } from "./usage.js";
 
 export interface LessonDetailPaths extends LessonIndexPaths {
   feedbackLedger: string;
+  lessonDigests: string;
 }
 
 export const DEFAULT_DETAIL_PATHS: LessonDetailPaths = {
   ...DEFAULT_INDEX_PATHS,
   feedbackLedger: PATHS.feedbackLedger,
+  lessonDigests: PATHS.lessonDigests,
 };
 
 export interface HistoryFields {
@@ -42,6 +46,8 @@ export interface LessonDetail {
   unitName: string;
   topics: string;
   hasTranscript: boolean;
+  /** Key points and sources; null for a lesson committed before them and not yet backfilled. */
+  digest: LessonDigest | null;
   history: HistoryFields | null;
   ratings: LessonRating[];
   /** usageHeadline of the ledger entry, commit turn included where recorded. */
@@ -126,6 +132,7 @@ export function buildLessonDetail(
     unitName: placed?.unit.name ?? e.unitId,
     topics: e.topicsFull,
     hasTranscript: e.hasTranscript,
+    digest: digestFor(loadDigests(paths.lessonDigests), lessonNumber),
     history: entry ? parseHistoryFields(entry.body) : null,
     ratings: readRatings(paths.feedbackLedger, lessonNumber),
     usage: ledger?.usage ? usageHeadline(ledger.usage) : null,
