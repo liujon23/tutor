@@ -126,8 +126,7 @@ the same conversation, committed the same way.
 - **Phone speaker is best.** On Bluetooth the car switches to phone-call audio
   whenever the mic is open — unavoidable from a web page.
 - The **debug strip** at the bottom (for use while parked) holds the voice
-  (Samantha by default), speed, tones, the "playback mode while speaking"
-  setting, and a **pre-drive check** worth running before the first drive on a
+  (Samantha by default), speed, tones and a **pre-drive check** worth running before the first drive on a
   new build.
 
 Everything drive mode does is logged to `.app/diag/<session>.jsonl` in the data

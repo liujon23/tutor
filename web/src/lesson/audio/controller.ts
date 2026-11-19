@@ -99,11 +99,9 @@ function loadSettings(): SpeechSettings {
       voiceURI: typeof v.voiceURI === "string" ? v.voiceURI : null,
       rate: typeof v.rate === "number" ? v.rate : 1,
       tones: v.tones !== false,
-      // Absent in settings saved before 2026-10-10: on, like a fresh device.
-      sessionPlayback: v.sessionPlayback !== false,
     };
   } catch {
-    return { voiceURI: null, rate: 1, tones: true, sessionPlayback: true };
+    return { voiceURI: null, rate: 1, tones: true };
   }
 }
 
@@ -483,8 +481,7 @@ export class DriveController implements AudioController {
       line(p.safari, p.safari ? "Safari" : "Not Safari — speech recognition only works in Safari on iOS");
       line(p.secure, p.secure ? "Secure (HTTPS) page" : "Not HTTPS — use the tailnet URL");
       line(p.recognition, "Speech recognition present");
-      const playback = loadSettings().sessionPlayback;
-      line(null, p.audioSession ? `audioSession present (playback while speaking: ${playback ? "on" : "off"})` : "no audioSession API");
+      line(null, p.audioSession ? "audioSession present" : "no audioSession API");
       const voices = await audioAdapter.voices();
       line(voices.length > 0, `${voices.length} voices`);
       await sleep(300);

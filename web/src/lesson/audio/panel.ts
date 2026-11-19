@@ -63,7 +63,6 @@ export class DrivePanel {
   private voiceSel = h("select", { class: "drive-select" }) as HTMLSelectElement;
   private rateSel = h("select", { class: "drive-select" }) as HTMLSelectElement;
   private tonesBox = h("input", { type: "checkbox" }) as HTMLInputElement;
-  private playbackBox = h("input", { type: "checkbox" }) as HTMLInputElement;
   private expanded = false;
 
   constructor(
@@ -84,20 +83,17 @@ export class DrivePanel {
     }
     this.rateSel.value = String(settings.rate);
     this.tonesBox.checked = settings.tones;
-    this.playbackBox.checked = settings.sessionPlayback;
     const emitSettings = () => {
       this.settings = {
         voiceURI: this.voiceSel.value || null,
         rate: Number(this.rateSel.value),
         tones: this.tonesBox.checked,
-        sessionPlayback: this.playbackBox.checked,
       };
       this.handlers.settings(this.settings);
     };
     this.voiceSel.addEventListener("change", emitSettings);
     this.rateSel.addEventListener("change", emitSettings);
     this.tonesBox.addEventListener("change", emitSettings);
-    this.playbackBox.addEventListener("change", emitSettings);
 
     this.debug.append(
       h(
@@ -106,12 +102,6 @@ export class DrivePanel {
         h("label", {}, "Voice ", this.voiceSel),
         h("label", {}, "Speed ", this.rateSel),
         h("label", {}, this.tonesBox, " Tones (off: short spoken cues)"),
-        h(
-          "label",
-          {},
-          this.playbackBox,
-          " Playback mode while speaking (experiment: steadier volume; on Bluetooth, music audio instead of call audio)"
-        ),
         h("button", { class: "drive-check-btn", onclick: own(() => this.handlers.check()) }, "Run pre-drive check"),
         h(
           "div",
