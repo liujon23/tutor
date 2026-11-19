@@ -329,6 +329,12 @@ export const demoApi: Api = {
   report,
   curriculum,
   transcript: transcriptText,
+  // The demo ships no lesson history or ledgers: the reader shows what the
+  // transcript itself carries, and search is hidden.
+  lessonDetail: async () => {
+    throw new Error("Lesson details aren't part of this demo.");
+  },
+  searchLessons: async (query: string) => ({ query, terms: [], hits: [], truncated: false }),
   createLesson,
   lesson,
   sendMessage,

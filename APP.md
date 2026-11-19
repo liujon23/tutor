@@ -49,10 +49,24 @@ labels, since a DAG at phone width is unreadable.
 
 Tapping a block expands it in place: core topics with their state and when each
 was last touched, optional topics in a dimmer group, cross-lane connections, and
-every lesson taught in that unit. Tapping a lesson opens its **transcript**, fully
-rendered with math, code and the artwork the lesson embedded. A topic's
-last-touched lesson is a link too, which matters when a topic was last exercised
-as a recall warm-up inside *another* lane's lesson.
+every lesson taught in that unit. Tapping a lesson opens its **transcript**. A
+topic's last-touched lesson is a link too, which matters when a topic was last
+exercised as a recall warm-up inside *another* lane's lesson.
+
+**By date** (the switch at the top) lists every lesson, newest first, across all
+lanes, with a lane filter and a search box. Search matches every word you type
+in the same message, each at the start of a word, and shows up to three matching
+messages per lesson; tapping one opens the transcript at that message with the
+words marked. Back returns to the list as you left it.
+
+The transcript reader opens with the lesson's lane, unit, topics and what
+happened, then three sections you can open: **Sources** (every link the tutor
+gave, each with a way to the message that gave it, plus what the lesson history
+names; "Copy all" copies them), **How it went** (the performance sketch, what you
+asked for, your ratings, feedback noted) and **Details** (size, model, cost,
+timings). The conversation follows as bubbles, rendered with math, code and the
+lesson's artwork; each tutor message has a Copy button for its markdown. Previous
+and next go by lesson number across all lanes.
 
 Two things render as plain text rather than links, on purpose: lessons from before
 the transcript archive existed (they show "no transcript archived"), and a unit

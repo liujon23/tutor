@@ -205,19 +205,24 @@ export function buildLessonIndex(
     });
   }
 
-  // 2. Transcript headers — covers lesson 4, which predates the ledger.
+  // 2. Transcript headers — covers lesson 4, which predates the ledger. The
+  // header's topics line holds ids unless the lesson strayed off-graph; ids
+  // that all resolve are shown by name.
   for (const n of transcripts.keys()) {
     if (byNumber.has(n)) continue;
     const head = headFor(n);
     if (!head) continue;
+    const parts = head.topicsLine.split(",").map((s) => s.trim()).filter(Boolean);
+    const topicIds = parts.length > 0 && parts.every((id) => topicById(c, id)) ? parts : [];
+    const full = topicIds.length ? labelTopics(c, topicIds, "") : head.topicsLine;
     add({
       lessonNumber: head.lessonNumber,
       date: head.date,
       laneId: head.laneId,
       unitId: head.unitId,
-      topicIds: [],
-      topicsLabel: truncate(head.topicsLine, LABEL_MAX),
-      topicsFull: head.topicsLine,
+      topicIds,
+      topicsLabel: truncate(full, LABEL_MAX),
+      topicsFull: full,
       hasTranscript: true,
       source: "transcript",
     });
