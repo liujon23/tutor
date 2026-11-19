@@ -12,6 +12,7 @@ import { docFromMarkdown, plainText, searchDocs, searchTranscripts, snippetAroun
 import { buildLessonDetail, parseHistoryFields, type LessonDetailPaths } from "../server/lesson-detail.js";
 import { buildLessonIndex } from "../server/lesson-index.js";
 import { saveDigests } from "../core/lesson-digests.js";
+import { conversationText, missingDigests, parseKeyPoints, readKeyPointsRule } from "../scripts/lesson-digests-prompt.js";
 
 // ---------------------------------------------------------------------------
 // A transcript in the shape renderTranscript writes
@@ -296,4 +297,35 @@ test("search over files: reads the transcripts directory", () => {
   const { transcriptsDir } = detailFixture();
   const r = searchTranscripts("gatekeeper", transcriptsDir);
   assert.deepEqual(r.hits.map((h) => h.lessonNumber), [9]);
+});
+
+// ---------------------------------------------------------------------------
+// Key-points backfill (the pure half; no model)
+// ---------------------------------------------------------------------------
+
+test("backfill: only transcript lessons without a digest, ascending", () => {
+  const file = { version: 1 as const, lessons: { "9": { keyPoints: ["a", "b", "c"], sources: [], origin: "commit" as const } } };
+  assert.deepEqual(missingDigests([12, 9, 4, 12], file), [4, 12]);
+});
+
+test("backfill: the rule is read from the teaching contract itself", () => {
+  const rule = readKeyPointsRule(join(import.meta.dirname, ".."));
+  assert.ok(rule.startsWith("- **keyPoints**"));
+  assert.match(rule, /3–6 lines/);
+  assert.ok(!rule.includes("**sources**"), "stops before the next bullet");
+});
+
+test("backfill: the conversation drops images but keeps every turn", () => {
+  const text = conversationText(TRANSCRIPT);
+  assert.equal((text.match(/^### (Tutor|Learner)/gm) ?? []).length, 4);
+  assert.match(text, /### Learner \(spoken\)/);
+  assert.ok(!text.includes("assets/"));
+  assert.match(text, /\[primer\]\(https:\/\/example\.org\/primer\)/);
+});
+
+test("backfill: the model's lines are read and held to the commit limits", () => {
+  const ok = parseKeyPoints("- One.\n- Two.\n\n* Three.\n");
+  assert.deepEqual(ok.keyPoints, ["One.", "Two.", "Three."]);
+  assert.deepEqual(ok.errors, []);
+  assert.ok(parseKeyPoints("Here are the points:\n- Only one.").errors.length > 0);
 });
