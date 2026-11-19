@@ -11,14 +11,11 @@
 // - Keep a strong reference to the speaking utterance (it can be garbage
 //   collected before onend), and tag each with the machine's generation so a
 //   cancelled one's late onend/onerror is recognisably stale.
-// - Never set navigator.audioSession.type to "play-and-record": it made the
-//   speaker quieter and switched the car's Bluetooth source. What IS set, when
-//   the sessionPlayback setting is on (the default since 2026-10-10), is
-//   "playback" while the tutor speaks and "auto" again before the mic opens:
-//   J heard the tutor come out quieter on some drives and not others, which
-//   fits iOS keeping the session in its record mode after the mic closes. On
-//   Bluetooth it also keeps the tutor's voice out of the car's phone-call
-//   audio (only the mic needs that). An experiment: every switch is logged.
+// - Never set navigator.audioSession.type. "play-and-record" made the
+//   speaker quieter and switched the car's Bluetooth source; "playback" while
+//   speaking made speech silent on iOS 27 (Safari 27.2): speechSynthesis still
+//   ran to time, tones still played, nothing was heard. The session is only
+//   watched, for interruptions.
 // - Tones come from an oscillator (the CSP blocks data: audio). The
 //   AudioContext must be created inside a tap.
 // ---------------------------------------------------------------------------
@@ -75,8 +72,6 @@ export interface SpeechSettings {
   voiceURI: string | null;
   rate: number;
   tones: boolean;
-  /** Mark the audio session "playback" while speaking (see the header). */
-  sessionPlayback: boolean;
 }
 
 /** navigator.audioSession — Safari only, not in lib.dom yet. */
@@ -164,7 +159,7 @@ export class AudioAdapter {
   private deferredStart: ReturnType<typeof setTimeout> | undefined;
   private ac: AudioContext | null = null;
   private wake: WakeLockSentinel | null = null;
-  private settings: SpeechSettings = { voiceURI: null, rate: 1, tones: true, sessionPlayback: true };
+  private settings: SpeechSettings = { voiceURI: null, rate: 1, tones: true };
   private sessionWatched = false;
   /** Bumped on every speak/cancel, so a lead-in waiting on a resume can tell it was superseded. */
   private speakToken = 0;
@@ -183,20 +178,6 @@ export class AudioAdapter {
   private sessionInfo(): { type: string; state: string | null } | null {
     const as = audioSession();
     return as ? { type: as.type, state: as.state ?? null } : null;
-  }
-
-  /** Switch the audio session type (see the header). Logged; never throws. */
-  private sessionFor(use: "speech" | "mic"): void {
-    const as = audioSession();
-    if (!as) return;
-    const want = use === "speech" && this.settings.sessionPlayback ? "playback" : "auto";
-    if (as.type === want) return;
-    try {
-      as.type = want;
-      this.log("audiosession-set", { type: want, for: use, state: as.state ?? null });
-    } catch (e) {
-      this.log("audiosession-set-failed", { type: want, error: (e as Error).message }, "anomaly");
-    }
   }
 
   private input(i: DriveInput): void {
@@ -235,7 +216,6 @@ export class AudioAdapter {
   configure(settings: SpeechSettings): void {
     this.settings = settings;
     this.voice = null; // re-picked on the next speak
-    if (!settings.sessionPlayback) this.sessionFor("mic"); // switched off: back to "auto" now
   }
 
   /** Voices, waiting for voiceschanged only if none are loaded yet (it may never fire). */
@@ -291,7 +271,6 @@ export class AudioAdapter {
   speak(gen: number, text: string, leadIn: boolean, inGesture: boolean): void {
     clearTimeout(this.leadInTimer);
     const token = ++this.speakToken;
-    this.sessionFor("speech");
     const u = this.utterance(text);
     this.current = u; // strong ref until it ends
     const startedAt = now();
@@ -339,7 +318,6 @@ export class AudioAdapter {
   /** Speak outside the machine (pre-drive check, select-screen "Starting."). Resolves on end. */
   speakOnce(text: string, timeoutMs = 20_000): Promise<void> {
     return new Promise((resolve) => {
-      this.sessionFor("speech");
       const u = this.utterance(text);
       this.current = u;
       const done = () => {
@@ -367,7 +345,6 @@ export class AudioAdapter {
     const line = SPOKEN_CUES[kind];
     if (line) {
       // Not tracked by the machine — its own utterances carry generations.
-      this.sessionFor("speech");
       const u = this.utterance(line);
       speechSynthesis.speak(u);
     }
@@ -554,7 +531,6 @@ export class AudioAdapter {
   }
 
   private beginRecognizer(r: Recognizer): void {
-    this.sessionFor("mic");
     this.recSession++;
     this.finalsThisSession.clear();
     // Reset per session, or the first audiostart measures from an earlier
@@ -609,7 +585,6 @@ export class AudioAdapter {
       this.recSession++;
       this.finalsThisSession.clear();
       this.recStartedAt = now();
-      this.sessionFor("mic");
       try {
         r.start();
       } catch (e) {

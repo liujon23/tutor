@@ -138,10 +138,13 @@ restarts it and the endpointer keeps accumulating one answer.
   flight. With tones off, "Okay." / "Still working." are spoken and the
   listening cue is silent. iOS suspends an idle `AudioContext` ~8s after its
   last sound, so a tone resumes it first (≤500ms) and speech waits for the tone.
-- **Audio session: `"playback"` while speaking, `"auto"` before the mic** (a
-  setting, on by default). Left on `"auto"` throughout, speech came out quieter
-  on some drives. `"play-and-record"` is never set: it made the speaker quieter
-  and switched the car's Bluetooth source.
+- **The audio session type is never set.** `"play-and-record"` made the
+  speaker quieter and switched the car's Bluetooth source. `"playback"` while
+  speaking (a setting, on by default until November 2026) made speech silent
+  on iOS 27: the utterances ran to time and tones still played, but nothing
+  was heard, and starting speech interrupted the page's `AudioContext` on 13
+  of 41 lines (1 in 1,145 before). It had been added because speech sometimes
+  came out quieter on `"auto"`; if that returns, it is the known trade-off.
 - **The phone speaker is the default.** Any open Bluetooth mic forces the
   call (HFP) profile, and a web page can't choose the built-in mic instead.
 
@@ -181,7 +184,7 @@ does.
 - **Listen** on the select screen (per device) starts lessons — and opens
   in-progress ones — in drive mode, so the opening is spoken.
 - The overlay is always dark (glare). The **debug strip** (collapsed) holds the
-  build id, wake-lock dot, voice/speed/tones, the playback-mode toggle, the
+  build id, wake-lock dot, voice/speed/tones, the
   pre-drive check and the live diag tail.
 - Errors are **spoken**: `closed`, `api_error`, `error`, `rate_limit` (once per
   change). Everything else is silent and logged.
