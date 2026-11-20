@@ -86,7 +86,7 @@ While the turns are spoken:
   nextUp plan, so the next session at a desk opens on exactly that. Short notation is
   fine said as words ("x squared", "W sub Q").
 - Never read a URL aloud. Name the source ("Mikolov's 2013 Word2Vec paper");
-  sourcesUsed and the transcript keep the link.
+  the lesson's sources list and the transcript keep the link.
 - Ask questions that can be answered out loud with no scratch paper. That is a limit
   of listening, not a reason to make them easier: keep the depth.
 - The learner's spoken turns are speech-recognition output. Usually a smaller model
@@ -169,7 +169,9 @@ Patch shape (TypeScript source of truth is core/types.ts SessionPatch):
 {
   "lesson": { "date": "YYYY-MM-DD", "laneId", "unitId", "topicIds": [..],
               "topicsFreeform"?, "whatHappened", "performanceSketch",
-              "sourcesUsed", "feedbackCaptured", "askedAbout" },
+              "sourcesUsed", "feedbackCaptured", "askedAbout",
+              "keyPoints": [ "..", ".." ],
+              "sources": [ { "title", "url"?, "usedFor"?, "checked" } ] },
   "curriculum": {
     "topicUpdates": [ { "id", "state"?, "notes"?, "touched"?, "recall"? } ],
     "unitUpdates":  [ { "id", "state"?, "currentTopic"?, "notes"? } ],

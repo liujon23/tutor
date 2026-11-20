@@ -133,6 +133,13 @@ fields: Lane/Unit/Topic, What happened, Performance sketch, Sources used, Feedba
 captured, Asked about. **Archival:** only the last few entries are loaded per session
 (`--history N`); the durable signal lives in Settled questions.
 
+## lesson-digests.json
+
+The reading-back record of each lesson, keyed by lesson number: `keyPoints` and
+`sources` from the patch. Written at commit, never loaded into a lesson's packet; the
+transcript reader and the By date list show it. Lessons committed before it existed
+are filled in by `npm run lesson-digests`.
+
 ## projects/&lt;laneId&gt;.md (optional — per-lane project artifact)
 
 Some lanes carry a **project**: a design/spec document the learner builds and revises across the
@@ -163,7 +170,11 @@ truth: `core/types.ts` (`SessionPatch`); worked example:
 ```
 {
   lesson:      { date, laneId, unitId, topicIds[], topicsFreeform?, whatHappened,
-                 performanceSketch, sourcesUsed, feedbackCaptured, askedAbout },
+                 performanceSketch, sourcesUsed, feedbackCaptured, askedAbout,
+                 keyPoints[]  — 3–6 conclusions the lesson reached, one claim each,
+                 sources[]    — {title, url?, usedFor?, checked}; url only when the
+                                lesson gave the link; checked = looked up
+                                this lesson, not named from memory },
   curriculum?: { topicUpdates[]   — {id, state?, notes?, touched? (default true →
                                      lastTouched stamped with this lesson),
                                      recall? (clean|rusty|miss — grade for a recall

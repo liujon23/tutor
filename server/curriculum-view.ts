@@ -12,6 +12,7 @@ import {
 } from "../core/unit-summaries.js";
 import { DATA_PATHS, PATHS, todayLocal } from "../scripts/lib.js";
 import { buildLessonIndex, lessonsForUnit, type LessonIndexEntry } from "./lesson-index.js";
+import { digestFor, loadDigests, type LessonDigestsFile } from "../core/lesson-digests.js";
 import type { Curriculum, Lane, Topic, Unit } from "../core/types.js";
 
 export interface TopicView {
@@ -30,6 +31,8 @@ export interface UnitLessonView {
   topicsLabel: string;
   topicsFull: string;
   hasTranscript: boolean;
+  /** The lesson's first key point, when it has a digest. */
+  keyPoint?: string;
   /** Learner turns spoken in drive mode; absent for lessons that predate it. */
   spokenTurns?: number;
   typedTurns?: number;
@@ -94,7 +97,8 @@ function buildUnitView(
   unit: Unit,
   index: LessonIndexEntry[],
   hasTranscript: Map<number, boolean>,
-  summaries: ReturnType<typeof loadUnitSummaries>
+  summaries: ReturnType<typeof loadUnitSummaries>,
+  digests: LessonDigestsFile
 ): UnitView {
   const lessons = lessonsForUnit(index, unit.id);
   const entry = summaries.units[unit.id];
@@ -146,15 +150,19 @@ function buildUnitView(
     optionalTopics: unit.optionalTopics.map((t) => topicView(t, hasTranscript)),
     bridgesInLane,
     bridgesCrossLane,
-    lessons: lessons.map((e) => ({
-      lessonNumber: e.lessonNumber,
-      date: e.date,
-      topicsLabel: e.topicsLabel,
-      topicsFull: e.topicsFull,
-      hasTranscript: e.hasTranscript,
-      ...(e.spokenTurns !== undefined ? { spokenTurns: e.spokenTurns } : {}),
-      ...(e.typedTurns !== undefined ? { typedTurns: e.typedTurns } : {}),
-    })),
+    lessons: lessons.map((e) => {
+      const keyPoint = digestFor(digests, e.lessonNumber)?.keyPoints[0];
+      return {
+        lessonNumber: e.lessonNumber,
+        date: e.date,
+        topicsLabel: e.topicsLabel,
+        topicsFull: e.topicsFull,
+        hasTranscript: e.hasTranscript,
+        ...(keyPoint ? { keyPoint } : {}),
+        ...(e.spokenTurns !== undefined ? { spokenTurns: e.spokenTurns } : {}),
+        ...(e.typedTurns !== undefined ? { typedTurns: e.typedTurns } : {}),
+      };
+    }),
   };
 }
 
@@ -163,6 +171,7 @@ export function buildCurriculumView(): CurriculumView {
   const index = buildLessonIndex();
   const hasTranscript = transcriptMap(index);
   const summaries = loadUnitSummaries(PATHS.unitSummaries);
+  const digests = loadDigests(PATHS.lessonDigests);
 
   const lanes: LaneView[] = c.lanes.map((lane) => ({
     id: lane.id,
@@ -172,7 +181,7 @@ export function buildCurriculumView(): CurriculumView {
     currentUnitId: lane.currentUnit ?? null,
     layers: layerUnits(lane.units),
     units: lane.units.map((unit) =>
-      buildUnitView(c, lane, unit, index, hasTranscript, summaries)
+      buildUnitView(c, lane, unit, index, hasTranscript, summaries, digests)
     ),
   }));
 

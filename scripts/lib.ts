@@ -48,6 +48,7 @@ export function resolveTutorPaths(codeRoot: string, dataRootRaw?: string): Tutor
     history: join(dataRoot, "data", "lesson-history.md"),
     projectsDir: join(dataRoot, "data", "projects"),
     unitSummaries: join(dataRoot, "data", "unit-summaries.json"),
+    lessonDigests: join(dataRoot, "data", "lesson-digests.json"),
     dataRoot,
     transcriptsDir: join(dataRoot, "transcripts"),
     usageLedger: join(dataRoot, "transcripts", "usage.jsonl"),

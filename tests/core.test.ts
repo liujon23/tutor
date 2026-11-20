@@ -15,6 +15,7 @@ import { applySessionPatch, checkPatch } from "../core/patcher.js";
 import { buildSessionPacket } from "../core/slicer.js";
 import { renderUnitFull } from "../core/render.js";
 import { buildLaneDoc, renderLaneMarkdown, renderLaneHtml } from "../core/lane-doc.js";
+import { loadDigests } from "../core/lesson-digests.js";
 import type { DataPaths, Lane, ProfilePatch, SessionPatch } from "../core/types.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -29,6 +30,7 @@ const STARTER: DataPaths = {
   history: join(STARTER_DATA, "lesson-history.md"),
   projectsDir: join(STARTER_DATA, "projects"),
   unitSummaries: join(STARTER_DATA, "unit-summaries.json"),
+  lessonDigests: join(STARTER_DATA, "lesson-digests.json"),
 };
 
 // A frozen snapshot of the data — see tests/fixtures/README.md. All behavioural
@@ -40,6 +42,7 @@ const FIXTURE: DataPaths = {
   history: join(ROOT, "tests", "fixtures", "lesson-history.md"),
   projectsDir: join(ROOT, "tests", "fixtures", "projects"),
   unitSummaries: join(ROOT, "tests", "fixtures", "unit-summaries.json"),
+  lessonDigests: join(ROOT, "tests", "fixtures", "lesson-digests.json"),
 };
 
 function scratchCopy(): DataPaths {
@@ -53,6 +56,7 @@ function scratchCopy(): DataPaths {
     history: join(dir, "lesson-history.md"),
     projectsDir: join(dir, "projects"),
     unitSummaries: join(dir, "unit-summaries.json"),
+    lessonDigests: join(dir, "lesson-digests.json"),
   };
 }
 
@@ -321,6 +325,8 @@ const goodPatch: SessionPatch = {
     sourcesUsed: "None.",
     feedbackCaptured: "skipped",
     askedAbout: "nothing new",
+    keyPoints: ["First conclusion.", "Second conclusion.", "Third conclusion."],
+    sources: [],
   },
   curriculum: {
     topicUpdates: [{ id: "ai-nn-foundations-loss", state: "comfortable", notes: "Test note." }],
@@ -488,6 +494,49 @@ test("end-to-end: apply a session patch, curriculum + history + profile all upda
   assert.deepEqual(parseHistory(hist).entries.map((e) => e.number), [4, 3, 2, 1]);
 
   assert.ok(readFileSync(paths.profile, "utf8").includes("end-to-end patch worked"));
+
+  // The key points and sources land in lesson-digests.json under the new number.
+  const digest = loadDigests(paths.lessonDigests).lessons["4"];
+  assert.deepEqual(digest, { keyPoints: goodPatch.lesson.keyPoints, sources: [], origin: "commit" });
+});
+
+test("patcher: key points and sources are checked, and a bad patch writes nothing", () => {
+  const paths = scratchCopy();
+  const bad: SessionPatch = structuredClone(goodPatch);
+  bad.lesson.keyPoints = ["Only one."];
+  bad.lesson.sources = [{ title: " ", url: "not a link", checked: "yes" as unknown as boolean }];
+  const errors = checkPatch(paths, bad);
+  assert.ok(errors.includes("lesson.keyPoints must list 3–6 conclusions (got 1)"));
+  assert.ok(errors.includes("lesson.sources[0] needs a title"));
+  assert.ok(errors.includes("lesson.sources[0].url is not an http(s) link"));
+  assert.ok(errors.includes("lesson.sources[0] needs checked: true or false"));
+  assert.throws(() => applySessionPatch(paths, bad));
+  assert.equal(existsSync(paths.lessonDigests), false);
+
+  const missing = structuredClone(goodPatch) as unknown as { lesson: Record<string, unknown> };
+  delete missing.lesson.keyPoints;
+  delete missing.lesson.sources;
+  const e2 = checkPatch(paths, missing as unknown as SessionPatch);
+  assert.ok(e2.some((e) => e.startsWith("lesson.keyPoints is required")));
+  assert.ok(e2.some((e) => e.startsWith("lesson.sources is required")));
+
+  const long = structuredClone(goodPatch);
+  long.lesson.keyPoints = ["a", "b", "x".repeat(301)];
+  assert.ok(checkPatch(paths, long).includes("lesson.keyPoints[2] is over 300 characters: one conclusion per line"));
+});
+
+test("patcher: sources are stored trimmed, with empty optional fields dropped", () => {
+  const paths = scratchCopy();
+  const p = structuredClone(goodPatch);
+  p.lesson.sources = [
+    { title: " Hubinger et al., Risks from Learned Optimization (2019) ", url: "", usedFor: "deceptive alignment", checked: false },
+    { title: "Moffatt v. Air Canada (2024)", url: "https://example.org/moffatt", checked: true },
+  ];
+  const res = applySessionPatch(paths, p);
+  assert.deepEqual(loadDigests(paths.lessonDigests).lessons[String(res.lessonNumber)].sources, [
+    { title: "Hubinger et al., Risks from Learned Optimization (2019)", usedFor: "deceptive alignment", checked: false },
+    { title: "Moffatt v. Air Canada (2024)", url: "https://example.org/moffatt", checked: true },
+  ]);
 });
 
 // --- completedAt ------------------------------------------------------------

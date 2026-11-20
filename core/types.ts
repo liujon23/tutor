@@ -114,6 +114,21 @@ export interface LessonRecord {
   sourcesUsed: string;
   feedbackCaptured: string;
   askedAbout: string;
+  /** 3–6 conclusions the lesson reached, each stated as the claim itself. */
+  keyPoints: string[];
+  /** Every work the lesson drew on; [] when none were named. */
+  sources: LessonSource[];
+}
+
+export interface LessonSource {
+  /** As a citation would name it: author, title, year when known. */
+  title: string;
+  /** Only when the lesson actually gave this link. */
+  url?: string;
+  /** A few words on what it supported in this lesson. */
+  usedFor?: string;
+  /** True only when this lesson looked the source up; false when named from memory. */
+  checked: boolean;
 }
 
 export interface TopicUpdate {
@@ -246,4 +261,5 @@ export interface DataPaths {
   history: string;
   projectsDir: string; // dir of per-lane project docs: <projectsDir>/<laneId>.md
   unitSummaries: string; // generated per-unit blurbs (see core/unit-summaries.ts)
+  lessonDigests: string; // key points + sources per lesson (see core/lesson-digests.ts)
 }

@@ -1,18 +1,24 @@
-// The Curriculum screen: one lane's units as a dependency graph, each block
-// expandable into its topics and lessons.
+// The Curriculum screen, two ways round. By unit: one lane's units as a
+// dependency graph, each block expandable into its topics and lessons. By
+// date: every past lesson, newest first, with search (lesson-list.ts).
 //
 // Like every other screen in this app there's no router — showCurriculum clears
 // #app and draws. The `initial` argument is how the transcript reader gets you
-// back to the unit you opened it from.
+// back to where you opened it from: the unit, or the list with its filter,
+// query and scroll position.
 import { h, clear } from "../dom.js";
 import { api } from "../api.js";
 import type { CurriculumView } from "../api.js";
 import { renderFlowchart, type FlowchartHandle } from "./flowchart.js";
+import { renderLessonList, type DateViewState } from "./lesson-list.js";
 import { showTranscript } from "./transcript.js";
 
 export interface CurriculumEntry {
+  mode?: "unit" | "date";
   laneId?: string;
   expandUnitId?: string;
+  date?: DateViewState;
+  scrollTop?: number;
 }
 
 export async function showCurriculum(
@@ -56,7 +62,12 @@ export async function showCurriculum(
     (initial.laneId && view.lanes.some((l) => l.id === initial.laneId) ? initial.laneId : null) ??
     byWeight[0].id;
 
+  let mode: "unit" | "date" = initial.mode ?? "unit";
+  const dateState: DateViewState = initial.date ?? { laneId: null, query: "" };
+
   const screen = h("div", { class: "screen curriculum" });
+  const unitView = h("div", { class: "unit-view" });
+  const dateHost = h("div", { class: "date-host" });
   // Chips, not a segmented control: lane names are long and variable, and four
   // of them have to wrap on a phone. `.seg-row` is `overflow: hidden` and never
   // wraps, which silently hid the whole switcher at narrow widths.
@@ -73,9 +84,46 @@ export async function showCurriculum(
   const openTranscript = (lessonNumber: number, unitId: string) => {
     handle?.destroy();
     void showTranscript(root, lessonNumber, () =>
-      void showCurriculum(root, onBack, { laneId, expandUnitId: unitId })
+      void showCurriculum(root, onBack, { mode: "unit", laneId, expandUnitId: unitId })
     );
   };
+
+  // From the date view, back restores the filter, the query and the scroll.
+  const openFromList = (lessonNumber: number, turn?: number, terms?: string[]) => {
+    handle?.destroy();
+    const back: CurriculumEntry = { mode: "date", laneId, date: { ...dateState }, scrollTop: screen.scrollTop };
+    void showTranscript(root, lessonNumber, () => void showCurriculum(root, onBack, back), { turn, terms });
+  };
+
+  const modeButtons = new Map<string, HTMLElement>();
+  const modeRow = h("div", { class: "seg-row curriculum-mode" });
+  const drawMode = () => {
+    for (const [m, btn] of modeButtons) btn.classList.toggle("on", m === mode);
+    unitView.classList.toggle("hidden", mode !== "unit");
+    dateHost.classList.toggle("hidden", mode !== "date");
+    if (mode === "date" && !dateHost.firstChild) dateHost.append(renderLessonList(view, dateState, openFromList));
+  };
+  for (const [m, label] of [
+    ["unit", "By unit"],
+    ["date", "By date"],
+  ] as const) {
+    const btn = h(
+      "button",
+      {
+        class: "seg",
+        type: "button",
+        onclick: () => {
+          if (mode === m) return;
+          mode = m;
+          drawMode();
+          screen.scrollTop = 0;
+        },
+      },
+      label
+    );
+    modeButtons.set(m, btn);
+    modeRow.append(btn);
+  }
 
   const drawLane = (expandUnitId?: string) => {
     const lane = view.lanes.find((l) => l.id === laneId)!;
@@ -122,10 +170,13 @@ export async function showCurriculum(
       h("button", { class: "back", onclick: () => onBack() }, "‹"),
       h("h1", {}, "Curriculum")
     ),
-    laneRow,
-    direction,
-    graphHost
+    modeRow,
+    unitView,
+    dateHost
   );
+  unitView.append(laneRow, direction, graphHost);
   root.append(screen);
   drawLane(initial.expandUnitId);
+  drawMode();
+  if (initial.scrollTop) screen.scrollTop = initial.scrollTop;
 }

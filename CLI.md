@@ -41,6 +41,7 @@ npm run usage-report [-- --json]
 npm run drive-report [-- <session-id-prefix>] [-- --since 2026-11-01] [-- --json]
 npm run export-lane -- --lane sts [--out <dir>] [--md-only] [--clean]
 npm run unit-summaries [-- --check | --force]
+npm run lesson-digests [-- --check | --lessons 4,18,53]
 npm run backfill-completed-at [-- --dry-run]
 npm run demo:snapshot
 npm run echo-test
@@ -65,12 +66,19 @@ npm run echo-test
   strips all authored prose down to a bare syllabus / reading list, safe to
   send to anyone.
 - **`unit-summaries`** writes the short "what this unit covers" blurbs the app's
-  curriculum viewer shows. The **only** script here that spends tokens, and the
-  only non-deterministic one — so it's explicit rather than automatic. It
+  curriculum viewer shows. One of the two scripts here that spend tokens (with
+  `lesson-digests`), so it's explicit rather than automatic. It
   regenerates just the units whose *structure* changed (renamed, topics
   added/removed/reordered, or the lane's `direction` rewritten); ordinary lessons
   never invalidate a summary. `--check` lists what's stale and spends nothing;
   `--force` regenerates everything. Writes `data/unit-summaries.json` and commits.
+- **`lesson-digests`** writes key points for lessons committed before the tutor
+  wrote them, from each lesson's transcript and history summary, under the same
+  rule the tutor follows (read from the teaching contract). Spends tokens: about
+  3–12 cents a lesson with Sonnet. Never rewrites a lesson that already has key
+  points, and leaves those lessons' sources as their links and history line.
+  `--check` lists the lessons without key points and spends nothing; `--lessons`
+  runs only the ones named. Writes `data/lesson-digests.json` and commits.
 - **`backfill-completed-at`** a one-time migration for curricula that predate the
   `completedAt` field: stamps each already-finished unit with the date of its
   last lesson. Idempotent — it only fills blanks — so it's harmless to re-run.

@@ -11,6 +11,8 @@ import { DATA_PATHS, PATHS, ROOT, ensureDataRoot, gitCommit, todayLocal } from "
 import { registerAssetRoutes } from "./assets.js";
 import { cleanTranscript, prewarmCleanup, withHeard } from "./cleanup.js";
 import { buildCurriculumView } from "./curriculum-view.js";
+import { buildLessonDetail } from "./lesson-detail.js";
+import { searchTranscripts } from "./lesson-search.js";
 import {
   buildAllowedHosts,
   checkExposure,
@@ -156,6 +158,18 @@ app.get("/api/report", async () => buildReport());
 // The whole curriculum as a per-lane unit graph — the in-app Curriculum screen.
 // Read-only aggregation over the data files; spends no tokens.
 app.get("/api/curriculum", async () => buildCurriculumView());
+
+// Past lessons for the transcript reader and the By date view. Read-only, no tokens.
+app.get<{ Querystring: { q?: string } }>("/api/lessons/search", async (req) =>
+  searchTranscripts(String(req.query.q ?? "").slice(0, 200))
+);
+
+app.get<{ Params: { n: string } }>("/api/lessons/:n", async (req, reply) => {
+  const n = Number(req.params.n);
+  const detail = Number.isInteger(n) && n > 0 ? buildLessonDetail(n) : null;
+  if (!detail) return reply.code(404).send({ error: `No record of lesson ${req.params.n}.` });
+  return detail;
+});
 
 // Build-id check for the PWA's "update available" toast — read fresh each
 // request since dist/ can change under a running server after a rebuild.

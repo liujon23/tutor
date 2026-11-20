@@ -203,6 +203,8 @@ export interface CurriculumUnitLesson {
   topicsLabel: string;
   topicsFull: string;
   hasTranscript: boolean;
+  /** The lesson's first key point, when it has a digest. */
+  keyPoint?: string;
   /** Learner turns spoken in drive mode; absent for lessons before it. */
   spokenTurns?: number;
   typedTurns?: number;
@@ -239,6 +241,48 @@ export interface CurriculumLane {
 export interface CurriculumView {
   today: string;
   lanes: CurriculumLane[];
+}
+
+// --- Past lessons ----------------------------------------------------------------
+// Mirrors server/lesson-detail.ts and server/lesson-search.ts.
+
+export interface LessonDetail {
+  lessonNumber: number;
+  date: string;
+  laneId: string;
+  laneName: string;
+  unitId: string;
+  unitName: string;
+  topics: string;
+  hasTranscript: boolean;
+  /** Key points and sources; null for a lesson committed before them and not yet backfilled. */
+  digest: {
+    keyPoints: string[];
+    sources: { title: string; url?: string; usedFor?: string; checked: boolean }[];
+    origin: "commit" | "backfill";
+  } | null;
+  history: {
+    whatHappened: string;
+    performanceSketch: string;
+    sourcesUsed: string;
+    feedbackCaptured: string;
+    askedAbout: string;
+  } | null;
+  ratings: { level: number; context: string; takeaway: string }[];
+  usage: string | null;
+  prev: number | null;
+  next: number | null;
+}
+
+export interface LessonSearchResult {
+  query: string;
+  terms: string[];
+  hits: {
+    lessonNumber: number;
+    turnsMatched: number;
+    snippets: { turn: number; role: "tutor" | "learner"; text: string }[];
+  }[];
+  truncated: boolean;
 }
 
 export interface TranscriptEntry {
@@ -376,6 +420,10 @@ export interface Api {
   curriculum(): Promise<CurriculumView>;
   /** Raw markdown of an archived lesson transcript. */
   transcript(lessonNumber: number): Promise<string>;
+  /** What the transcript doesn't carry: history fields, ratings, cost, neighbours. */
+  lessonDetail(lessonNumber: number): Promise<LessonDetail>;
+  /** Full-text search across transcripts. */
+  searchLessons(query: string): Promise<LessonSearchResult>;
   createLesson(body: {
     laneId?: string;
     topicOverride?: string;
@@ -441,6 +489,12 @@ const liveApi: Api = {
     }
     return res.text();
   },
+
+  lessonDetail: (lessonNumber: number): Promise<LessonDetail> =>
+    fetch(`/api/lessons/${lessonNumber}`).then((r) => j<LessonDetail>(r)),
+
+  searchLessons: (query: string): Promise<LessonSearchResult> =>
+    fetch(`/api/lessons/search?q=${encodeURIComponent(query)}`).then((r) => j<LessonSearchResult>(r)),
 
   createLesson: (body: {
     laneId?: string;

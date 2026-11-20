@@ -24,6 +24,7 @@
     "preview:demo": "vite preview web --mode demo --port 5180 --strictPort",
     "backfill-completed-at": "tsx scripts/backfill-completed-at.ts",
     "unit-summaries": "tsx scripts/unit-summaries.ts",
+    "lesson-digests": "tsx scripts/lesson-digests.ts",
     "demo:snapshot": "tsx scripts/export-demo-curriculum.ts"
   },
   "dependencies": {
