@@ -19,7 +19,8 @@ selection into the chat. The session packet carries recall warm-up candidates pa
 to that track, scheduled by mastery: a comfortable topic comes due 14 days after it was
 last touched (`TUTOR_STALE_DAYS`), and each cleanly-recalled warm-up multiplies that
 interval by 2.5 (`TUTOR_RECALL_GROWTH`, capped at a year) — so a topic you keep nailing
-goes quiet for months. Past its interval a topic is *sampled* (seeded per day, so a
+goes quiet for months. Those are the defaults; `core/spacing.ts` owns the curve and
+every number in it. Past its interval a topic is *sampled* (seeded per day, so a
 refresh doesn't reshuffle) rather than offered outright, which adds variety near the due
 date. (It has little effect on a large backlog — see
 [Known limitations](#known-limitations-not-by-design--worth-revisiting).)
@@ -114,7 +115,10 @@ as the per-message signal does the work.
 tutor to recap and wrap up; it then validates and applies the session patch through
 the same core patcher as the CLI and git-commits it. Proposed confirmed-pattern
 changes show up in the wrap-up panel with Approve/Reject buttons — nothing touches
-"How I learn best" without your explicit yes.
+"How I learn best" without your explicit yes. Approving there folds the change into
+the lesson's own commit (`git commit --amend`), keeping one lesson to one commit; if
+that commit has already been pushed, the approval takes a commit of its own rather
+than rewriting published history.
 
 Abandoning a lesson (or letting it idle for 7 days) writes nothing back — no
 partial entries. The In-progress card shows when it expires.
@@ -235,7 +239,11 @@ Every lesson commit fires a background `git push` — the commit never waits on 
 fails because of it; push failures are only logged. Prerequisites on the host PC: a
 configured remote on the data repo and non-interactive auth (an SSH
 key or a credential helper — the push must not prompt). Both the app and the CLI
-scripts funnel through the same commit helper, so both get pushed.
+scripts funnel through the same commit helper, so both get pushed. One exception: a
+lesson commit that leaves proposed confirmed patterns waiting for your approval holds
+its push until you approve or reject them, so an approval can fold into the lesson's
+own commit instead of adding a second one. If you never answer, the next commit's
+push carries it.
 
 ## Reachability (the actual security model)
 
