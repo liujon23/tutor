@@ -1,10 +1,10 @@
-import type { Curriculum, DataPaths, Lane, PacketOptions } from "./types.js";
+import type { Curriculum, DataPaths, Lane, PacketOptions, Topic } from "./types.js";
 import { laneById, topicById, unitById } from "./curriculum.js";
 import { loadCurriculum } from "./curriculum.js";
 import { condenseEntry, lastN } from "./history.js";
 import { readProfile } from "./profile.js";
 import { readProjectDoc } from "./project.js";
-import { isLaneFinished } from "./lane-status.js";
+import { isLaneFinished, looseEnds } from "./lane-status.js";
 import { renderLaneOneLiner, renderUnitFull, renderUnitOneLiner } from "./render.js";
 import {
   recallCandidates,
@@ -44,6 +44,9 @@ export function buildSessionPacket(paths: DataPaths, opts: PacketOptions): strin
   );
 
   sections.push(renderRecommendation(c, rec));
+
+  // A capstone session gets the whole course laid out, plus its loose ends.
+  if (opts.capstone) sections.push(renderCapstone(lane));
 
   sections.push(renderRecall(recall));
 
@@ -162,13 +165,44 @@ function renderCurrentUnit(c: Curriculum, lane: Lane): string {
   return renderUnitFull(cur);
 }
 
+/**
+ * The capstone's map of the course: every unit with its topics and their states,
+ * and the topics never settled (touched/shaky) that the arc must work in. How to
+ * run it lives in the CAPSTONE machinery (server/prompt.ts), not here.
+ */
+function renderCapstone(lane: Lane): string {
+  const lines = [
+    `## Capstone — closing out ${lane.name}`,
+    `This session is the course's closing capstone, not a normal lesson: follow the CAPSTONE section ` +
+      `of your instructions. It runs 3–5 questions whatever the session size above says.`,
+    ``,
+    `**The course, unit by unit** (state · core / optional topics with their states)`,
+  ];
+  for (const u of lane.units) {
+    const topics = (ts: Topic[]) => ts.map((t) => `${t.name} (${t.id}) [${t.state}]`).join("; ") || "—";
+    lines.push(`- ${u.name} (${u.id}) [${u.state}]`);
+    lines.push(`  core: ${topics(u.coreTopics)}`);
+    if (u.optionalTopics.length) lines.push(`  optional: ${topics(u.optionalTopics)}`);
+  }
+  const loose = looseEnds(lane);
+  lines.push(``, `**Loose ends — taught but never settled; work each into the arc on purpose:**`);
+  if (loose.length) {
+    for (const { unit, topic } of loose) lines.push(`- ${topic.name} (${topic.id}) [${topic.state}] — unit ${unit.id}`);
+  } else {
+    lines.push(`(none — every taught topic is comfortable)`);
+  }
+  return lines.join("\n");
+}
+
 function renderRecommendation(c: Curriculum, rec: Recommendation): string {
   const lines: string[] = [`## Recommendation (deterministic — the learner can override freely)`];
   if (rec.note) lines.push(`_${rec.note}_`);
   if (rec.primary) {
     const label = rec.primary.topicId
       ? describeTopic(c, rec.primary.topicId)
-      : `unit ${rec.primary.unitId}`;
+      : rec.primary.unitId
+        ? `unit ${rec.primary.unitId}`
+        : "the closing capstone";
     lines.push(`**Primary:** ${label} — ${rec.primary.reason}`);
     if (rec.primary.plan) lines.push(`**Carried plan:** ${rec.primary.plan}`);
     if (rec.primary.topicId) lines.push(prereqReadiness(c, rec.primary.topicId));

@@ -32,6 +32,17 @@ running lanes), and stays in recall at twice the usual interval, still capped at
 year. It can still be picked by hand for a review lesson. Extending it in
 course-setup reopens it with no other edit.
 
+**The capstone** is how a course ends. Once every unit is done, the lane card reads
+"Next: Capstone" and starting a plain lesson there (no topic override, not "discuss it
+instead") runs it: the tutor finds a recent real case that several units bear on (or a
+flagged invented one), then walks 3–5 questions through it, one unit each, whatever
+the session size. It nudges toward anything an answer skipped before grading, treats
+a cut-off spoken answer as unfinished, and works every touched/shaky topic in on
+purpose; a topic still missing after a nudge is graded rusty, never miss. Committing it
+stamps `finishedAt` (server-side, from the session's frozen `capstone` param — never a
+patch field). Extending a finished course and finishing it again earns a fresh one.
+The rules live in `CAPSTONE_MACHINERY` (`server/prompt.ts`).
+
 **Quick recall** is the same machinery without the lesson. A "Quick recall" button below
 the start row runs a one-question check: no selection at all — the server draws the most
 overdue topic across every lane, plus any topics genuinely linked to it, and the tutor

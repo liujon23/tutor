@@ -263,6 +263,8 @@ export interface PacketOptions {
   historyN: number; // how many recent lesson-history entries to include
   today: string; // YYYY-MM-DD
   spacing: SpacingConfig; // recall interval growth
+  /** The session is the lane's closing capstone: add the course map and loose ends. */
+  capstone?: boolean;
 }
 
 export interface DataPaths {

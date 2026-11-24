@@ -44,8 +44,9 @@ Key fields (see the shipped file for a live example):
   setting), `currentUnit`, `direction` (a loose line or two on where the lane is
   heading — themes, not a fixed syllabus), `nextUp`, `units`, and optionally
   `finishedAt`.
-- **Lane.finishedAt** (optional): `YYYY-MM-DD` the course ended. Absent on lanes that
-  never ended — don't add `finishedAt: null`. It only counts while every unit is
+- **Lane.finishedAt** (optional, machine-written): `YYYY-MM-DD` the course ended,
+  stamped when the app's closing capstone commits (no patch field sets it; course-setup
+  may set it by hand). Absent on lanes that never ended — don't add `finishedAt: null`. It only counts while every unit is
   `core-complete`/`complete` and no unit's `completedAt` is later than it
   (`core/lane-status.ts`), so **reopening a course needs no edit to it**: add a unit
   and the course is running again; finishing that unit later leaves it waiting on a
