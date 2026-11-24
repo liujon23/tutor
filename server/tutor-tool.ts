@@ -375,7 +375,8 @@ export function createRecordRecallTool(ctx: RecallToolContext) {
   return tool(
     "record_recall",
     "Record the grade(s) for this recall check and git-commit the result. Call this " +
-      "exactly once, right after you give the learner your feedback on their answer. " +
+      "exactly once, after your feedback AND after the learner says they have no more " +
+      "questions on these topics — never while they are still asking. " +
       "One entry per topic in your packet. On errors, fix the arguments and call again.",
     recallSchema,
     async ({ grades }) =>
@@ -387,7 +388,7 @@ export function createRecordRecallTool(ctx: RecallToolContext) {
           return textResult(
             `ALREADY RECORDED — nothing written. This check's grades are already saved ` +
               `(${already.graded.map((g) => `${g.name}: ${g.result}`).join(", ")}). ` +
-              `Do not call record_recall again; just finish the follow-up conversation.`,
+              `Do not call record_recall again; just close out in one line.`,
             true
           );
         }
@@ -501,8 +502,8 @@ export function createRecordRecallTool(ctx: RecallToolContext) {
             `Recall recorded.\n` +
               result.summary.map((x) => `  - ${x}`).join("\n") +
               `\n${gitMessage}\n` +
-              `Now ask the learner whether any of this raised a question, answer what they ask, ` +
-              `then close out. Do not call record_recall again.`
+              `Close out now in one line (what you recorded, when it comes back around) and stop — ` +
+              `do not ask whether they have anything else. Do not call record_recall again.`
           );
         } catch (e) {
           // curriculum.yaml and the session's recall record are already written;
