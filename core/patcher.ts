@@ -3,6 +3,7 @@ import type {
   Curriculum,
   DataPaths,
   SessionPatch,
+  SpacingConfig,
   Topic,
   TopicUpdate,
   Unit,
@@ -11,6 +12,7 @@ import type {
 import { RECALL_RESULTS, TOPIC_STATES, UNIT_STATES } from "./types.js";
 import { laneById, loadCurriculum, saveCurriculum, topicById, unitById } from "./curriculum.js";
 import { getRecall, stabilityDays } from "./spacing.js";
+import { applyRecallGrade } from "./recall.js";
 import { validateCurriculum } from "./validator.js";
 import { nextLessonNumber, prependEntry, renderEntry } from "./history.js";
 import { applyProfilePatchToLines, checkProfilePatch } from "./profile.js";
@@ -91,7 +93,13 @@ export function checkPatch(paths: DataPaths, patch: SessionPatch): string[] {
  * (e.g. a profile edit whose needle doesn't match) can never leave a
  * partial apply on disk — nothing before the writes throws mid-write.
  */
-export function applySessionPatch(paths: DataPaths, patch: SessionPatch): ApplyResult {
+export function applySessionPatch(
+  paths: DataPaths,
+  patch: SessionPatch,
+  /** The configured curve, so the summary quotes the interval the selector will
+   *  actually honor. Omit only where no spacing config exists. */
+  spacing?: SpacingConfig
+): ApplyResult {
   const pre = checkPatch(paths, patch);
   if (pre.length) throw new Error(`patch rejected:\n  - ${pre.join("\n  - ")}`);
 
@@ -100,7 +108,7 @@ export function applySessionPatch(paths: DataPaths, patch: SessionPatch): ApplyR
   const lessonNumber = nextLessonNumber(paths.history);
 
   // --- compute phase: no writes yet ---
-  applyCurriculumChanges(c, patch, lessonNumber, summary);
+  applyCurriculumChanges(c, patch, lessonNumber, summary, spacing);
 
   const names = {
     lane: (id: string) => laneById(c, id)?.name ?? id,
@@ -149,7 +157,8 @@ function applyCurriculumChanges(
   c: Curriculum,
   patch: SessionPatch,
   lessonNumber: number,
-  summary?: string[]
+  summary?: string[],
+  spacing?: SpacingConfig
 ): void {
   const cur = patch.curriculum;
   const L = patch.lesson;
@@ -200,18 +209,9 @@ function applyCurriculumChanges(
     if (u.state) hit.topic.state = u.state;
     if (u.notes !== undefined) hit.topic.notes = u.notes;
     if (u.touched !== false) hit.topic.lastTouched = { date: L.date, lesson: lessonNumber };
-    if (u.recall) {
-      const prev = getRecall(hit.topic);
-      hit.topic.recall = {
-        streak: u.recall === "clean" ? prev.streak + 1 : 0,
-        reviews: prev.reviews + 1,
-        last: { date: L.date, result: u.recall },
-      };
-      // A topic that's gone is due for re-teaching, not another warm-up. Deterministic
-      // bookkeeping, but an explicit `state` in the patch still wins.
-      if (u.recall === "miss" && !u.state) hit.topic.state = "shaky";
-    }
-    summary?.push(`topic ${u.id}: ${describeTopicUpdate(u, hit.topic)}`);
+    // Shared with the standalone recall check so the streak rules can't drift.
+    if (u.recall) applyRecallGrade(hit.topic, u.recall, L.date, u.state);
+    summary?.push(`topic ${u.id}: ${describeTopicUpdate(u, hit.topic, spacing)}`);
   }
 
   for (const u of cur.unitUpdates ?? []) {
@@ -254,13 +254,15 @@ function stampCompletedAt(unit: Unit, lessonDate: string): void {
   else unit.completedAt = null;
 }
 
-/** `after` is the already-mutated topic, so the summary can quote the earned interval. */
-function describeTopicUpdate(u: TopicUpdate, after: Topic): string {
+/** `after` is the already-mutated topic, so the summary can quote the earned interval.
+ *  `spacing` must be the configured curve — quoting the default here reports an
+ *  interval the selector will not honor once TUTOR_STALE_DAYS is set. */
+function describeTopicUpdate(u: TopicUpdate, after: Topic, spacing?: SpacingConfig): string {
   const bits: string[] = [];
   if (u.recall) {
     const { streak } = getRecall(after);
     bits.push(
-      `recall ${u.recall} (streak ${streak} → next in ${Math.round(stabilityDays(streak))}d)`
+      `recall ${u.recall} (streak ${streak} → next in ${Math.round(stabilityDays(streak, spacing))}d)`
     );
   }
   if (u.state) bits.push(`state → ${u.state}`);

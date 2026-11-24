@@ -7,7 +7,17 @@ import fastifyStatic from "@fastify/static";
 import { applyProfilePatch } from "../core/profile.js";
 import { DEFAULT_SPACING } from "../core/spacing.js";
 import type { SpacingConfig } from "../core/types.js";
-import { DATA_PATHS, PATHS, ROOT, ensureDataRoot, gitAmendInto, gitCommit, gitPushNow, todayLocal } from "../scripts/lib.js";
+import {
+  DATA_PATHS,
+  PATHS,
+  ROOT,
+  ensureDataRoot,
+  gitAmendInto,
+  gitCommit,
+  gitPushNow,
+  spacingFromEnv,
+  todayLocal,
+} from "../scripts/lib.js";
 import { registerAssetRoutes } from "./assets.js";
 import { registerTranscriptsStatic } from "./transcripts-static.js";
 import { cleanTranscript, prewarmCleanup, withHeard } from "./cleanup.js";
@@ -25,6 +35,9 @@ import { composeFeedbackHandoff, messageSnippet, validateFeedbackInput } from ".
 import { isSessionId, parseClientBatch, serverDiag, writeClientBatch } from "./diag.js";
 import { buildLessonSystemPrompt, kickoffMessage, lastVia, turnTag, withTurnTag } from "./prompt.js";
 import { END_TURN_TEXT, defaultModel, readBuildId } from "./params.js";
+import { buildRecallSystemPrompt } from "./prompt.js";
+import { pickRecallBundle } from "../core/selector.js";
+import { loadCurriculum } from "../core/curriculum.js";
 import { buildReport } from "./report.js";
 import { LessonManager, endAlreadyPending } from "./runner.js";
 import { buildStatus, laneExists } from "./status.js";
@@ -37,6 +50,7 @@ import type {
   LessonParams,
   MessageFeedback,
   RatingLevel,
+  SessionMode,
   StoredSession,
   Via,
 } from "./types.js";
@@ -53,11 +67,7 @@ const HOST = process.env.TUTOR_HOST ?? "127.0.0.1";
 // Recall spacing: TUTOR_STALE_DAYS is the interval at streak 0, widened by
 // TUTOR_RECALL_GROWTH on every clean recall. One config, passed to every caller —
 // the constants themselves live in core/spacing.ts.
-const SPACING: SpacingConfig = {
-  ...DEFAULT_SPACING,
-  baseDays: Number(process.env.TUTOR_STALE_DAYS ?? DEFAULT_SPACING.baseDays),
-  growth: Number(process.env.TUTOR_RECALL_GROWTH ?? DEFAULT_SPACING.growth),
-};
+const SPACING: SpacingConfig = spacingFromEnv();
 const WEB_DIST = join(ROOT, "web", "dist");
 
 // Seed the starter courses if this is a first run. Copies files only — serving
@@ -172,6 +182,7 @@ interface CreateLessonBody {
   laneId?: string;
   topicOverride?: string;
   discuss?: boolean;
+  mode?: "lesson" | "recall";
   size?: "tight" | "standard" | "deep";
   model?: "opus" | "sonnet";
   historyN?: number;
@@ -182,10 +193,13 @@ interface CreateLessonBody {
 app.post<{ Body: CreateLessonBody }>("/api/lesson", async (req, reply) => {
   const b = req.body ?? {};
   const size = b.size ?? "standard";
+  // Narrow explicitly — never let a request body land straight in a union.
+  const mode: SessionMode = b.mode === "recall" ? "recall" : "lesson";
   const params: LessonParams = {
     laneId: b.laneId,
     topicOverride: b.topicOverride,
     discuss: b.discuss ?? false,
+    mode,
     size,
     model: defaultModel(size, b.model),
     historyN: b.historyN ?? 3,
@@ -199,7 +213,21 @@ app.post<{ Body: CreateLessonBody }>("/api/lesson", async (req, reply) => {
 
   let prompt;
   try {
-    prompt = buildLessonSystemPrompt(params);
+    if (mode === "recall") {
+      // The server draws the topics — a recall check has no selection UI. Frozen
+      // into params so the tool's allow-list survives a restart and SDK resume.
+      // Inside the try so a malformed curriculum gives the same clean 400 the
+      // lesson path does, not a bare 500.
+      const bundle = pickRecallBundle(loadCurriculum(DATA_PATHS.curriculum), {
+        today: todayLocal(),
+        spacing: SPACING,
+      });
+      if (!bundle.length) {
+        return reply.code(409).send({ error: "nothing is due for recall today" });
+      }
+      params.recallTopicIds = bundle.map((r) => r.topicId);
+    }
+    prompt = mode === "recall" ? buildRecallSystemPrompt(params) : buildLessonSystemPrompt(params);
   } catch (e) {
     return reply.code(400).send({ error: (e as Error).message });
   }
@@ -295,7 +323,13 @@ app.post<{
 // Any siloed per-message feedback rides along as model-only text: the model
 // sees it, the transcript keeps just the short human message.
 app.post<{ Params: { id: string }; Body: { via?: Via } | undefined }>("/api/lesson/:id/end", async (req, reply) => {
-  if (!manager.sessionFor(req.params.id)) return reply.code(404).send({ error: "no such lesson" });
+  const existing = manager.sessionFor(req.params.id);
+  if (!existing) return reply.code(404).send({ error: "no such lesson" });
+  // Checked BEFORE runnerFor, which constructs a LessonRunner (and with it an
+  // Agent SDK session) that a recall check would never use.
+  if (existing.params.mode === "recall") {
+    return reply.code(409).send({ error: "a recall check has no wrap-up — go back to the start screen when you are done" });
+  }
   const via = parseVia(req.body?.via);
   if (typeof via !== "string") return reply.code(400).send(via);
   let runner;

@@ -19,6 +19,7 @@ test("no override: every path lives under the default data dir, not the code roo
   assert.equal(p.transcriptsDir, join(DEFAULT_ROOT, "transcripts"));
   assert.equal(p.usageLedger, join(DEFAULT_ROOT, "transcripts", "usage.jsonl"));
   assert.equal(p.feedbackLedger, join(DEFAULT_ROOT, "transcripts", "feedback.jsonl"));
+  assert.equal(p.recallLedger, join(DEFAULT_ROOT, "transcripts", "recall.jsonl"));
   assert.equal(p.appDir, join(DEFAULT_ROOT, ".app"));
   assert.equal(p.sessionsDir, join(DEFAULT_ROOT, ".app", "sessions"));
   assert.equal(p.assetsDir, join(DEFAULT_ROOT, ".app", "assets"));
