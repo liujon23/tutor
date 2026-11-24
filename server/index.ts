@@ -9,6 +9,7 @@ import { DEFAULT_SPACING } from "../core/spacing.js";
 import type { SpacingConfig } from "../core/types.js";
 import { DATA_PATHS, PATHS, ROOT, ensureDataRoot, gitCommit, todayLocal } from "../scripts/lib.js";
 import { registerAssetRoutes } from "./assets.js";
+import { registerTranscriptsStatic } from "./transcripts-static.js";
 import { cleanTranscript, prewarmCleanup, withHeard } from "./cleanup.js";
 import { buildCurriculumView } from "./curriculum-view.js";
 import { buildLessonDetail } from "./lesson-detail.js";
@@ -131,17 +132,7 @@ if (existsSync(WEB_DIST)) {
 // and lets recall prompts re-show them after .app/ is gone.
 const TRANSCRIPTS_DIR = PATHS.transcriptsDir;
 mkdirSync(TRANSCRIPTS_DIR, { recursive: true });
-// Lesson markdown and archived images only. The same directory also holds
-// usage.jsonl and feedback.jsonl — the cost ledger and distilled notes about the
-// learner — which nothing in the UI fetches and which have no business being
-// served.
-const SERVABLE_TRANSCRIPT_FILE = /\.(md|jpg|jpeg|png|gif|webp|avif)$/i;
-await app.register(fastifyStatic, {
-  root: TRANSCRIPTS_DIR,
-  prefix: "/transcripts/",
-  decorateReply: false,
-  allowedPath: (pathName) => SERVABLE_TRANSCRIPT_FILE.test(pathName),
-});
+await registerTranscriptsStatic(app, TRANSCRIPTS_DIR);
 
 // --- Asset proxy --------------------------------------------------------------
 
