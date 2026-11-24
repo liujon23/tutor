@@ -245,7 +245,10 @@ export function createCommitSessionTool(ctx: TutorToolContext) {
           const tGit = Date.now(); // git commit — never throws
           gitMessage = gitCommit(
             `Lesson ${res.lessonNumber} — ${sessionPatch.lesson.date} — ${sessionPatch.lesson.topicIds.join(", ")}`,
-            ["data", "transcripts"]
+            ["data", "transcripts"],
+            // Proposals still waiting on the learner: hold the push so an
+            // approval can fold into this commit instead of adding another.
+            { holdPush: res.proposedConfirmedPatterns.length > 0 }
           );
           gitSha = gitHeadSha() ?? undefined;
           const gitMs = Date.now() - tGit;

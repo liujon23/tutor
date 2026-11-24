@@ -7,7 +7,7 @@ import fastifyStatic from "@fastify/static";
 import { applyProfilePatch } from "../core/profile.js";
 import { DEFAULT_SPACING } from "../core/spacing.js";
 import type { SpacingConfig } from "../core/types.js";
-import { DATA_PATHS, PATHS, ROOT, ensureDataRoot, gitAmendInto, gitCommit, todayLocal } from "../scripts/lib.js";
+import { DATA_PATHS, PATHS, ROOT, ensureDataRoot, gitAmendInto, gitCommit, gitPushNow, todayLocal } from "../scripts/lib.js";
 import { registerAssetRoutes } from "./assets.js";
 import { registerTranscriptsStatic } from "./transcripts-static.js";
 import { cleanTranscript, prewarmCleanup, withHeard } from "./cleanup.js";
@@ -599,6 +599,9 @@ app.post<{
       gitCommit(
         `Approve confirmed pattern(s) after Lesson ${session.commit.lessonNumber} — ${todayLocal()}`
       );
+  } else {
+    // Nothing approved: the lesson commit is final, so send the push it held.
+    gitPushNow();
   }
   session.commit.patternsResolved = true;
   saveSession(session);

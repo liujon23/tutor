@@ -54,12 +54,12 @@ function makeDataRoot(withRemote: boolean): { root: string; cleanup: () => void 
   return { root, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
-function runProbe(root: string, scenario: string) {
+function runProbe(root: string, scenario: string, push = false) {
   const out = execFileSync("npx", ["tsx", PROBE, scenario], {
     cwd: ROOT,
     stdio: "pipe",
     encoding: "utf8",
-    env: { ...process.env, TUTOR_DATA_DIR: root, TUTOR_GIT_PUSH: "0" },
+    env: { ...process.env, TUTOR_DATA_DIR: root, TUTOR_GIT_PUSH: push ? "1" : "0" },
   });
   return JSON.parse(out) as {
     lessonSha: string | null;
@@ -132,6 +132,36 @@ test("an intervening commit blocks the amend — the approval never rewrites som
       "Lesson 1 — 2026-09-09 — ai-attn-mechanism",
       "seed",
     ]);
+  } finally {
+    cleanup();
+  }
+});
+
+const rev = (root: string, ref: string) =>
+  execFileSync("git", ["rev-parse", ref], { cwd: root, stdio: "pipe", encoding: "utf8" }).trim();
+
+test("with TUTOR_GIT_PUSH on, a held lesson push lets the approval fold in, then pushes once", () => {
+  const { root, cleanup } = makeDataRoot(true);
+  try {
+    const res = runProbe(root, "held-push", true);
+    assert.ok(res.amendMessage?.startsWith("git: folded into"), "amended while the push was held");
+    assert.equal(res.fallbackMessage, null);
+    assert.deepEqual(log(root), ["Lesson 1 — 2026-09-09 — ai-attn-mechanism", "seed"]);
+    // The probe exits only after its background push finishes, so the remote
+    // now has the amended commit, and never saw the pre-amend one.
+    execFileSync("git", ["fetch", "-q", "origin"], { cwd: root, stdio: "pipe" });
+    assert.equal(rev(root, "origin/main"), rev(root, "HEAD"), "the amended commit was pushed");
+  } finally {
+    cleanup();
+  }
+});
+
+test("with TUTOR_GIT_PUSH on and no hold, the push in flight blocks the amend", () => {
+  const { root, cleanup } = makeDataRoot(true);
+  try {
+    const res = runProbe(root, "unheld-push", true);
+    assert.equal(res.amendMessage, null, "never amends a commit that may already be on the remote");
+    assert.ok(res.fallbackMessage?.startsWith("git: committed"));
   } finally {
     cleanup();
   }

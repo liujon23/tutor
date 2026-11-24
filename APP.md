@@ -239,7 +239,11 @@ Every lesson commit fires a background `git push` — the commit never waits on 
 fails because of it; push failures are only logged. Prerequisites on the host PC: a
 configured remote on the data repo and non-interactive auth (an SSH
 key or a credential helper — the push must not prompt). Both the app and the CLI
-scripts funnel through the same commit helper, so both get pushed.
+scripts funnel through the same commit helper, so both get pushed. One exception: a
+lesson commit that leaves proposed confirmed patterns waiting for your approval holds
+its push until you approve or reject them, so an approval can fold into the lesson's
+own commit instead of adding a second one. If you never answer, the next commit's
+push carries it.
 
 ## Reachability (the actual security model)
 

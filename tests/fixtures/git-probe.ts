@@ -13,8 +13,16 @@ import { gitAmendInto, gitCommit, gitHeadSha, PATHS } from "../../scripts/lib.js
 const scenario = process.argv[2] ?? "local";
 const touch = (line: string) => appendFileSync(PATHS.profile, `${line}\n`, "utf8");
 
+if (scenario === "held-push" || scenario === "unheld-push") {
+  // A data repo that already tracks a remote, as TUTOR_GIT_PUSH=1 expects.
+  execFileSync("git", ["push", "-u", "origin", "HEAD"], { cwd: PATHS.dataRoot, stdio: "pipe" });
+}
+
 touch("- a pattern the lesson wrote");
-const commitMessage = gitCommit("Lesson 1 — 2026-09-09 — ai-attn-mechanism");
+const commitMessage = gitCommit("Lesson 1 — 2026-09-09 — ai-attn-mechanism", ["data"], {
+  // The lesson commit holds its push while proposals wait on the learner.
+  holdPush: scenario === "held-push",
+});
 const lessonSha = gitHeadSha();
 
 if (scenario === "published") {

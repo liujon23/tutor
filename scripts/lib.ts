@@ -183,8 +183,18 @@ export function parseArgs<T extends Record<string, string | undefined>>(
  * never throws (write-back already succeeded). `paths` defaults to just `data/`;
  * the app also passes `transcripts/` so the rendered conversation is archived
  * in the same commit.
+ *
+ * `holdPush` skips the TUTOR_GIT_PUSH push for this commit: the lesson commit
+ * does this while proposed confirmed patterns are still waiting on the learner,
+ * so an approval can still be folded into it (see gitAmendInto). The caller
+ * then pushes with `gitPushNow()` once the proposals are resolved; if they never
+ * are, the next commit's push carries this one along.
  */
-export function gitCommit(message: string, paths: string[] = ["data"]): string {
+export function gitCommit(
+  message: string,
+  paths: string[] = ["data"],
+  opts: { holdPush?: boolean } = {}
+): string {
   // Must be its own repo, not merely *inside* one: the default data root sits
   // in the code checkout, where `git add` would refuse the gitignored path and
   // report a baffling error on the wrap-up receipt.
@@ -198,7 +208,7 @@ export function gitCommit(message: string, paths: string[] = ["data"]): string {
     execFileSync("git", ["add", "--", ...paths], { cwd: PATHS.dataRoot, stdio: "pipe" });
     execFileSync("git", ["commit", "-m", message], { cwd: PATHS.dataRoot, stdio: "pipe" });
     pushStartedForHead = false; // a fresh HEAD, not yet handed to any remote
-    pushInBackground();
+    if (!opts.holdPush) pushInBackground();
     return `git: committed '${message}'`;
   } catch (e) {
     return `WARNING: git commit failed (${(e as Error).message.split("\n")[0]}) — changes written but not committed.`;
@@ -302,6 +312,13 @@ export function gitAmendInto(targetSha: string | undefined, paths: string[] = ["
  * the push is best-effort replication.
  */
 let pushStartedForHead = false;
+
+/** Push now (when TUTOR_GIT_PUSH=1), for a commit made with `holdPush`.
+ *  Same best-effort, never-throws contract as every other push. */
+export function gitPushNow(): void {
+  if (!isOwnGitRepo(PATHS.dataRoot)) return;
+  pushInBackground();
+}
 
 function pushInBackground(): void {
   if (process.env.TUTOR_GIT_PUSH !== "1") return;
