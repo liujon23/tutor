@@ -62,9 +62,11 @@ Key fields (see the shipped file for a live example):
 - **Topic.recall** (optional): spaced-recall history —
   `{streak, reviews, last?: {date, result}}` with `result` = `clean|rusty|miss`.
   Absent until the topic's first graded recall (code reads it via `getRecall()` in
-  `core/spacing.ts`). `streak` counts consecutive clean recalls and drives the review
-  interval: base 14 days, ×2.5 per clean recall, capped at a year. A `rusty`/`miss`
-  resets it.
+  `core/spacing.ts`). `streak` counts consecutive clean recalls and widens the review
+  interval — each clean recall pushes the topic's next appearance further out, up to a
+  ceiling; a `rusty`/`miss` resets it. The curve and its numbers live in
+  `core/spacing.ts`, which owns them: they are per-run configurable defaults, not part
+  of this schema.
 
   **Two writers, one rule.** A lesson grades warm-ups through `topicUpdates[].recall`
   (below); the app's one-click recall check writes through `record_recall` →

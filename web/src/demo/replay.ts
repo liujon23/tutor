@@ -6,6 +6,9 @@
 // otherwise this whole module is unreferenced and Rollup drops it.
 import { transcriptName } from "../api.js";
 import { END_TURN_TEXT } from "../lesson/reconcile.js";
+// The one place the recall curve is defined — the demo mirrors the live
+// /api/status payload, so it quotes the server's defaults rather than its own.
+import { DEFAULT_SPACING } from "../../../core/spacing.js";
 import type {
   Api,
   CommitResult,
@@ -170,7 +173,7 @@ async function status(): Promise<Status> {
   });
   return {
     today: new Date().toISOString().slice(0, 10),
-    spacing: { baseDays: 14, growth: 2.5, maxDays: 365 },
+    spacing: DEFAULT_SPACING,
     lanes: [
       {
         id: "art",

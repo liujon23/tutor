@@ -12,7 +12,9 @@ import {
   PATHS,
   ROOT,
   ensureDataRoot,
+  gitAmendInto,
   gitCommit,
+  gitPushNow,
   spacingFromEnv,
   todayLocal,
 } from "../scripts/lib.js";
@@ -355,7 +357,9 @@ app.post<{ Params: { id: string }; Body: { via?: Via } | undefined }>("/api/less
     "3. Read all my ratings below and distill each one. If a rating is unclear, or a " +
     "preference guess is ready to promote to a confirmed pattern, ask me now — one short " +
     "question at a time. If I approve a promotion, fold it into approvedConfirmedPatterns " +
-    "in the single commit (don't also list it under proposedConfirmedPatterns).\n" +
+    "in the single commit (don't also list it under proposedConfirmedPatterns). Don't save " +
+    "a ready guess for the approval panel: asking here is what keeps this lesson to one " +
+    "commit.\n" +
     "4. Only once this wrap-up conversation is done, build the patch and call " +
     "commit_session exactly once.";
   const handoff = composeFeedbackHandoff(session);
@@ -621,9 +625,17 @@ app.post<{
   let gitMessage = "";
   if (approve.length > 0) {
     applyProfilePatch(DATA_PATHS.profile, { approvedConfirmedPatterns: { add: approve } });
-    gitMessage = gitCommit(
-      `Approve confirmed pattern(s) after Lesson ${session.commit.lessonNumber} — ${todayLocal()}`
-    );
+    // One lesson = one commit. The approval belongs to the lesson that proposed
+    // it, so fold it into that commit when doing so can't rewrite history anyone
+    // has seen; otherwise fall back to a commit of its own (see shouldAmend).
+    gitMessage =
+      gitAmendInto(session.commit.gitSha) ??
+      gitCommit(
+        `Approve confirmed pattern(s) after Lesson ${session.commit.lessonNumber} — ${todayLocal()}`
+      );
+  } else {
+    // Nothing approved: the lesson commit is final, so send the push it held.
+    gitPushNow();
   }
   session.commit.patternsResolved = true;
   saveSession(session);

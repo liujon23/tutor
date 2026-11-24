@@ -157,6 +157,7 @@ test("lesson prompt splices the shared teaching contract", () => {
   assert.ok(systemPrompt.includes("## Recall warm-up"), "recall warm-up section");
   assert.ok(systemPrompt.includes("## Readiness check"), "readiness section");
   assert.ok(systemPrompt.includes("Session-size anchors"), "size anchors");
+  assert.ok(systemPrompt.includes("## What goes wrong"), "named failure modes");
   assert.ok(systemPrompt.includes("## Reading the primary source first"), "primary-source rule shared with the app");
   assert.ok(systemPrompt.includes("## Synthesis capstone"), "synthesis capstone");
   assert.ok(systemPrompt.includes("Working notes are instructions, not a log"), "working-notes rule");
