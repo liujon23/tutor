@@ -1,5 +1,5 @@
 {
-  "$comment": "Example session patch — the structured diff the tutor emits at wrap-up. See skills/references/document-formats.md for full semantics. Validate with: npm run commit-session -- --patch examples/session-patch.example.json --dry-run",
+  "$comment": "Example session patch — the structured diff the tutor emits at wrap-up. See .claude/skills/references/document-formats.md for full semantics. Validate with: npm run commit-session -- --patch examples/session-patch.example.json --dry-run",
   "lesson": {
     "date": "2026-07-01",
     "laneId": "ai",

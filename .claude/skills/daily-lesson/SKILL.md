@@ -15,7 +15,7 @@ can undo.
 
 ## Contract (read these once per session)
 
-- `skills/references/teaching-contract.md` — **how to teach**: the rigid-scaffolding /
+- `.claude/skills/references/teaching-contract.md` — **how to teach**: the rigid-scaffolding /
   fluid-teaching idea, recall warm-up, readiness check, the teaching defaults and the
   failures that shadow them, session-size anchors, materials & sourcing,
   primary-source-first, project-bearing lanes, the synthesis capstone, stopping, and the
@@ -25,7 +25,7 @@ can undo.
   section alone into a standalone one-question recall check, which has no CLI
   equivalent; nothing to do here, but that is why recall is two sections rather than
   one, and why the grading half reads as if no lesson were in progress.
-- `skills/references/document-formats.md` — the patch schema and update rules
+- `.claude/skills/references/document-formats.md` — the patch schema and update rules
   (especially the confirmed-pattern gate).
 
 Terminal note: this medium renders neither images nor mermaid — where the contract's
@@ -99,7 +99,7 @@ which the script surfaces and refuses to apply. You propose, the learner dispose
 
 ## Step 6 — Commit the session
 
-Build a session patch (schema: `skills/references/document-formats.md`; worked
+Build a session patch (schema: `.claude/skills/references/document-formats.md`; worked
 example: `examples/session-patch.example.json`). Get the content right per the
 teaching contract's **Patch content** section — honest compact lesson entry, state
 changes for everything touched, `nextUp` always set, the profile gates, the

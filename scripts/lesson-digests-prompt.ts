@@ -35,7 +35,7 @@ export function contractRule(contract: string, field: string): string {
 export const keyPointsRule = (contract: string): string => contractRule(contract, "keyPoints");
 
 function readContract(root: string): string {
-  return readFileSync(join(root, "skills", "references", "teaching-contract.md"), "utf8");
+  return readFileSync(join(root, ".claude", "skills", "references", "teaching-contract.md"), "utf8");
 }
 
 export function readKeyPointsRule(root: string): string {

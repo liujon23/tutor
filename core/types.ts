@@ -1,5 +1,5 @@
 // Shared types for the learning-tutor deterministic core.
-// These mirror the document contract in skills/references/document-formats.md.
+// These mirror the document contract in .claude/skills/references/document-formats.md.
 
 export type TopicState = "not-started" | "touched" | "comfortable" | "shaky";
 export type UnitState = "not-started" | "in-progress" | "core-complete" | "complete";

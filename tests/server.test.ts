@@ -363,7 +363,7 @@ test("the lesson prompt still carries both recall sections after the split", () 
 
 test("markdownSection survives a CRLF checkout and ignores prose mentions", () => {
   const raw = readFileSync(
-    join(process.cwd(), "skills", "references", "teaching-contract.md"),
+    join(process.cwd(), ".claude", "skills", "references", "teaching-contract.md"),
     "utf8"
   );
   const lf = raw.slice(raw.indexOf("\n## ") + 1).trim();

@@ -1,10 +1,11 @@
 # Teaching contract — shared by the CLI skill and the app
 
 The single source of truth for HOW a lesson is taught. Three consumers read it:
-`skills/daily-lesson/SKILL.md` (Claude Code CLI lessons), and `server/prompt.ts`
+`.claude/skills/daily-lesson/SKILL.md` (Claude Code CLI lessons), and `server/prompt.ts`
 twice over — the app splices the whole file into the lesson system prompt, and
-slices **`## Recall grading` alone** into the prompt for its one-click recall
-check, a standalone session that asks a single recall question and nothing else.
+slices **`## Recall grading`** (with `## Register — how you sound`) into the prompt
+for its one-click recall check, a standalone session that asks a single recall
+question and nothing else.
 
 That third consumer is why recall is two sections rather than one. Everything in
 `## Recall grading` must read correctly with no lesson around it; anything that

@@ -1,5 +1,5 @@
 // The lesson system prompt for the app. The shared teaching contract
-// (skills/references/teaching-contract.md — single source for HOW to teach,
+// (.claude/skills/references/teaching-contract.md — single source for HOW to teach,
 // shared with the CLI skill) is spliced into the static prompt at module load;
 // what's authored here is only the app machinery: rendering capabilities, the
 // selection-screen handoff, per-message ratings, and the commit_session tool.
@@ -17,6 +17,7 @@ import type { LessonParams, TranscriptEntry, Via } from "./types.js";
 
 export const TEACHING_CONTRACT_PATH = join(
   ROOT,
+  ".claude",
   "skills",
   "references",
   "teaching-contract.md"
@@ -277,8 +278,8 @@ export const STATIC_PROMPT = `${APP_INTRO}\n\n${TEACHING_CONTRACT}\n\n${APP_MACH
 // Deliberately NOT built from STATIC_PROMPT. A recall check has no lesson, no
 // wrap-up, no ratings and no commit_session, so the lesson machinery would be
 // pure noise at best and wrong instructions at worst. It takes the contract's
-// `## Recall grading` section — written to hold with no lesson around it — and
-// nothing else from the contract.
+// `## Recall grading` section — written to hold with no lesson around it — plus
+// `## Register — how you sound`, and nothing else from the contract.
 
 const RECALL_INTRO = `You are the learner's personal tutor, running a single spaced-recall check inside
 their tutoring app. The learner (their name is in the packet below — use it) is chatting
