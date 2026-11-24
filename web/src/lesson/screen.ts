@@ -157,7 +157,7 @@ export async function showLesson(id: string, opts: ShowLessonOptions = {}): Prom
         const warning = isRecall
           ? lesson.recall
             ? "Close this recall check? The grade is already saved and won't be undone."
-            : "Close this recall check? Nothing has been graded yet."
+            : "Close this recall check? Nothing has been graded yet — the grade is saved once you finish your questions."
           : "Abandon this lesson? Nothing will be written back.";
         if (!confirm(warning)) return;
         await api.abandon(id);

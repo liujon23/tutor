@@ -28,7 +28,8 @@ date. (It has little effect on a large backlog — see
 **Quick recall** is the same machinery without the lesson. A "Quick recall" button below
 the start row runs a one-question check: no selection at all — the server draws the most
 overdue topic across every lane, plus any topics genuinely linked to it, and the tutor
-asks one cold-retrieval question, grades it, records it, and offers follow-ups. It takes
+asks one cold-retrieval question, gives feedback, asks whether you have questions on the
+same topics, and only once you're done grades and records it. It takes
 a minute, so an overdue backlog can be worked down without sitting a full lesson. A
 caption under the button shows how many topics are due, and the button greys out
 ("Nothing due today") when the backlog is clear. Unlike a lesson this draw is

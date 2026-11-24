@@ -331,6 +331,13 @@ test("the recall prompt carries the shared rubric and none of the lesson machine
   assert.ok(systemPrompt.includes(topicId), "names the drawn topic");
   assert.match(title, /^Recall: /);
 
+  // J's order (2026-11-24): offer same-topic questions first, record only once
+  // they're done, then close without a second "anything else?" offer.
+  const askAt = systemPrompt.indexOf("ASK FOR QUESTIONS ON THESE TOPICS");
+  const recordAt = systemPrompt.indexOf("WHEN THEY ARE DONE, GRADE AND CALL record_recall");
+  assert.ok(askAt > 0 && recordAt > askAt, "questions come before the record_recall call");
+  assert.ok(!systemPrompt.includes("do not wait for the follow-up"), "no record-first instruction left");
+
   // The negative half is the real assertion: it proves the lightweight prompt
   // didn't quietly re-absorb STATIC_PROMPT, and that the contract split kept
   // in-lesson framing out of a session that has no lesson around it.
