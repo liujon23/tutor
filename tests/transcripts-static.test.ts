@@ -1,6 +1,7 @@
 // /transcripts/ serves lesson markdown and archived images, and nothing else
-// from that directory: usage.jsonl (cost ledger) and feedback.jsonl (notes
-// about the learner) live alongside them. Older @fastify/static versions had
+// from that directory: usage.jsonl (cost ledger), feedback.jsonl (notes about
+// the learner) and recall.jsonl (recall grades and their rationale) live
+// alongside them. Older @fastify/static versions had
 // path / route-guard bypasses (GHSA-83w8-p2f5-377r, GHSA-8pvw-jcv7-9cmj); this
 // throws the usual bypass spellings at the real registration.
 import { test } from "node:test";
@@ -24,6 +25,7 @@ async function buildApp() {
   writeFileSync(join(transcripts, "assets", "pic.jpg"), "JPEGDATA");
   writeFileSync(join(transcripts, "usage.jsonl"), `{"secret":"${SECRET}"}\n`);
   writeFileSync(join(transcripts, "feedback.jsonl"), `{"secret":"${SECRET}"}\n`);
+  writeFileSync(join(transcripts, "recall.jsonl"), `{"secret":"${SECRET}"}\n`);
   writeFileSync(join(web, "index.html"), "<!doctype html>");
 
   // Same shape as server/index.ts: the PWA at "/" plus the guarded transcripts.
@@ -49,7 +51,7 @@ test("/transcripts/ serves lesson markdown and archived images", async () => {
   }
 });
 
-test("/transcripts/ never serves usage.jsonl or feedback.jsonl, however the path is spelled", async () => {
+test("/transcripts/ never serves usage.jsonl, feedback.jsonl or recall.jsonl, however the path is spelled", async () => {
   const { app, cleanup } = await buildApp();
   try {
     const spellings = (f: string) => [
@@ -78,7 +80,7 @@ test("/transcripts/ never serves usage.jsonl or feedback.jsonl, however the path
       `/web/../transcripts/${f}`,
       `/%2e%2e/transcripts/${f}`,
     ];
-    for (const f of ["usage.jsonl", "feedback.jsonl"]) {
+    for (const f of ["usage.jsonl", "feedback.jsonl", "recall.jsonl"]) {
       for (const url of spellings(f)) {
         const r = await app.inject({ url });
         assert.ok(!r.body.includes(SECRET), `${url} leaked ${f} (status ${r.statusCode})`);

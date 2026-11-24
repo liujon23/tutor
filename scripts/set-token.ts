@@ -10,7 +10,7 @@
  * screen or in shell history. Piped input works too: `... | npm run set-token`.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { Writable } from "node:stream";
@@ -61,8 +61,14 @@ const base = existsSync(envPath)
   : existsSync(examplePath)
     ? readFileSync(examplePath, "utf8")
     : "";
-// Owner-only when created: the token is a key to the whole subscription.
+// Owner-only: the token is a key to the whole subscription. `mode` only applies
+// when the file is created, so an existing .env is tightened explicitly too.
 writeFileSync(envPath, upsertEnv(base, KEY, token), { mode: 0o600 });
+try {
+  chmodSync(envPath, 0o600);
+} catch {
+  // Best effort: Windows has no POSIX modes (it maps this to read-only/not).
+}
 console.log(`\n[ok] Saved to ${envPath}`);
 
 // Things that would quietly win over the token we just saved.
