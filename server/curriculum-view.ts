@@ -5,6 +5,7 @@
 // deterministic fallback here, not a model call.)
 import { loadCurriculum, topicById } from "../core/curriculum.js";
 import { layerUnits } from "../core/layout.js";
+import { laneFinishedAt } from "../core/lane-status.js";
 import {
   fallbackSummary,
   loadUnitSummaries,
@@ -62,6 +63,8 @@ export interface LaneView {
   id: string;
   name: string;
   weight: number;
+  /** YYYY-MM-DD the course ended; null while running (or reopened). */
+  finishedAt: string | null;
   direction: string;
   currentUnitId: string | null;
   layers: string[][];
@@ -182,6 +185,7 @@ export function buildCurriculumView(): CurriculumView {
     id: lane.id,
     name: lane.name,
     weight: lane.weight,
+    finishedAt: laneFinishedAt(lane),
     direction: lane.direction,
     currentUnitId: lane.currentUnit ?? null,
     layers: layerUnits(lane.units),

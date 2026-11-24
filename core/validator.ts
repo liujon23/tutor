@@ -124,6 +124,9 @@ export function validateCurriculum(c: Curriculum): string[] {
     if (lane.currentUnit && !lane.units.some((u) => u.id === lane.currentUnit)) {
       errors.push(`lane ${lane.id}: currentUnit '${lane.currentUnit}' is not a unit in this lane`);
     }
+    if (lane.finishedAt && !/^\d{4}-\d{2}-\d{2}$/.test(lane.finishedAt)) {
+      errors.push(`lane ${lane.id}: finishedAt '${lane.finishedAt}' is not YYYY-MM-DD`);
+    }
     if (lane.nextUp) {
       const { topicId, unitId } = lane.nextUp;
       if ((topicId ? 1 : 0) + (unitId ? 1 : 0) !== 1) {

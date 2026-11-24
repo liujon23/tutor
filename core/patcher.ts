@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import type {
   Curriculum,
   DataPaths,
+  Lane,
   SessionPatch,
   SpacingConfig,
   Topic,
@@ -11,7 +12,8 @@ import type {
 } from "./types.js";
 import { RECALL_RESULTS, TOPIC_STATES, UNIT_STATES } from "./types.js";
 import { laneById, loadCurriculum, saveCurriculum, topicById, unitById } from "./curriculum.js";
-import { getRecall, stabilityDays } from "./spacing.js";
+import { getRecall } from "./spacing.js";
+import { recallInterval } from "./lane-status.js";
 import { applyRecallGrade } from "./recall.js";
 import { validateCurriculum } from "./validator.js";
 import { nextLessonNumber, prependEntry, renderEntry } from "./history.js";
@@ -211,7 +213,7 @@ function applyCurriculumChanges(
     if (u.touched !== false) hit.topic.lastTouched = { date: L.date, lesson: lessonNumber };
     // Shared with the standalone recall check so the streak rules can't drift.
     if (u.recall) applyRecallGrade(hit.topic, u.recall, L.date, u.state);
-    summary?.push(`topic ${u.id}: ${describeTopicUpdate(u, hit.topic, spacing)}`);
+    summary?.push(`topic ${u.id}: ${describeTopicUpdate(u, hit.topic, hit.lane, spacing)}`);
   }
 
   for (const u of cur.unitUpdates ?? []) {
@@ -257,12 +259,12 @@ function stampCompletedAt(unit: Unit, lessonDate: string): void {
 /** `after` is the already-mutated topic, so the summary can quote the earned interval.
  *  `spacing` must be the configured curve — quoting the default here reports an
  *  interval the selector will not honor once TUTOR_STALE_DAYS is set. */
-function describeTopicUpdate(u: TopicUpdate, after: Topic, spacing?: SpacingConfig): string {
+function describeTopicUpdate(u: TopicUpdate, after: Topic, lane: Lane, spacing?: SpacingConfig): string {
   const bits: string[] = [];
   if (u.recall) {
     const { streak } = getRecall(after);
     bits.push(
-      `recall ${u.recall} (streak ${streak} → next in ${Math.round(stabilityDays(streak, spacing))}d)`
+      `recall ${u.recall} (streak ${streak} → next in ${Math.round(recallInterval(lane, streak, spacing))}d)`
     );
   }
   if (u.state) bits.push(`state → ${u.state}`);

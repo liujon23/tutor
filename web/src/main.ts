@@ -36,7 +36,10 @@ export const root = document.getElementById("app")!;
  * distribution over many draws. Falls back to the first lane if weights are all
  * zero.
  */
-function pickLane(lanes: StatusLane[]): StatusLane | undefined {
+function pickLane(all: StatusLane[]): StatusLane | undefined {
+  // A finished course never comes up as today's pick; drawing over the running
+  // lanes' raw weights is what shares its weight out over the rest.
+  const lanes = all.filter((l) => !l.finishedAt);
   if (lanes.length === 0) return undefined;
   const total = lanes.reduce((s, l) => s + Math.max(0, l.weight), 0);
   if (total <= 0) return lanes[0];
@@ -163,7 +166,9 @@ export async function showSelect(): Promise<void> {
   const recLineFor = (rec: StatusLane["recommendation"]): string =>
     rec.kind === "demo-locked"
       ? (rec.note ?? "Not in this demo")
-      : rec.topicName
+      : rec.kind === "finished"
+        ? "Finished — open it for a review lesson, or extend it in course-setup"
+        : rec.topicName
         ? `Next: ${rec.topicName}`
         : rec.unitId
           ? `Next unit: ${rec.unitName ?? rec.unitId}`
@@ -195,7 +200,14 @@ export async function showSelect(): Promise<void> {
               },
             }),
       },
-      h("div", { class: "lane-head" }, h("strong", {}, lane.name), h("span", { class: "weight" }, `~${lane.weight}%`)),
+      h(
+        "div",
+        { class: "lane-head" },
+        h("strong", {}, lane.name),
+        lane.finishedAt
+          ? h("span", { class: "weight finished-badge" }, `✓ Finished ${lane.finishedAt}`)
+          : h("span", { class: "weight" }, `~${lane.share ?? lane.weight}%`)
+      ),
       lane.currentUnit ? h("div", { class: "lane-unit" }, `${lane.currentUnit.name} · ${lane.currentUnit.state}`) : null,
       h("div", { class: "lane-next" }, recLineFor(lane.recommendation)),
       lane.recommendation.plan ? h("div", { class: "lane-plan" }, lane.recommendation.plan) : null
@@ -224,6 +236,14 @@ export async function showSelect(): Promise<void> {
       rec.plan ? h("div", { class: "lane-plan" }, rec.plan) : null
     );
     screen.append(pickCard);
+  } else if (status.lanes.length > 0) {
+    screen.append(
+      h(
+        "section",
+        { class: "card" },
+        "Every course is finished. Pick one under “Choose a different track” for a review lesson, or extend one in course-setup."
+      )
+    );
   } else {
     screen.append(h("section", { class: "card" }, "No tracks are set up yet."));
   }

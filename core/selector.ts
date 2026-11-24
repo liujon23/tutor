@@ -1,11 +1,12 @@
 import type { Curriculum, Lane, SpacingConfig, Topic, Unit } from "./types.js";
 import { allTopics, topicById, unitById } from "./curriculum.js";
-import { DEFAULT_SPACING, getRecall, offerProbability, seededUnit, stabilityDays } from "./spacing.js";
+import { DEFAULT_SPACING, getRecall, offerProbability, seededUnit } from "./spacing.js";
 import { lastExercised } from "./recall.js";
+import { laneFinishedAt, recallInterval } from "./lane-status.js";
 
 export interface Recommendation {
   laneId: string;
-  kind: "next-up" | "next-core" | "core-complete-options" | "unit-seam" | "empty";
+  kind: "next-up" | "next-core" | "core-complete-options" | "unit-seam" | "finished" | "empty";
   primary?: { topicId?: string; unitId?: string; reason: string; plan?: string };
   alternatives: { topicId?: string; unitId?: string; reason: string }[];
   note?: string;
@@ -16,6 +17,20 @@ export interface Recommendation {
  * Priority: lane.nextUp (queued at last wrap-up) → derive from unit state.
  */
 export function recommendNext(c: Curriculum, lane: Lane): Recommendation {
+  // A finished course recommends nothing: the last wrap-up's nextUp may still
+  // point at a topic, but there is no next step left in this lane.
+  const finishedAt = laneFinishedAt(lane);
+  if (finishedAt) {
+    return {
+      laneId: lane.id,
+      kind: "finished",
+      alternatives: [],
+      note:
+        `This course finished on ${finishedAt}. A lesson here is review — revisit what the learner ` +
+        `wants; extending the course with new units is course-setup's job.`,
+    };
+  }
+
   if (lane.nextUp) {
     if (lane.nextUp.topicId && topicById(c, lane.nextUp.topicId)) {
       return {
@@ -200,7 +215,8 @@ export function recallCandidates(c: Curriculum, opts: RecallOptions): RecallCand
     const t1 = new Date(lastSeen + "T00:00:00Z").getTime();
     const daysStale = Math.floor((t0 - t1) / 86_400_000);
     const { streak, reviews } = getRecall(topic);
-    const stability = stabilityDays(streak, spacing);
+    // Finished courses stretch the interval (core/lane-status.ts).
+    const stability = recallInterval(lane, streak, spacing);
     const p = offerProbability(daysStale, stability);
     if (p <= 0) continue; // still inside the interval this topic earned
     if (probabilistic && seededUnit(`${today}|${topic.id}`) >= p) continue;

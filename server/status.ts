@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import { allTopics, laneById, loadCurriculum, topicById, unitById } from "../core/curriculum.js";
 import { countRecallDue, recommendNext } from "../core/selector.js";
+import { laneFinishedAt, laneShares } from "../core/lane-status.js";
 import type { SpacingConfig } from "../core/types.js";
 import { SECTIONS } from "../core/profile.js";
 import { DATA_PATHS, todayLocal } from "../scripts/lib.js";
@@ -14,6 +15,11 @@ export interface StatusLane {
   id: string;
   name: string;
   weight: number;
+  /** Effective % of attention: weight renormalized over the lanes still running.
+   *  0 for a finished lane — its weight is shared out over the rest. */
+  share: number;
+  /** YYYY-MM-DD the course ended; null while it is running (or was reopened). */
+  finishedAt: string | null;
   currentUnit: { id: string; name: string; state: string } | null;
   recommendation: {
     kind: string;
@@ -31,6 +37,7 @@ export function buildStatus(spacing: SpacingConfig) {
   const c = loadCurriculum(DATA_PATHS.curriculum);
   const today = todayLocal();
 
+  const shares = laneShares(c);
   const lanes: StatusLane[] = c.lanes.map((lane) => {
     const rec = recommendNext(c, lane);
     const cur = lane.currentUnit ? unitById(c, lane.currentUnit)?.unit : undefined;
@@ -40,6 +47,8 @@ export function buildStatus(spacing: SpacingConfig) {
       id: lane.id,
       name: lane.name,
       weight: lane.weight,
+      share: shares.get(lane.id) ?? 0,
+      finishedAt: laneFinishedAt(lane),
       currentUnit: cur ? { id: cur.id, name: cur.name, state: cur.state } : null,
       recommendation: {
         kind: rec.kind,

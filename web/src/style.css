@@ -170,6 +170,11 @@ body {
   font-size: 13px;
 }
 
+.weight.finished-badge {
+  color: var(--ink);
+  font-weight: 550;
+}
+
 .lane-unit {
   color: var(--muted);
   font-size: 13px;
@@ -1304,6 +1309,17 @@ input.hidden[type="file"] {
 }
 
 .lane-direction.hidden {
+  display: none;
+}
+
+.lane-finished {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.5;
+}
+
+.lane-finished.hidden {
   display: none;
 }
 

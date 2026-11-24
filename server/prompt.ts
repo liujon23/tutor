@@ -9,7 +9,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildSessionPacket } from "../core/slicer.js";
 import { topicById, loadCurriculum } from "../core/curriculum.js";
-import { getRecall, stabilityDays } from "../core/spacing.js";
+import { getRecall } from "../core/spacing.js";
+import { recallInterval } from "../core/lane-status.js";
 import { SECTIONS, findSection, learnerName } from "../core/profile.js";
 import { DATA_PATHS, ROOT, todayLocal } from "../scripts/lib.js";
 import type { SpacingConfig } from "../core/types.js";
@@ -372,7 +373,7 @@ function buildRecallPacket(
     lines.push(
       `- ${topic.name} (${topic.id})`,
       `  lane ${lane.id} · unit ${unit.id} (${unit.name})`,
-      `  ${taught} · ${history} · current interval ${Math.round(stabilityDays(r.streak, spacing))}d`,
+      `  ${taught} · ${history} · current interval ${Math.round(recallInterval(lane, r.streak, spacing))}d`,
       `  what was taught: ${topic.notes || "(no notes recorded)"}`
     );
   }

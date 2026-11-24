@@ -93,6 +93,18 @@ test("buildStatus surfaces lanes, recommendations, topics, and open items", () =
     ai!.recommendation.topicId || ai!.recommendation.unitId,
     "ai lane has a queued/derived target (topic or unit)"
   );
+  // Course ending: every lane carries its effective share and finished date, and
+  // the running lanes' shares add up to ~100 (rounding) with finished ones at 0.
+  for (const l of s.lanes) {
+    assert.equal(typeof l.share, "number");
+    assert.ok(l.finishedAt === null || /^\d{4}-\d{2}-\d{2}$/.test(l.finishedAt));
+    if (l.finishedAt) assert.equal(l.share, 0);
+  }
+  const running = s.lanes.filter((l) => !l.finishedAt);
+  if (running.length) {
+    const sum = running.reduce((a, l) => a + l.share, 0);
+    assert.ok(Math.abs(sum - 100) <= running.length, `running shares sum to ~100 (got ${sum})`);
+  }
   assert.ok(s.topics.length > 50, "override picker has the full topic list");
   // Live-profile OPEN items come and go as real lessons settle them — assert
   // shape only, not any specific item (same reason the lane count is a bound).
