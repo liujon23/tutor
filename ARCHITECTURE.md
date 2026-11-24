@@ -85,9 +85,13 @@ calls a model.
 
 Three invariants make the design hold:
 
-1. **Everything writes through the same patcher.** The CLI (`commit-session`) and
-   the app (`server/tutor-tool.ts`) both call `checkPatch` → `applySessionPatch`.
-   There is no second write path to corrupt state.
+1. **Every write is validate-then-apply, and the rules have one home.** Lesson
+   commits — the CLI's `commit-session` and the app's `commit_session` — both go
+   `checkPatch` → `applySessionPatch`. The app's one-click recall check is the one
+   other writer: `checkRecallCheck` → `applyRecallCheck` in `core/recall.ts`, which
+   touches nothing but a topic's `recall` block. The two cannot drift because the
+   grading rules live in a single shared function (`applyRecallGrade`) that both
+   call, and both refuse to write anything when validation fails.
 2. **Paths flow from one place.** `scripts/lib.ts` resolves a data root
    (`TUTOR_DATA_DIR`, default: `my-data/`) into a `TutorPaths` object; core takes
    its `DataPaths` subset as an argument. Nothing else touches path logic.
@@ -104,18 +108,26 @@ Three invariants make the design hold:
 2. **`core/slicer.ts`** — how a packet is assembled (what the model gets to see).
 3. **`core/selector.ts`** — deterministic "what to learn next" + spaced recall
    (lane-paired, sampled above mastery-widened intervals; the curve and its
-   constants live in `core/spacing.ts`).
-4. **`core/patcher.ts`** — validate-then-apply; note the compute-then-write shape
+   constants live in `core/spacing.ts`). `pickRecallBundle` is the unsampled
+   cross-lane draw behind the app's one-click recall check.
+4. **`core/recall.ts`** — the standalone recall write path (grade a topic without
+   committing a lesson), and `applyRecallGrade`, the one home for the streak and
+   demotion rules that `core/patcher.ts` also calls.
+5. **`core/patcher.ts`** — validate-then-apply; note the compute-then-write shape
    so a late failure can't leave a partial write.
-5. **`.claude/skills/references/teaching-contract.md`** — how lessons are taught; shared
-   verbatim between the CLI skill and the app's system prompt. The profile's
-   confirmed patterns override its defaults.
-6. **`server/tutor-tool.ts`** — the commit pipeline (guards, ledgers, transcript,
-   git), serialized through a single write chain.
-7. **`server/runner.ts`** — one Agent SDK session per lesson: streaming, revival
+6. **`.claude/skills/references/teaching-contract.md`** — how lessons are taught; shared
+   verbatim between the CLI skill and the app's lesson prompt, with its
+   `## Recall grading` section sliced out on its own for the app's recall check.
+   The profile's confirmed patterns override its defaults.
+7. **`server/tutor-tool.ts`** — the write pipeline (guards, ledgers, transcript,
+   git), serialized through a single write chain. Which of its two tools a
+   session gets — `commit_session` or `record_recall` — is decided at
+   registration by the session's mode.
+8. **`server/runner.ts`** — one Agent SDK session per lesson: streaming, revival
    after restart, per-turn cost tracking.
-8. **`web/src/lesson/screen.ts`** — the lesson screen orchestrator; each concern
-   (bubbles, ratings, wrap-up, SSE, composer) is its own module.
+9. **`web/src/lesson/screen.ts`** — the lesson screen orchestrator; each concern
+   (bubbles, ratings, wrap-up, SSE, composer) is its own module. A recall check
+   reuses it wholesale — every difference reads off `params.mode`.
 
 ## The feedback loop (how it learns how you learn)
 

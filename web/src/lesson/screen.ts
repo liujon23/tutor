@@ -6,7 +6,7 @@ import type { LessonCtx } from "./ctx.js";
 import { showBanner, entryKey } from "./ctx.js";
 import { addBubble, addNote, photoUrls, scrollDown } from "./bubbles.js";
 import { closeRating } from "./rating.js";
-import { showWrapup, mapError, refreshEndingHint } from "./wrapup.js";
+import { showWrapup, showRecallPanel, mapError, refreshEndingHint } from "./wrapup.js";
 import { subscribeEvents, type EventSubscription } from "./events.js";
 import { buildComposer } from "./composer.js";
 import { DriveController, clearPendingDrive, type DriveStart } from "./audio/controller.js";
@@ -39,6 +39,10 @@ export async function showLesson(id: string, opts: ShowLessonOptions = {}): Prom
     return;
   }
   clear(root);
+
+  // A recall check reuses this whole screen — only the header chips and the
+  // end-of-session panel differ, and both read off params.mode.
+  const isRecall = lesson.params.mode === "recall";
 
   const screen = h("div", { class: "screen lesson" });
   const messages = h("div", { class: "messages" });
@@ -148,7 +152,14 @@ export async function showLesson(id: string, opts: ShowLessonOptions = {}): Prom
     {
       class: "hdr-chip danger",
       onclick: async () => {
-        if (!confirm("Abandon this lesson? Nothing will be written back.")) return;
+        // A recorded recall check has already written its grade to curriculum.yaml
+        // and git — abandoning drops the conversation, not the grade.
+        const warning = isRecall
+          ? lesson.recall
+            ? "Close this recall check? The grade is already saved and won't be undone."
+            : "Close this recall check? Nothing has been graded yet."
+          : "Abandon this lesson? Nothing will be written back.";
+        if (!confirm(warning)) return;
         await api.abandon(id);
         ctx.leaveLesson();
       },
@@ -167,10 +178,20 @@ export async function showLesson(id: string, opts: ShowLessonOptions = {}): Prom
         },
         "‹"
       ),
-      h("div", { class: "hdr-title" }, h("strong", {}, lesson.title || "Lesson"), h("span", { class: "hdr-sub" }, lesson.params.size)),
+      h(
+        "div",
+        { class: "hdr-title" },
+        h("strong", {}, lesson.title || "Lesson"),
+        h("span", { class: "hdr-sub" }, isRecall ? "quick recall" : lesson.params.size)
+      ),
       // Model switch and abandon are meaningless against a fixed recording.
       __DEMO__ ? null : modelBtn,
-      endBtn,
+      // A recall check has no commit_session tool, so the wrap-up checklist the
+      // End button sends would be an instruction it cannot follow — the server
+      // 409s it too. The check closes when the learner taps "Back to start" on
+      // the recall panel (or the 24h sweep collects it); nothing flips its
+      // status the way a commit does.
+      isRecall ? null : endBtn,
       __DEMO__ ? null : moreBtn
     )
   );
@@ -180,7 +201,10 @@ export async function showLesson(id: string, opts: ShowLessonOptions = {}): Prom
   if (__DEMO__ && lesson.note) showBanner(ctx, lesson.note);
 
   // Composer
-  const { chipRow, composer } = buildComposer(ctx, { onListen: () => startDrive("tap") });
+  // Drive mode is built around a lesson (spoken wrap-up hand-off, turn tags the
+  // lesson prompt explains); a recall check's prompt knows none of that, so it
+  // stays typed.
+  const { chipRow, composer } = buildComposer(ctx, isRecall ? {} : { onListen: () => startDrive("tap") });
   screen.append(chipRow, composer);
   root.append(screen);
 
@@ -192,6 +216,7 @@ export async function showLesson(id: string, opts: ShowLessonOptions = {}): Prom
   }
   if (lesson.status === "abandoned") addNote(ctx, "This lesson was abandoned.");
   if (lesson.commit) showWrapup(ctx, lesson.commit);
+  if (lesson.recall) showRecallPanel(ctx, lesson.recall);
   if (lesson.lastError && !lesson.commit) showBanner(ctx, mapError(lesson.lastError));
   refreshEndingHint(ctx);
 

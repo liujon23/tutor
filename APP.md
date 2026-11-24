@@ -19,10 +19,34 @@ selection into the chat. The session packet carries recall warm-up candidates pa
 to that track, scheduled by mastery: a comfortable topic comes due 14 days after it was
 last touched (`TUTOR_STALE_DAYS`), and each cleanly-recalled warm-up multiplies that
 interval by 2.5 (`TUTOR_RECALL_GROWTH`, capped at a year) — so a topic you keep nailing
-goes quiet for months. Past its interval a topic is *sampled* (seeded per day, so a
+goes quiet for months. Those are the defaults; `core/spacing.ts` owns the curve and
+every number in it. Past its interval a topic is *sampled* (seeded per day, so a
 refresh doesn't reshuffle) rather than offered outright, which adds variety near the due
 date. (It has little effect on a large backlog — see
 [Known limitations](#known-limitations-not-by-design--worth-revisiting).)
+
+**Quick recall** is the same machinery without the lesson. A "Quick recall" button below
+the start row runs a one-question check: no selection at all — the server draws the most
+overdue topic across every lane, plus any topics genuinely linked to it, and the tutor
+asks one cold-retrieval question, grades it, records it, and offers follow-ups. It takes
+a minute, so an overdue backlog can be worked down without sitting a full lesson. A
+caption under the button shows how many topics are due, and the button greys out
+("Nothing due today") when the backlog is clear. Unlike a lesson this draw is
+*unsampled* — a click is the ask, so it gives you the most overdue topic rather than a
+varied one. When you're done, "Back to start" closes the check.
+
+A recall check writes only the grade. It consumes no lesson number and appends nothing to
+`lesson-history.md`, and no transcript is archived under `transcripts/` — the
+conversation lives only in the session's scratch file under `.app/`, which is gitignored
+and swept after a day. What it does write is durable: the topic's recall streak in
+`curriculum.yaml`, its own `Recall check —` git commit, and a line in
+`transcripts/recall.jsonl` carrying the tutor's one-sentence justification per grade (the
+audit trail that stands in for the missing transcript). Recall checks deliberately do
+**not** re-stamp `lastTouched`, which stays the honest "last taught in Lesson N" the
+Curriculum screen links a transcript from; staleness reads whichever of the two dates is
+later. Their token cost is in
+`recall.jsonl` rather than `usage.jsonl` — the Stats screen is lesson-keyed and doesn't
+show it yet.
 
 The lesson is a streaming chat with rendered math and code — plus
 embedded images (fetched through the server's validating proxy and cached under
@@ -114,7 +138,10 @@ as the per-message signal does the work.
 tutor to recap and wrap up; it then validates and applies the session patch through
 the same core patcher as the CLI and git-commits it. Proposed confirmed-pattern
 changes show up in the wrap-up panel with Approve/Reject buttons — nothing touches
-"How I learn best" without your explicit yes.
+"How I learn best" without your explicit yes. Approving there folds the change into
+the lesson's own commit (`git commit --amend`), keeping one lesson to one commit; if
+that commit has already been pushed, the approval takes a commit of its own rather
+than rewriting published history.
 
 Abandoning a lesson (or letting it idle for 7 days) writes nothing back — no
 partial entries. The In-progress card shows when it expires.
@@ -235,7 +262,11 @@ Every lesson commit fires a background `git push` — the commit never waits on 
 fails because of it; push failures are only logged. Prerequisites on the host PC: a
 configured remote on the data repo and non-interactive auth (an SSH
 key or a credential helper — the push must not prompt). Both the app and the CLI
-scripts funnel through the same commit helper, so both get pushed.
+scripts funnel through the same commit helper, so both get pushed. One exception: a
+lesson commit that leaves proposed confirmed patterns waiting for your approval holds
+its push until you approve or reject them, so an approval can fold into the lesson's
+own commit instead of adding a second one. If you never answer, the next commit's
+push carries it.
 
 ## Reachability (the actual security model)
 
@@ -312,4 +343,7 @@ substitute for a login.
   `TopicUpdate.touched` defaults true, so any `topicUpdates` entry re-stamps
   `lastTouched` and pushes the next warm-up out by a full interval — even with no
   `recall` grade attached. A topic that keeps coming up in passing therefore keeps
-  resetting its own recall clock while its streak never moves.
+  resetting its own recall clock while its streak never moves. Quick recall is the
+  escape hatch rather than the fix: it advances the clock only via `recall.last.date`,
+  never `lastTouched`, so a check genuinely moves a topic's streak — but a lesson that
+  keeps mentioning it still resets the clock underneath.

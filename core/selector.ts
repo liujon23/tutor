@@ -1,6 +1,7 @@
 import type { Curriculum, Lane, SpacingConfig, Topic, Unit } from "./types.js";
 import { allTopics, topicById, unitById } from "./curriculum.js";
 import { DEFAULT_SPACING, getRecall, offerProbability, seededUnit, stabilityDays } from "./spacing.js";
+import { lastExercised } from "./recall.js";
 
 export interface Recommendation {
   laneId: string;
@@ -137,9 +138,15 @@ export interface RecallCandidate {
   name: string;
   laneId: string;
   unitId: string;
+  /** The date this topic was last *taught* in a numbered lesson. */
   lastTouched: string;
+  /** The date it was last exercised at all — taught or recall-checked. This is
+   *  what `daysStale` measures from; it differs from `lastTouched` only when a
+   *  standalone recall check has run since the last lesson. */
+  lastSeen: string;
   daysStale: number;
   streak: number; // consecutive clean recalls so far
+  reviews: number; // total recall attempts — distinguishes "never quizzed" from "streak reset"
   stabilityDays: number; // the interval that streak earns
   overdueDays: number; // daysStale - stabilityDays (>= 0 for anything returned)
   offerProbability: number;
@@ -159,6 +166,9 @@ export interface RecallOptions {
   /** Default true. False returns every topic past its interval, unsampled —
    *  what a "how many topics are stale?" count wants. */
   probabilistic?: boolean;
+  /** Default true. False skips bundle linking, which is O(n²) — for callers that
+   *  only need the set (or its size), not which members hang together. */
+  bundle?: boolean;
 }
 
 /**
@@ -169,16 +179,27 @@ export interface RecallOptions {
  * learner's plan for the session.
  */
 export function recallCandidates(c: Curriculum, opts: RecallOptions): RecallCandidate[] {
-  const { today, laneId, max = 3, spacing = DEFAULT_SPACING, probabilistic = true } = opts;
+  const {
+    today,
+    laneId,
+    max = 3,
+    spacing = DEFAULT_SPACING,
+    probabilistic = true,
+    bundle = true,
+  } = opts;
   const t0 = new Date(today + "T00:00:00Z").getTime();
   const out: RecallCandidate[] = [];
 
   for (const { lane, unit, topic } of allTopics(c)) {
     if (laneId && lane.id !== laneId) continue;
     if (topic.state !== "comfortable" || !topic.lastTouched) continue;
-    const t1 = new Date(topic.lastTouched.date + "T00:00:00Z").getTime();
+    // Measured from the last time the topic was *exercised* — taught or
+    // recall-checked. Identical to lastTouched.date for anything a lesson wrote;
+    // they diverge only after a standalone recall check. See core/recall.ts.
+    const lastSeen = lastExercised(topic);
+    const t1 = new Date(lastSeen + "T00:00:00Z").getTime();
     const daysStale = Math.floor((t0 - t1) / 86_400_000);
-    const { streak } = getRecall(topic);
+    const { streak, reviews } = getRecall(topic);
     const stability = stabilityDays(streak, spacing);
     const p = offerProbability(daysStale, stability);
     if (p <= 0) continue; // still inside the interval this topic earned
@@ -189,8 +210,10 @@ export function recallCandidates(c: Curriculum, opts: RecallOptions): RecallCand
       laneId: lane.id,
       unitId: unit.id,
       lastTouched: topic.lastTouched.date,
+      lastSeen,
       daysStale,
       streak,
+      reviews,
       stabilityDays: stability,
       overdueDays: daysStale - stability,
       offerProbability: p,
@@ -200,6 +223,75 @@ export function recallCandidates(c: Curriculum, opts: RecallOptions): RecallCand
 
   out.sort((a, b) => b.overdueDays - a.overdueDays);
   const picked = out.slice(0, max);
+  if (bundle) fillBundles(c, picked);
+  return picked;
+}
+
+/**
+ * How many topics are due across every lane, using the same unsampled draw
+ * `pickRecallBundle` makes — so a caller gating on this can't offer a check the
+ * server would then refuse.
+ *
+ * Counts without bundling. `recallCandidates` runs `fillBundles`, which is
+ * O(due²) with a `topicById` scan per pair; on a large backlog that is seconds
+ * of work for a number that needs none of it.
+ */
+export function countRecallDue(
+  c: Curriculum,
+  opts: { today: string; spacing?: SpacingConfig }
+): number {
+  return recallCandidates(c, {
+    today: opts.today,
+    spacing: opts.spacing,
+    probabilistic: false,
+    max: Number.MAX_SAFE_INTEGER,
+    bundle: false,
+  }).length;
+}
+
+/**
+ * The single most overdue recall candidate across EVERY lane, plus any other due
+ * topics it is genuinely linked to — the draw behind the app's one-click recall
+ * check.
+ *
+ * Deliberately UNSAMPLED, unlike `recallCandidates`. The sampling exists so a
+ * warm-up *offered* inside a lesson varies day to day without the learner asking;
+ * a one-click check IS the ask. Determinism also lets the select screen's
+ * enabled/disabled state agree exactly with what the server will pick.
+ *
+ * Returns [] when nothing is due.
+ */
+export function pickRecallBundle(
+  c: Curriculum,
+  opts: { today: string; spacing?: SpacingConfig; maxBundle?: number }
+): RecallCandidate[] {
+  const due = recallCandidates(c, {
+    today: opts.today,
+    spacing: opts.spacing,
+    probabilistic: false,
+    max: Number.MAX_SAFE_INTEGER,
+    bundle: false, // recomputed below against the final pick anyway
+  });
+  if (!due.length) return [];
+
+  // recallCandidates already sorts by overdueDays desc; break exact ties on id so
+  // reordering curriculum.yaml can't silently change which topic gets asked.
+  due.sort((a, b) => b.overdueDays - a.overdueDays || a.topicId.localeCompare(b.topicId));
+
+  // Build a CLIQUE, not a star. A sibling must be related to every topic already
+  // picked, not just to the head — otherwise the packet asks for "ONE question
+  // that can't be answered without all of them" over topics that share no unit,
+  // no prerequisite edge and no bridge, which is not a question anyone can write.
+  const cap = opts.maxBundle ?? 3;
+  const head = due[0];
+  const picked = [head];
+  for (const r of due) {
+    if (picked.length >= cap) break;
+    if (r.topicId === head.topicId) continue;
+    if (picked.every((p) => areRelated(c, p, r))) picked.push(r);
+  }
+  // Link only within the final pick. Bundling the full due set here would leave
+  // links to siblings that got cut, and bundleGroups prints whatever it finds.
   fillBundles(c, picked);
   return picked;
 }
