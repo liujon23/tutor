@@ -93,6 +93,14 @@ export interface Lane {
   direction: string;
   nextUp: NextUp | null;
   units: Unit[];
+  /**
+   * YYYY-MM-DD the course ended. Machine-written when the closing capstone
+   * commits; course-setup may also set it by hand. Optional and NOT normalized on
+   * load, so lanes that never ended don't grow a `finishedAt: null` line. Read it
+   * through `laneFinishedAt()` (core/lane-status.ts), never directly: a reopened
+   * lane keeps its old date here, and only that function knows it no longer counts.
+   */
+  finishedAt?: string | null;
 }
 
 export interface Curriculum {

@@ -4,6 +4,7 @@ import { loadCurriculum } from "./curriculum.js";
 import { condenseEntry, lastN } from "./history.js";
 import { readProfile } from "./profile.js";
 import { readProjectDoc } from "./project.js";
+import { isLaneFinished } from "./lane-status.js";
 import { renderLaneOneLiner, renderUnitFull, renderUnitOneLiner } from "./render.js";
 import {
   recallCandidates,
@@ -147,9 +148,12 @@ function bundleGroups(recall: RecallCandidate[]): string[][] {
 }
 
 function pickDefaultLane(c: Curriculum): Lane | undefined {
-  // Default = highest-weight lane. The tutor/UI may still surface others;
-  // the interest mix itself is the learner's deliberate setting, enforced socially not mechanically.
-  return [...c.lanes].sort((a, b) => b.weight - a.weight)[0];
+  // Default = highest-weight lane that hasn't finished. The tutor/UI may still
+  // surface others; the interest mix itself is the learner's deliberate setting,
+  // enforced socially not mechanically. Finished courses are only ever an
+  // explicit choice — if every course has finished, fall back to the heaviest.
+  const byWeight = [...c.lanes].sort((a, b) => b.weight - a.weight);
+  return byWeight.find((l) => !isLaneFinished(l)) ?? byWeight[0];
 }
 
 function renderCurrentUnit(c: Curriculum, lane: Lane): string {
@@ -175,7 +179,9 @@ function renderRecommendation(c: Curriculum, rec: Recommendation): string {
       lines.push(`- ${a.topicId ? describeTopic(c, a.topicId) : `unit ${a.unitId}`} — ${a.reason}`);
     }
   }
-  if (!rec.primary && !rec.alternatives.length) lines.push(`(nothing derivable — check lane pointers)`);
+  if (!rec.primary && !rec.alternatives.length && rec.kind !== "finished") {
+    lines.push(`(nothing derivable — check lane pointers)`);
+  }
   return lines.join("\n");
 }
 

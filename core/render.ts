@@ -1,3 +1,4 @@
+import { laneFinishedAt } from "./lane-status.js";
 import type { Curriculum, Lane, Topic, Unit } from "./types.js";
 import { topicById, unitById } from "./curriculum.js";
 
@@ -51,7 +52,10 @@ export function renderUnitOneLiner(unit: Unit): string {
 
 export function renderLaneOneLiner(c: Curriculum, lane: Lane): string {
   const cur = lane.units.find((u) => u.id === lane.currentUnit);
-  const next = lane.nextUp
+  const finishedAt = laneFinishedAt(lane);
+  const next = finishedAt
+    ? `FINISHED ${finishedAt}`
+    : lane.nextUp
     ? `next up: ${
         lane.nextUp.topicId
           ? topicById(c, lane.nextUp.topicId)?.topic.name ?? lane.nextUp.topicId

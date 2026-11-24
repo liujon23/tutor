@@ -11,6 +11,10 @@ export interface StatusLane {
   id: string;
   name: string;
   weight: number;
+  /** Effective % over running lanes; 0 when finished. Optional: the demo snapshot omits it. */
+  share?: number;
+  /** YYYY-MM-DD the course ended, or null/absent while running. */
+  finishedAt?: string | null;
   currentUnit: { id: string; name: string; state: string } | null;
   recommendation: {
     kind: string;
@@ -220,6 +224,8 @@ export interface CurriculumLane {
   id: string;
   name: string;
   weight: number;
+  /** YYYY-MM-DD the course ended, or null/absent while running. */
+  finishedAt?: string | null;
   direction: string;
   currentUnitId: string | null;
   layers: string[][];

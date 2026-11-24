@@ -73,6 +73,8 @@ export async function showCurriculum(
   // wraps, which silently hid the whole switcher at narrow widths.
   const laneRow = h("div", { class: "chip-row lane-tabs" });
   const direction = h("p", { class: "lane-direction" });
+  // Shown only on a finished course: the date, and how to reopen it.
+  const finished = h("p", { class: "lane-finished hidden" });
   const graphHost = h("div", { class: "flow-host" });
   let handle: FlowchartHandle | null = null;
 
@@ -129,6 +131,10 @@ export async function showCurriculum(
     const lane = view.lanes.find((l) => l.id === laneId)!;
     direction.textContent = lane.direction;
     direction.classList.toggle("hidden", !lane.direction);
+    finished.textContent = lane.finishedAt
+      ? `✓ Finished ${lane.finishedAt}. Its topics stay in recall, at half the frequency. Extend it in course-setup to reopen it.`
+      : "";
+    finished.classList.toggle("hidden", !lane.finishedAt);
     handle?.destroy();
     clear(graphHost);
     if (lane.units.length === 0) {
@@ -157,7 +163,7 @@ export async function showCurriculum(
           screen.scrollTop = 0;
         },
       },
-      lane.name.replace(/\s+Lane$/, "")
+      lane.name.replace(/\s+Lane$/, "") + (lane.finishedAt ? " ✓" : "")
     );
     laneButtons.set(lane.id, btn);
     laneRow.append(btn);
@@ -174,7 +180,7 @@ export async function showCurriculum(
     unitView,
     dateHost
   );
-  unitView.append(laneRow, direction, graphHost);
+  unitView.append(laneRow, direction, finished, graphHost);
   root.append(screen);
   drawLane(initial.expandUnitId);
   drawMode();

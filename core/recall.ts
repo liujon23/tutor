@@ -20,7 +20,8 @@ import type {
 } from "./types.js";
 import { RECALL_RESULTS, TOPIC_STATES } from "./types.js";
 import { loadCurriculum, saveCurriculum, topicById } from "./curriculum.js";
-import { getRecall, stabilityDays } from "./spacing.js";
+import { getRecall } from "./spacing.js";
+import { recallInterval } from "./lane-status.js";
 import { validateCurriculum } from "./validator.js";
 
 /**
@@ -169,7 +170,7 @@ export function applyRecallCheck(paths: DataPaths, input: RecallCheckInput): Rec
     applyRecallGrade(hit.topic, g.result, input.date, g.state);
 
     const { streak } = getRecall(hit.topic);
-    const nextInDays = Math.round(stabilityDays(streak, input.spacing));
+    const nextInDays = Math.round(recallInterval(hit.lane, streak, input.spacing));
     graded.push({
       topicId: g.topicId,
       name: hit.topic.name,

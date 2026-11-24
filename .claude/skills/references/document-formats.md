@@ -42,7 +42,16 @@ Key fields (see the shipped file for a live example):
 
 - **Lane:** `id`, `name`, `weight` (rough % of the learner's attention — their deliberate
   setting), `currentUnit`, `direction` (a loose line or two on where the lane is
-  heading — themes, not a fixed syllabus), `nextUp`, `units`.
+  heading — themes, not a fixed syllabus), `nextUp`, `units`, and optionally
+  `finishedAt`.
+- **Lane.finishedAt** (optional): `YYYY-MM-DD` the course ended. Absent on lanes that
+  never ended — don't add `finishedAt: null`. It only counts while every unit is
+  `core-complete`/`complete` and no unit's `completedAt` is later than it
+  (`core/lane-status.ts`), so **reopening a course needs no edit to it**: add a unit
+  and the course is running again; finishing that unit later leaves it waiting on a
+  fresh ending. A finished course leaves the app's Today's pick (its `weight` is shared
+  out over the running lanes), recommends nothing, and its topics stay in recall at
+  2× the usual interval (still capped).
 - **Unit:** `id`, `name`, `state`, `currentTopic`, `prerequisites` (unit ids, same
   lane), `bridgeTopics` (topic ids in *other* units — suggestions for connecting
   lessons, not dependencies), `notes`, `coreTopics`, `optionalTopics`,

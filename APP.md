@@ -25,6 +25,13 @@ refresh doesn't reshuffle) rather than offered outright, which adds variety near
 date. (It has little effect on a large backlog — see
 [Known limitations](#known-limitations-not-by-design--worth-revisiting).)
 
+**A finished course** (every unit done and `finishedAt` recorded; see
+`core/lane-status.ts`) shows "✓ Finished <date>" on its lane card and in the
+Curriculum screen, never comes up as Today's pick (its weight is spread over the
+running lanes), and stays in recall at twice the usual interval, still capped at a
+year. It can still be picked by hand for a review lesson. Extending it in
+course-setup reopens it with no other edit.
+
 **Quick recall** is the same machinery without the lesson. A "Quick recall" button below
 the start row runs a one-question check: no selection at all — the server draws the most
 overdue topic across every lane, plus any topics genuinely linked to it, and the tutor

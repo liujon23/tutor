@@ -101,6 +101,9 @@ Restructuring is the *revisit* half of this skill, and it has one non-obvious ru
 - **At a unit boundary,** flip the finished unit to `complete`, advance the lane's
   `currentUnit`, and repoint `nextUp` at the new next unit with a fresh `plan` line
   (roadmap-first for a new unit) so the next lesson opens in the right place.
+- **Extending a finished course** (its lane has a `finishedAt`) needs nothing beyond
+  adding units: the course reopens on its own, and leave `finishedAt` alone — it is
+  history, and `core/lane-status.ts` already ignores it once there is work left.
 - After reordering, re-read the lane's `units:` order top-to-bottom — that *is* the
   teaching sequence, and the validator won't check it against your intent.
 

@@ -110,6 +110,8 @@ Three invariants make the design hold:
    (lane-paired, sampled above mastery-widened intervals; the curve and its
    constants live in `core/spacing.ts`). `pickRecallBundle` is the unsampled
    cross-lane draw behind the app's one-click recall check.
+   **`core/lane-status.ts`** decides when a course has finished and owns what that
+   changes (the doubled recall interval, the shared-out weight).
 4. **`core/recall.ts`** — the standalone recall write path (grade a topic without
    committing a lesson), and `applyRecallGrade`, the one home for the streak and
    demotion rules that `core/patcher.ts` also calls.
