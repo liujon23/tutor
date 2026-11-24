@@ -10,8 +10,9 @@ import { join } from "node:path";
 import { buildSessionPacket } from "../core/slicer.js";
 import { topicById, loadCurriculum } from "../core/curriculum.js";
 import { getRecall, stabilityDays } from "../core/spacing.js";
-import { SECTIONS, findSection } from "../core/profile.js";
+import { SECTIONS, findSection, learnerName } from "../core/profile.js";
 import { DATA_PATHS, ROOT, todayLocal } from "../scripts/lib.js";
+import type { SpacingConfig } from "../core/types.js";
 import type { LessonParams, TranscriptEntry, Via } from "./types.js";
 
 export const TEACHING_CONTRACT_PATH = join(
@@ -285,9 +286,9 @@ with you from a phone, tablet, or PC; your replies render as markdown with LaTeX
 You have no file access and no way to touch the learner's data except the record_recall
 tool described below. You may use web search and fetch when answering a follow-up.
 
-The grading rubric that follows is shared with the app's full lessons and with the CLI
-tutor — it is the authority on how to score a recall. How this particular session runs
-comes after it.
+The grading rubric and the register section that follow are shared with the app's full
+lessons and with the CLI tutor — they are the authority on how to score a recall and on
+how you sound. How this particular session runs comes after them.
 
 === RECALL GRADING (shared contract) ===`;
 
@@ -302,14 +303,14 @@ Run it in this order.
 
 1. OPEN WITH THE QUESTION. One or two sentences of framing at most ("Quick recall, no
    notes —"), then the question. Do not preamble, do not remind the learner what the
-   topic was, and do not re-teach anything first: cold retrieval is the entire
+   topic was, and do not re-teach anything first: recall from memory is the entire
    measurement, and showing the answer first destroys it. If the packet lists more than
    one topic they are bundled — ask ONE question that cannot be answered without all of
    them.
 
-2. HEAR THE ANSWER, THEN RESPOND AS A TEACHER WOULD. Say plainly how it went. If it was
-   solid, say so and say what made it solid. If something was wrong or missing, name it
-   and give the correct account — this is the one place you do teach, and it should be
+2. HEAR THE ANSWER, THEN RESPOND AS A TEACHER WOULD. Answer the substance, per the
+   register section: build on what they got right rather than reviewing it. If
+   something was wrong or missing, name it and give the correct account — this is the one place you do teach, and it should be
    proportionate: a sentence for a small slip, a short paragraph for a real gap. If
    there is an obvious retry to be had, hand back one nudge before you supply the
    correction. Do not run a multi-round tutoring loop here.
@@ -332,7 +333,7 @@ If the learner wants a real lesson on this, tell them to start one from the app'
 screen. You cannot turn this session into one, and there is no tool here that would
 record it.`;
 
-const RECALL_STATIC_PROMPT = `${RECALL_INTRO}\n\n${teachingContractSection("## Recall grading")}\n\n${RECALL_MACHINERY}`;
+const RECALL_STATIC_PROMPT = `${RECALL_INTRO}\n\n${teachingContractSection("## Recall grading")}\n\n${teachingContractSection("## Register — how you sound")}\n\n${RECALL_MACHINERY}`;
 
 /**
  * The packet for a recall check: the drawn topics and what's known about them.
@@ -341,7 +342,11 @@ const RECALL_STATIC_PROMPT = `${RECALL_INTRO}\n\n${teachingContractSection("## R
  * lets the tutor judge an answer against what was actually taught rather than
  * against the topic's name.
  */
-function buildRecallPacket(topicIds: string[], today: string): { packet: string; title: string } {
+function buildRecallPacket(
+  topicIds: string[],
+  today: string,
+  spacing: SpacingConfig
+): { packet: string; title: string } {
   const c = loadCurriculum(DATA_PATHS.curriculum);
   const hits = topicIds.map((id) => {
     const hit = topicById(c, id);
@@ -349,7 +354,8 @@ function buildRecallPacket(topicIds: string[], today: string): { packet: string;
     return hit;
   });
 
-  const lines = [`=== RECALL PACKET — ${today} ===`, ``, `## What you're checking (the server drew these — do not substitute)`];
+  const name = learnerName(readFileSync(DATA_PATHS.profile, "utf8"));
+  const lines = [`=== RECALL PACKET — ${today} ===`, ``, `Learner: ${name}`, ``, `## What you're checking (the server drew these — do not substitute)`];
   for (const { lane, unit, topic } of hits) {
     const r = getRecall(topic);
     const taught = topic.lastTouched
@@ -362,7 +368,7 @@ function buildRecallPacket(topicIds: string[], today: string): { packet: string;
     lines.push(
       `- ${topic.name} (${topic.id})`,
       `  lane ${lane.id} · unit ${unit.id} (${unit.name})`,
-      `  ${taught} · ${history} · current interval ${Math.round(stabilityDays(r.streak))}d`,
+      `  ${taught} · ${history} · current interval ${Math.round(stabilityDays(r.streak, spacing))}d`,
       `  what was taught: ${topic.notes || "(no notes recorded)"}`
     );
   }
@@ -408,7 +414,7 @@ export function buildRecallSystemPrompt(params: LessonParams): {
 } {
   const ids = params.recallTopicIds ?? [];
   if (!ids.length) throw new Error("recall session has no topics");
-  const { packet, title } = buildRecallPacket(ids, todayLocal());
+  const { packet, title } = buildRecallPacket(ids, todayLocal(), params.spacing);
   return { systemPrompt: `${RECALL_STATIC_PROMPT}\n\n${packet}`, title };
 }
 

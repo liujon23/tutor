@@ -326,7 +326,7 @@ app.post<{ Params: { id: string }; Body: { via?: Via } | undefined }>("/api/less
   // Checked BEFORE runnerFor, which constructs a LessonRunner (and with it an
   // Agent SDK session) that a recall check would never use.
   if (existing.params.mode === "recall") {
-    return reply.code(409).send({ error: "a recall check has no wrap-up — it ends on its own" });
+    return reply.code(409).send({ error: "a recall check has no wrap-up — go back to the start screen when you are done" });
   }
   const via = parseVia(req.body?.via);
   if (typeof via !== "string") return reply.code(400).send(via);

@@ -201,7 +201,10 @@ export async function showLesson(id: string, opts: ShowLessonOptions = {}): Prom
   if (__DEMO__ && lesson.note) showBanner(ctx, lesson.note);
 
   // Composer
-  const { chipRow, composer } = buildComposer(ctx, { onListen: () => startDrive("tap") });
+  // Drive mode is built around a lesson (spoken wrap-up hand-off, turn tags the
+  // lesson prompt explains); a recall check's prompt knows none of that, so it
+  // stays typed.
+  const { chipRow, composer } = buildComposer(ctx, isRecall ? {} : { onListen: () => startDrive("tap") });
   screen.append(chipRow, composer);
   root.append(screen);
 
