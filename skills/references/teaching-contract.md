@@ -207,7 +207,8 @@ Describe a confirmed pattern or preference by what to do, not by a coined label.
   ("Outer, inner and deceptive alignment"), not a claim and not a summary. Name the
   main subject only: leave out the recall warm-up, asides and previews, unless
   review was the whole lesson. No lesson number, date, lane or unit name, since the
-  list already shows them.
+  list already shows them. Sentence case: capitalise only the first word and proper
+  names ("Kuhn's paradigm shifts", "Training data and opt-out").
 - **keyPoints** — the conclusions this lesson reached, 3–6 lines, for the learner
   reading the lesson back. Each line states the claim itself, in plain words, as it
   would sit on a revision card: "Training on human approval produces approval-seeking,
