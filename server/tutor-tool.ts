@@ -156,6 +156,10 @@ export function createCommitSessionTool(ctx: TutorToolContext) {
 
         const sessionPatch = patch as SessionPatch;
         const errors = checkPatch(DATA_PATHS, sessionPatch);
+        const capstoneLane = ctx.session().params.capstone ? ctx.session().params.laneId : undefined;
+        if (capstoneLane && sessionPatch.lesson?.laneId !== capstoneLane) {
+          errors.push(`this is the ${capstoneLane} capstone — lesson.laneId must be '${capstoneLane}'`);
+        }
         if (errors.length) {
           return textResult(
             "PATCH REJECTED — nothing written. Fix these and call commit_session again:\n" +
@@ -167,7 +171,10 @@ export function createCommitSessionTool(ctx: TutorToolContext) {
         const validateMs = Date.now() - tValidate;
 
         const tWrite = Date.now(); // writing curriculum, history, profile
-        const res = applySessionPatch(DATA_PATHS, sessionPatch);
+        const params = ctx.session().params;
+        const res = applySessionPatch(DATA_PATHS, sessionPatch, params.spacing, {
+          finishLaneId: params.capstone ? params.laneId : undefined,
+        });
         const writeMs = Date.now() - tWrite;
 
         // Idempotency guard becomes durable HERE: curriculum/history/profile

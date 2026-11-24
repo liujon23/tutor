@@ -40,7 +40,7 @@ import { pickRecallBundle } from "../core/selector.js";
 import { loadCurriculum } from "../core/curriculum.js";
 import { buildReport } from "./report.js";
 import { LessonManager, endAlreadyPending } from "./runner.js";
-import { buildStatus, laneExists } from "./status.js";
+import { buildStatus, laneExists, wantsCapstone } from "./status.js";
 import { newSessionId, saveSession } from "./store.js";
 import { INBOUND_MEDIA_TYPES } from "./types.js";
 import type {
@@ -226,6 +226,10 @@ app.post<{ Body: CreateLessonBody }>("/api/lesson", async (req, reply) => {
         return reply.code(409).send({ error: "nothing is due for recall today" });
       }
       params.recallTopicIds = bundle.map((r) => r.topicId);
+    } else if (wantsCapstone(params)) {
+      // Frozen at creation, like recallTopicIds: commit_session reads it to
+      // record the course's ending.
+      params.capstone = true;
     }
     prompt = mode === "recall" ? buildRecallSystemPrompt(params) : buildLessonSystemPrompt(params);
   } catch (e) {

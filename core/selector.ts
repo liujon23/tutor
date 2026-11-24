@@ -2,11 +2,11 @@ import type { Curriculum, Lane, SpacingConfig, Topic, Unit } from "./types.js";
 import { allTopics, topicById, unitById } from "./curriculum.js";
 import { DEFAULT_SPACING, getRecall, offerProbability, seededUnit } from "./spacing.js";
 import { lastExercised } from "./recall.js";
-import { laneFinishedAt, recallInterval } from "./lane-status.js";
+import { capstoneDue, laneFinishedAt, recallInterval } from "./lane-status.js";
 
 export interface Recommendation {
   laneId: string;
-  kind: "next-up" | "next-core" | "core-complete-options" | "unit-seam" | "finished" | "empty";
+  kind: "next-up" | "next-core" | "core-complete-options" | "unit-seam" | "capstone" | "finished" | "empty";
   primary?: { topicId?: string; unitId?: string; reason: string; plan?: string };
   alternatives: { topicId?: string; unitId?: string; reason: string }[];
   note?: string;
@@ -28,6 +28,29 @@ export function recommendNext(c: Curriculum, lane: Lane): Recommendation {
       note:
         `This course finished on ${finishedAt}. A lesson here is review — revisit what the learner ` +
         `wants; extending the course with new units is course-setup's job.`,
+    };
+  }
+
+  // Every unit done, ending not recorded: the closing capstone is next. It wins
+  // over the last wrap-up's nextUp, which can only point back into a done unit.
+  // Leftover optional topics stay on offer as alternatives.
+  if (capstoneDue(lane)) {
+    const optional: Recommendation["alternatives"] = [];
+    for (const u of lane.units) {
+      for (const t of u.optionalTopics) {
+        if (t.state === "not-started" || t.state === "shaky") {
+          optional.push({ topicId: t.id, reason: `optional topic in ${u.id}` });
+        }
+      }
+    }
+    return {
+      laneId: lane.id,
+      kind: "capstone",
+      primary: { reason: "every unit is done — the closing capstone is next" },
+      alternatives: optional,
+      note:
+        "Every unit in this course is done. The capstone runs in the app, and committing it " +
+        "records the course as finished.",
     };
   }
 

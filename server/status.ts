@@ -3,13 +3,13 @@
 import { readFileSync } from "node:fs";
 import { allTopics, laneById, loadCurriculum, topicById, unitById } from "../core/curriculum.js";
 import { countRecallDue, recommendNext } from "../core/selector.js";
-import { laneFinishedAt, laneShares } from "../core/lane-status.js";
+import { capstoneDue, laneFinishedAt, laneShares } from "../core/lane-status.js";
 import type { SpacingConfig } from "../core/types.js";
 import { SECTIONS } from "../core/profile.js";
 import { DATA_PATHS, todayLocal } from "../scripts/lib.js";
 import { sessionExpiresAt } from "./params.js";
 import { listSessions } from "./store.js";
-import type { StoredSession } from "./types.js";
+import type { LessonParams, StoredSession } from "./types.js";
 
 export interface StatusLane {
   id: string;
@@ -160,6 +160,18 @@ function openSettledItems(): string[] {
 export function laneForTopic(topicId: string): string | null {
   const c = loadCurriculum(DATA_PATHS.curriculum);
   return topicById(c, topicId)?.lane.id ?? null;
+}
+
+/**
+ * Whether a new lesson with these params is its lane's closing capstone: a plain
+ * lesson (no topic override, not "discuss it instead") on a lane whose units are
+ * all done and whose ending isn't recorded yet. Both escapes are deliberate — the
+ * learner can always take a normal lesson on a capstone-due lane instead.
+ */
+export function wantsCapstone(params: LessonParams): boolean {
+  if (params.mode === "recall" || params.topicOverride || params.discuss || !params.laneId) return false;
+  const lane = laneById(loadCurriculum(DATA_PATHS.curriculum), params.laneId);
+  return !!lane && capstoneDue(lane);
 }
 
 export function laneExists(laneId: string): boolean {

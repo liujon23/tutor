@@ -168,7 +168,9 @@ export async function showSelect(): Promise<void> {
       ? (rec.note ?? "Not in this demo")
       : rec.kind === "finished"
         ? "Finished — open it for a review lesson, or extend it in course-setup"
-        : rec.topicName
+        : rec.kind === "capstone"
+          ? "Next: Capstone — close out the course"
+          : rec.topicName
         ? `Next: ${rec.topicName}`
         : rec.unitId
           ? `Next unit: ${rec.unitName ?? rec.unitId}`

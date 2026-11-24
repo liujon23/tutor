@@ -30,6 +30,10 @@ export interface LessonParams {
    *  creation — record_recall refuses to grade anything outside this list, so a
    *  restart or SDK resume can't widen what the session may write. */
   recallTopicIds?: string[];
+  /** Lesson mode only: this session is the lane's closing capstone. Decided by the
+   *  server at creation (lane out of units, no override, no discuss) and frozen, so
+   *  commit_session knows to record the ending. */
+  capstone?: boolean;
   size: SessionSize;
   model: LessonModel;
   historyN: number;

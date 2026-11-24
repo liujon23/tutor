@@ -8,7 +8,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildSessionPacket } from "../core/slicer.js";
-import { topicById, loadCurriculum } from "../core/curriculum.js";
+import { laneById, topicById, loadCurriculum } from "../core/curriculum.js";
 import { getRecall } from "../core/spacing.js";
 import { recallInterval } from "../core/lane-status.js";
 import { SECTIONS, findSection, learnerName } from "../core/profile.js";
@@ -275,6 +275,55 @@ wrap-up panel.`;
 /** The system prompt minus the session packet — the same for every lesson, and testable without a data root. */
 export const STATIC_PROMPT = `${APP_INTRO}\n\n${TEACHING_CONTRACT}\n\n${APP_MACHINERY}`;
 
+// --- Capstone: the session that closes out a course ---------------------------
+// Appended only when params.capstone is set. It overrides the normal opening and
+// the session size; everything else (teaching contract, spoken turns, wrap-up,
+// commit_session) still applies. The server, not the patch, records the ending.
+export const CAPSTONE_MACHINERY = `=== CAPSTONE — HOW THIS SESSION RUNS ===
+
+Every unit in this course is done. This session is its closing capstone: one case,
+looked at through the whole course. It overrides "Opening the lesson" above and the
+packet's session size. The packet's "Capstone" section maps the course and lists its
+loose ends.
+
+1. FIND THE CASE FIRST. Before your opening message, search the web for something
+   recent and real that several of this course's units bear on: a news story, a
+   paper, a product launch, an exhibition, a policy fight. Prefer the last few months.
+   If nothing good turns up, build a realistic scenario instead, and say plainly that
+   it is invented. Open by presenting the case briefly, with its source, and say this
+   is the course's capstone.
+
+2. PLAN AN ARC OF 3 TO 5 QUESTIONS on that one case, each leaning mainly on a
+   different unit. Let the case set the order, not the unit list. Later questions may
+   twist the case to reach a unit the facts alone don't touch ("the company agrees to
+   silo the chats from the main model, but may use them to train the model deployed in
+   that school — pros and cons?"). Work every loose end from the packet into some
+   question on purpose. Keep the plan to yourself; ask one question at a time.
+
+3. NUDGE BEFORE YOU GRADE. Each question has units and topics you expect the answer
+   to draw on. If the learner's answer leaves one out, don't count it against them:
+   nudge toward it ("what about the data side of this?") and let them pick it up.
+   Answers often arrive by voice and get cut off before they're done, so treat a
+   short or trailing spoken answer as unfinished and invite them to keep going
+   before you move on. Teach briefly where an answer shows a real gap, then return to
+   the case.
+
+4. 3 TO 5 QUESTIONS, WHATEVER THE SIZE. When the arc is done, say the capstone is
+   complete and suggest wrapping up. If the learner ends early, wrap up anyway.
+
+5. GRADING IN THE PATCH:
+   - Only grade topics the arc actually aimed at. A topic you never brought up gets
+     no topicUpdate at all.
+   - A topic the learner brought up unprompted or covered well after a nudge:
+     recall "clean" if it was comfortable. A loose end (touched or shaky) shown solid
+     goes to state "comfortable" with recall "clean".
+   - A topic still missing or muddled AFTER a nudge: recall "rusty", never "miss" —
+     the capstone is a broad sweep, not a cold recall.
+   - lesson.laneId is this course and lesson.unitId its current unit; topicIds are
+     every topic the arc touched. title names the case ("Capstone: <the case>").
+   - Set the lane's nextUp to null: nothing is queued after a capstone. Committing
+     this session is what records the course as finished; you don't set that.`;
+
 // --- Quick recall: a standalone one-question check ---------------------------
 // Deliberately NOT built from STATIC_PROMPT. A recall check has no lesson, no
 // wrap-up, no ratings and no commit_session, so the lesson machinery would be
@@ -460,7 +509,12 @@ export function buildLessonSystemPrompt(params: LessonParams): {
     historyN: params.historyN,
     today,
     spacing: params.spacing,
+    capstone: params.capstone,
   });
+  if (params.capstone && !title) {
+    const lane = laneId ? laneById(loadCurriculum(DATA_PATHS.curriculum), laneId) : undefined;
+    title = `Capstone: ${lane?.name.replace(/\s+Lane$/, "") ?? laneId}`;
+  }
 
   if (!title) {
     // Title from the packet's primary recommendation line, best-effort.
@@ -476,6 +530,7 @@ export function buildLessonSystemPrompt(params: LessonParams): {
 
   const systemPrompt =
     STATIC_PROMPT +
+    (params.capstone ? `\n\n${CAPSTONE_MACHINERY}` : "") +
     overrideNote +
     discussNote +
     `\n\n=== SESSION PACKET ===\n\n` +
@@ -495,7 +550,10 @@ export function kickoffMessage(params: LessonParams): string {
     `[Session start — the learner opened the app and is ready. Parameters: ` +
     `size=${params.size}, model=${params.model}` +
     (params.discuss ? ", mode=discuss-selection" : "") +
-    `. Open the lesson per your instructions.]`
+    (params.capstone ? ", mode=capstone" : "") +
+    (params.capstone
+      ? `. Find the case and open the capstone per your instructions.]`
+      : `. Open the lesson per your instructions.]`)
   );
 }
 

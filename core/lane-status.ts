@@ -8,7 +8,7 @@
 //   - it leaves Today's pick, and its weight is shared out over the rest;
 //   - its topics stay in recall, at FINISHED_RECALL_FACTOR × the usual interval;
 //   - the selector stops recommending lessons in it (review is still allowed).
-import type { Curriculum, Lane, SpacingConfig, UnitState } from "./types.js";
+import type { Curriculum, Lane, SpacingConfig, Topic, Unit, UnitState } from "./types.js";
 import { DEFAULT_SPACING, stabilityDays } from "./spacing.js";
 
 const DONE: UnitState[] = ["core-complete", "complete"];
@@ -41,6 +41,28 @@ export function laneFinishedAt(lane: Lane): string | null {
 
 export function isLaneFinished(lane: Lane): boolean {
   return laneFinishedAt(lane) !== null;
+}
+
+/**
+ * Every unit is done but the ending isn't recorded yet: the closing capstone is
+ * next. Committing the capstone (server/tutor-tool.ts → applySessionPatch's
+ * `finishLaneId`) is what stamps `finishedAt`. A course extended and finished
+ * again is capstone-due again — each ending gets its own capstone.
+ */
+export function capstoneDue(lane: Lane): boolean {
+  return laneOutOfUnits(lane) && !isLaneFinished(lane);
+}
+
+/** Topics in the lane that were taught but never settled (touched or shaky) — the
+ *  capstone works them in on purpose, since recall only ever reaches comfortable ones. */
+export function looseEnds(lane: Lane): { unit: Unit; topic: Topic }[] {
+  const out: { unit: Unit; topic: Topic }[] = [];
+  for (const unit of lane.units) {
+    for (const topic of [...unit.coreTopics, ...unit.optionalTopics]) {
+      if (topic.state === "touched" || topic.state === "shaky") out.push({ unit, topic });
+    }
+  }
+  return out;
 }
 
 /**

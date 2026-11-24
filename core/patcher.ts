@@ -13,13 +13,23 @@ import type {
 import { RECALL_RESULTS, TOPIC_STATES, UNIT_STATES } from "./types.js";
 import { laneById, loadCurriculum, saveCurriculum, topicById, unitById } from "./curriculum.js";
 import { getRecall } from "./spacing.js";
-import { recallInterval } from "./lane-status.js";
+import { isLaneFinished, laneOutOfUnits, recallInterval } from "./lane-status.js";
 import { applyRecallGrade } from "./recall.js";
 import { validateCurriculum } from "./validator.js";
 import { nextLessonNumber, prependEntry, renderEntry } from "./history.js";
 import { applyProfilePatchToLines, checkProfilePatch } from "./profile.js";
 import { writeProjectDoc } from "./project.js";
 import { checkDigestFields, checkTitle, digestFromRecord, loadDigests, saveDigests } from "./lesson-digests.js";
+
+export interface ApplyOptions {
+  /**
+   * The lesson was this lane's closing capstone: record the course's ending
+   * (`finishedAt` = the lesson date) in the same write. Server-decided from the
+   * session's params, never a patch field — like `completedAt`, the model has no
+   * say in it.
+   */
+  finishLaneId?: string;
+}
 
 export interface ApplyResult {
   lessonNumber: number;
@@ -100,7 +110,8 @@ export function applySessionPatch(
   patch: SessionPatch,
   /** The configured curve, so the summary quotes the interval the selector will
    *  actually honor. Omit only where no spacing config exists. */
-  spacing?: SpacingConfig
+  spacing?: SpacingConfig,
+  opts: ApplyOptions = {}
 ): ApplyResult {
   const pre = checkPatch(paths, patch);
   if (pre.length) throw new Error(`patch rejected:\n  - ${pre.join("\n  - ")}`);
@@ -110,7 +121,7 @@ export function applySessionPatch(
   const lessonNumber = nextLessonNumber(paths.history);
 
   // --- compute phase: no writes yet ---
-  applyCurriculumChanges(c, patch, lessonNumber, summary, spacing);
+  applyCurriculumChanges(c, patch, lessonNumber, summary, spacing, opts.finishLaneId);
 
   const names = {
     lane: (id: string) => laneById(c, id)?.name ?? id,
@@ -159,6 +170,23 @@ function applyCurriculumChanges(
   c: Curriculum,
   patch: SessionPatch,
   lessonNumber: number,
+  summary?: string[],
+  spacing?: SpacingConfig,
+  finishLaneId?: string
+): void {
+  // Topic lines quote the earned recall interval, which depends on whether the
+  // lane ends in this same write — so they're worded last, after the ending.
+  const topicLines: (() => string)[] = [];
+  applyCurriculumEdits(c, patch, lessonNumber, topicLines, summary, spacing);
+  if (finishLaneId) recordEnding(c, finishLaneId, patch.lesson.date, summary ?? []);
+  for (const line of topicLines) summary?.push(line());
+}
+
+function applyCurriculumEdits(
+  c: Curriculum,
+  patch: SessionPatch,
+  lessonNumber: number,
+  topicLines: (() => string)[],
   summary?: string[],
   spacing?: SpacingConfig
 ): void {
@@ -213,7 +241,7 @@ function applyCurriculumChanges(
     if (u.touched !== false) hit.topic.lastTouched = { date: L.date, lesson: lessonNumber };
     // Shared with the standalone recall check so the streak rules can't drift.
     if (u.recall) applyRecallGrade(hit.topic, u.recall, L.date, u.state);
-    summary?.push(`topic ${u.id}: ${describeTopicUpdate(u, hit.topic, hit.lane, spacing)}`);
+    topicLines.push(() => `topic ${u.id}: ${describeTopicUpdate(u, hit.topic, hit.lane, spacing)}`);
   }
 
   for (const u of cur.unitUpdates ?? []) {
@@ -237,6 +265,24 @@ function applyCurriculumChanges(
     summary?.push(
       `lane ${u.id} updated${u.nextUp ? ` (next up: ${u.nextUp.topicId ?? u.nextUp.unitId})` : ""}`
     );
+  }
+}
+
+/**
+ * Stamp a lane's ending after a capstone. Only while the lane is still out of
+ * units once the patch has applied — a capstone that reopened a unit (or ran on a
+ * lane that was extended meanwhile) records nothing, and says so.
+ */
+function recordEnding(c: Curriculum, laneId: string, date: string, summary: string[]): void {
+  const lane = laneById(c, laneId);
+  if (!lane) return;
+  if (isLaneFinished(lane)) {
+    summary.push(`course ${laneId} was already finished (${lane.finishedAt}) — ending not re-recorded`);
+  } else if (!laneOutOfUnits(lane)) {
+    summary.push(`capstone committed, but course ${laneId} still has unfinished units — not marked finished`);
+  } else {
+    lane.finishedAt = date;
+    summary.push(`course ${laneId} finished ${date}`);
   }
 }
 

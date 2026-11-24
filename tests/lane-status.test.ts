@@ -10,6 +10,8 @@ import { fileURLToPath } from "node:url";
 
 import { loadCurriculum, saveCurriculum, topicById } from "../core/curriculum.js";
 import {
+  capstoneDue,
+  looseEnds,
   FINISHED_RECALL_FACTOR,
   isLaneFinished,
   laneFinishedAt,
@@ -21,7 +23,9 @@ import { recallCandidates, recommendNext } from "../core/selector.js";
 import { DEFAULT_SPACING, stabilityDays } from "../core/spacing.js";
 import { validateCurriculum } from "../core/validator.js";
 import { buildSessionPacket } from "../core/slicer.js";
-import type { Curriculum, DataPaths, Lane, Unit } from "../core/types.js";
+import { applySessionPatch } from "../core/patcher.js";
+import { CAPSTONE_MACHINERY, kickoffMessage } from "../server/prompt.js";
+import type { Curriculum, DataPaths, Lane, SessionPatch, Unit } from "../core/types.js";
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 
@@ -188,4 +192,115 @@ test("packet: a finished lane says so instead of 'check lane pointers'; the defa
   assert.ok(!byDefault.includes("(ai) — default"), "ai is the heaviest lane but finished");
   assert.match(byDefault, /\(sts\) — default/);
   assert.match(byDefault, /FINISHED 2026-11-20/, "other-lanes one-liner marks the finished course");
+});
+
+// ---------------------------------------------------------------------------
+// The capstone: what closes a course out and records its ending.
+// ---------------------------------------------------------------------------
+
+test("out of units with no recorded ending → the capstone is next, over a stale nextUp", () => {
+  const c = fixture();
+  const ai = c.lanes.find((l) => l.id === "ai")!;
+  assert.equal(capstoneDue(ai), false);
+  finish(ai, "2026-11-20", null);
+  assert.ok(ai.nextUp, "a stale nextUp from the last wrap-up");
+  assert.equal(capstoneDue(ai), true);
+  const rec = recommendNext(c, ai);
+  assert.equal(rec.kind, "capstone");
+  assert.ok(rec.primary && !rec.primary.topicId && !rec.primary.unitId);
+  // Leftover optional topics stay on offer.
+  const optional = ai.units.flatMap((u) => u.optionalTopics).filter((t) => t.state === "not-started");
+  assert.ok(optional.length > 0, "fixture has untouched optional topics");
+  assert.deepEqual(new Set(rec.alternatives.map((a) => a.topicId)), new Set(optional.map((t) => t.id)));
+
+  // Finished → no longer due. Extended and done again → due again (a fresh capstone).
+  ai.finishedAt = "2026-11-20";
+  assert.equal(capstoneDue(ai), false);
+  ai.units[0].completedAt = "2026-12-01";
+  assert.equal(capstoneDue(ai), true);
+});
+
+test("capstone packet maps the whole course and lists its loose ends", () => {
+  const c = fixture();
+  const ai = c.lanes.find((l) => l.id === "ai")!;
+  finish(ai, "2026-11-20", null);
+  const shaky = ai.units[1].coreTopics[0];
+  shaky.state = "shaky";
+  const paths = scratch(c);
+  const opts = { size: "tight" as const, model: "opus", historyN: 1, today: "2026-11-24", spacing: DEFAULT_SPACING };
+
+  const packet = buildSessionPacket(paths, { ...opts, laneId: "ai", capstone: true });
+  assert.match(packet, /\*\*Primary:\*\* the closing capstone/);
+  assert.match(packet, /## Capstone — closing out/);
+  assert.match(packet, /3–5 questions whatever the session size/);
+  for (const u of ai.units) assert.ok(packet.includes(`(${u.id}) [core-complete]`), `maps unit ${u.id}`);
+  assert.ok(looseEnds(ai).some((x) => x.topic.id === shaky.id));
+  assert.match(packet, new RegExp(`- ${shaky.name.replace(/[()]/g, ".")} \\(${shaky.id}\\) \\[shaky\\]`));
+
+  const plain = buildSessionPacket(paths, { ...opts, laneId: "ai" });
+  assert.ok(!plain.includes("## Capstone"), "only a capstone session gets the map");
+});
+
+function capstonePatch(): SessionPatch {
+  return {
+    lesson: {
+      date: "2026-11-24",
+      laneId: "ai",
+      unitId: "ai-nn-foundations",
+      topicIds: ["ai-nn-foundations-loss"],
+      whatHappened: "Capstone (test).",
+      performanceSketch: "Solid (test).",
+      sourcesUsed: "None.",
+      feedbackCaptured: "skipped",
+      askedAbout: "nothing new",
+      title: "Capstone: a test case",
+      keyPoints: ["First conclusion.", "Second conclusion.", "Third conclusion."],
+      sources: [],
+    },
+    curriculum: {
+      topicUpdates: [{ id: "ai-nn-foundations-loss", recall: "rusty" }],
+      laneUpdates: [{ id: "ai", nextUp: null }],
+    },
+  };
+}
+
+test("committing the capstone records the ending; nothing else does", () => {
+  const c = fixture();
+  finish(c.lanes.find((l) => l.id === "ai")!, "2026-11-20", null);
+
+  // A normal commit on a capstone-due lane records nothing.
+  let paths = scratch(c);
+  applySessionPatch(paths, capstonePatch());
+  assert.equal(loadCurriculum(paths.curriculum).lanes.find((l) => l.id === "ai")!.finishedAt ?? null, null);
+
+  // The capstone commit stamps the lesson date, and the course is now finished.
+  paths = scratch(c);
+  const res = applySessionPatch(paths, capstonePatch(), DEFAULT_SPACING, { finishLaneId: "ai" });
+  const after = loadCurriculum(paths.curriculum).lanes.find((l) => l.id === "ai")!;
+  assert.equal(after.finishedAt, "2026-11-24");
+  assert.equal(isLaneFinished(after), true);
+  assert.ok(res.summary.includes("course ai finished 2026-11-24"));
+  assert.ok(res.summary.some((l) => l.includes("next in 28d")), "a finished course's recall quotes the doubled interval");
+
+  // A capstone whose patch reopened a unit records nothing, and says so.
+  paths = scratch(c);
+  const reopening = capstonePatch();
+  reopening.curriculum!.unitUpdates = [{ id: "ai-nn-foundations", state: "in-progress" }];
+  const res2 = applySessionPatch(paths, reopening, DEFAULT_SPACING, { finishLaneId: "ai" });
+  assert.equal(loadCurriculum(paths.curriculum).lanes.find((l) => l.id === "ai")!.finishedAt ?? null, null);
+  assert.ok(res2.summary.some((l) => l.includes("not marked finished")));
+});
+
+test("capstone instructions carry the design: case, arc, nudge, size, gentle grading", () => {
+  const m = CAPSTONE_MACHINERY;
+  assert.match(m, /recent and real/);
+  assert.match(m, /say plainly that\s+it is invented/);
+  assert.match(m, /3 TO 5 QUESTIONS/);
+  assert.match(m, /NUDGE BEFORE YOU GRADE/);
+  assert.match(m, /cut off/);
+  assert.match(m, /recall "rusty", never "miss"/);
+  assert.match(m, /Work every loose end/);
+  const params = { size: "tight" as const, model: "opus" as const, historyN: 3, spacing: DEFAULT_SPACING };
+  assert.match(kickoffMessage({ ...params, capstone: true }), /mode=capstone.*open the capstone/);
+  assert.ok(!kickoffMessage(params).includes("capstone"));
 });
