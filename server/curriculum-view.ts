@@ -31,6 +31,8 @@ export interface UnitLessonView {
   topicsLabel: string;
   topicsFull: string;
   hasTranscript: boolean;
+  /** The lesson's name, written at commit or by the backfill; shown in place of the topic names. */
+  title?: string;
   /** The lesson's first key point, when it has a digest. */
   keyPoint?: string;
   /** Learner turns spoken in drive mode; absent for lessons that predate it. */
@@ -151,13 +153,16 @@ function buildUnitView(
     bridgesInLane,
     bridgesCrossLane,
     lessons: lessons.map((e) => {
-      const keyPoint = digestFor(digests, e.lessonNumber)?.keyPoints[0];
+      const digest = digestFor(digests, e.lessonNumber);
+      const title = digest?.title;
+      const keyPoint = digest?.keyPoints[0];
       return {
         lessonNumber: e.lessonNumber,
         date: e.date,
         topicsLabel: e.topicsLabel,
         topicsFull: e.topicsFull,
         hasTranscript: e.hasTranscript,
+        ...(title ? { title } : {}),
         ...(keyPoint ? { keyPoint } : {}),
         ...(e.spokenTurns !== undefined ? { spokenTurns: e.spokenTurns } : {}),
         ...(e.typedTurns !== undefined ? { typedTurns: e.typedTurns } : {}),

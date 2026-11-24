@@ -51,6 +51,7 @@ const lessonShape = z.object({
   sourcesUsed: z.string(),
   feedbackCaptured: z.string(),
   askedAbout: z.string(),
+  title: z.string(),
   keyPoints: z.array(z.string()),
   sources: z.array(
     z.object({

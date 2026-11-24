@@ -72,13 +72,15 @@ npm run echo-test
   added/removed/reordered, or the lane's `direction` rewritten); ordinary lessons
   never invalidate a summary. `--check` lists what's stale and spends nothing;
   `--force` regenerates everything. Writes `data/unit-summaries.json` and commits.
-- **`lesson-digests`** writes key points for lessons committed before the tutor
-  wrote them, from each lesson's transcript and history summary, under the same
-  rule the tutor follows (read from the teaching contract). Spends tokens: about
-  3–12 cents a lesson with Sonnet. Never rewrites a lesson that already has key
-  points, and leaves those lessons' sources as their links and history line.
-  `--check` lists the lessons without key points and spends nothing; `--lessons`
-  runs only the ones named. Writes `data/lesson-digests.json` and commits.
+- **`lesson-digests`** writes key points and titles for lessons committed before
+  the tutor wrote them, under the same rules the tutor follows (read from the
+  teaching contract). Key points come from each lesson's transcript and history
+  summary, about 3–12 cents a lesson with Sonnet. A title comes from the history
+  summary and the key points, a cent or two, and lessons with no transcript (the
+  first three) get a title alone. Never rewrites key points or a title a lesson
+  already has, and leaves those lessons' sources as their links and history line.
+  `--check` lists what's missing and spends nothing; `--lessons` runs only the
+  ones named. Writes `data/lesson-digests.json` and commits.
 - **`backfill-completed-at`** a one-time migration for curricula that predate the
   `completedAt` field: stamps each already-finished unit with the date of its
   last lesson. Idempotent — it only fills blanks — so it's harmless to re-run.

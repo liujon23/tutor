@@ -168,7 +168,7 @@ Patch shape (TypeScript source of truth is core/types.ts SessionPatch):
 
 {
   "lesson": { "date": "YYYY-MM-DD", "laneId", "unitId", "topicIds": [..],
-              "topicsFreeform"?, "whatHappened", "performanceSketch",
+              "topicsFreeform"?, "title", "whatHappened", "performanceSketch",
               "sourcesUsed", "feedbackCaptured", "askedAbout",
               "keyPoints": [ "..", ".." ],
               "sources": [ { "title", "url"?, "usedFor"?, "checked" } ] },

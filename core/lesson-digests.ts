@@ -1,6 +1,6 @@
-// The reading-back record of each lesson: the conclusions it reached and the
-// sources it drew on. Written at commit (from the patch's lesson.keyPoints and
-// lesson.sources) and, for lessons committed before these fields existed, by
+// The reading-back record of each lesson: its title, the conclusions it reached
+// and the sources it drew on. Written at commit (from the patch's lesson.title,
+// lesson.keyPoints and lesson.sources) and, for lessons committed before these fields existed, by
 // the backfill script. Never loaded into a lesson's packet — it exists for the
 // learner reading a lesson back, not for the next tutor.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -9,8 +9,12 @@ import type { LessonRecord, LessonSource } from "./types.js";
 export const KEY_POINTS_MIN = 3;
 export const KEY_POINTS_MAX = 6;
 export const KEY_POINT_MAX_CHARS = 300;
+export const TITLE_MAX_CHARS = 80;
 
 export interface LessonDigest {
+  /** The lesson's name in the list of lessons. Absent only in files written before titles existed. */
+  title?: string;
+  /** Empty for a lesson with no transcript (L1–3), whose entry holds a title alone. */
   keyPoints: string[];
   sources: LessonSource[];
   /** "commit": the teaching tutor wrote it; "backfill": written afterwards from the transcript. */
@@ -51,8 +55,9 @@ export function digestFor(file: LessonDigestsFile, lessonNumber: number): Lesson
 }
 
 /** Trimmed copies, with empty optional fields dropped. Assumes checkDigestFields passed. */
-export function digestFromRecord(rec: Pick<LessonRecord, "keyPoints" | "sources">, origin: LessonDigest["origin"]): LessonDigest {
+export function digestFromRecord(rec: Pick<LessonRecord, "title" | "keyPoints" | "sources">, origin: LessonDigest["origin"]): LessonDigest {
   return {
+    title: rec.title.trim(),
     keyPoints: rec.keyPoints.map((p) => p.trim()),
     sources: rec.sources.map((s) => ({
       title: s.title.trim(),
@@ -62,6 +67,19 @@ export function digestFromRecord(rec: Pick<LessonRecord, "keyPoints" | "sources"
     })),
     origin,
   };
+}
+
+/** Errors in a lesson's title, worded for the tutor (or backfill model) that has to fix them. */
+export function checkTitle(title: unknown, prefix = "lesson."): string[] {
+  if (typeof title !== "string" || !title.trim()) {
+    return [`${prefix}title is required: the lesson's main subject in about 8 words`];
+  }
+  const t = title.trim();
+  if (/[\r\n]/.test(t)) return [`${prefix}title must be one line`];
+  if (t.length > TITLE_MAX_CHARS) {
+    return [`${prefix}title is over ${TITLE_MAX_CHARS} characters: name the subject, not the lesson's arc`];
+  }
+  return [];
 }
 
 /**

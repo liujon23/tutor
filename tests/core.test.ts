@@ -325,6 +325,7 @@ const goodPatch: SessionPatch = {
     sourcesUsed: "None.",
     feedbackCaptured: "skipped",
     askedAbout: "nothing new",
+    title: "A test lesson",
     keyPoints: ["First conclusion.", "Second conclusion.", "Third conclusion."],
     sources: [],
   },
@@ -497,7 +498,7 @@ test("end-to-end: apply a session patch, curriculum + history + profile all upda
 
   // The key points and sources land in lesson-digests.json under the new number.
   const digest = loadDigests(paths.lessonDigests).lessons["4"];
-  assert.deepEqual(digest, { keyPoints: goodPatch.lesson.keyPoints, sources: [], origin: "commit" });
+  assert.deepEqual(digest, { title: goodPatch.lesson.title, keyPoints: goodPatch.lesson.keyPoints, sources: [], origin: "commit" });
 });
 
 test("patcher: key points and sources are checked, and a bad patch writes nothing", () => {
@@ -523,6 +524,26 @@ test("patcher: key points and sources are checked, and a bad patch writes nothin
   const long = structuredClone(goodPatch);
   long.lesson.keyPoints = ["a", "b", "x".repeat(301)];
   assert.ok(checkPatch(paths, long).includes("lesson.keyPoints[2] is over 300 characters: one conclusion per line"));
+});
+
+test("patcher: the title is required, one line, at most 80 characters, stored trimmed", () => {
+  const paths = scratchCopy();
+  const none = structuredClone(goodPatch) as unknown as { lesson: Record<string, unknown> };
+  delete none.lesson.title;
+  assert.ok(checkPatch(paths, none as unknown as SessionPatch).includes("lesson.title is required: the lesson's main subject in about 8 words"));
+
+  const long = structuredClone(goodPatch);
+  long.lesson.title = "x".repeat(81);
+  assert.ok(checkPatch(paths, long).includes("lesson.title is over 80 characters: name the subject, not the lesson's arc"));
+
+  const two = structuredClone(goodPatch);
+  two.lesson.title = "Outer alignment\nand inner";
+  assert.ok(checkPatch(paths, two).includes("lesson.title must be one line"));
+
+  const spaced = structuredClone(goodPatch);
+  spaced.lesson.title = "  Outer, inner and deceptive alignment ";
+  const res = applySessionPatch(paths, spaced);
+  assert.equal(loadDigests(paths.lessonDigests).lessons[String(res.lessonNumber)].title, "Outer, inner and deceptive alignment");
 });
 
 test("patcher: sources are stored trimmed, with empty optional fields dropped", () => {

@@ -202,6 +202,12 @@ Describe a confirmed pattern or preference by what to do, not by a coined label.
 - **lesson** — honest, compact entry. Performance graded *fairly*, never generously.
   Keep `whatHappened` to the load-bearing arc — what the next lesson needs, not a
   blow-by-blow; the transcript is the full record.
+- **title** — the lesson's name in the learner's list of lessons, at most about 8
+  words: what the lesson was mainly about, as a chapter heading would name it
+  ("Outer, inner and deceptive alignment"), not a claim and not a summary. Name the
+  main subject only: leave out the recall warm-up, asides and previews, unless
+  review was the whole lesson. No lesson number, date, lane or unit name, since the
+  list already shows them.
 - **keyPoints** — the conclusions this lesson reached, 3–6 lines, for the learner
   reading the lesson back. Each line states the claim itself, in plain words, as it
   would sit on a revision card: "Training on human approval produces approval-seeking,

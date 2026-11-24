@@ -10,6 +10,7 @@
     "sourcesUsed": "How the sources were handled: searched live, or named from memory and not re-checked.",
     "feedbackCaptured": "What the learner said in the wrap-up, or 'skipped'.",
     "askedAbout": "Which feedback topics were probed, so future sessions don't re-ask.",
+    "title": "The lesson's main subject, as a chapter heading",
     "keyPoints": [
       "Each line is one conclusion the lesson reached, stated as the claim itself.",
       "3–6 of them; plain words, no lesson numbers, nothing about how it went.",

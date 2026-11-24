@@ -207,7 +207,7 @@ function howItWent(detail: LessonDetail | null): HTMLElement | null {
   const ratings = detail?.ratings ?? [];
   if (!hist && ratings.length === 0) return null;
   // With key points at the top, the full account moves down here.
-  const whatHappened = detail?.digest ? hist?.whatHappened : undefined;
+  const whatHappened = detail?.digest?.keyPoints.length ? hist?.whatHappened : undefined;
   const ratingList = ratings.length
     ? h(
         "div",
@@ -320,7 +320,8 @@ export async function showTranscript(
 
   const date = detail?.date ?? parsed.date;
   const where = detail ? `${detail.laneName.replace(/\s+Lane$/, "")} · ${detail.unitName}` : parsed.fields["Lane / Unit"];
-  const topics = detail?.topics || parsed.fields["Topics"];
+  const name = detail?.title;
+  const topics = name ? undefined : detail?.topics || parsed.fields["Topics"];
   const digest = detail?.digest ?? null;
   const summary = detail?.history?.whatHappened || parsed.summary;
   const top = digest?.keyPoints.length
@@ -354,6 +355,7 @@ export async function showTranscript(
       "div",
       { class: "reader-title" },
       date ? h("div", { class: "reader-date" }, readableDate(date)) : null,
+      name ? h("h2", { class: "reader-name" }, name) : null,
       where ? h("div", { class: "reader-where" }, where) : null,
       topics ? h("div", { class: "reader-topics" }, topics) : null
     ),

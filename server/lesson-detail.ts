@@ -45,6 +45,8 @@ export interface LessonDetail {
   unitId: string;
   unitName: string;
   topics: string;
+  /** The lesson's name, when it has one; the reader shows it in place of the topics. */
+  title?: string;
   hasTranscript: boolean;
   /** Key points and sources; null for a lesson committed before them and not yet backfilled. */
   digest: LessonDigest | null;
@@ -123,6 +125,8 @@ export function buildLessonDetail(
   const prev = [...withTranscript].reverse().find((x) => x.lessonNumber < lessonNumber)?.lessonNumber ?? null;
   const next = withTranscript.find((x) => x.lessonNumber > lessonNumber)?.lessonNumber ?? null;
 
+  const digest = digestFor(loadDigests(paths.lessonDigests), lessonNumber);
+
   return {
     lessonNumber,
     date: e.date,
@@ -131,8 +135,9 @@ export function buildLessonDetail(
     unitId: e.unitId,
     unitName: placed?.unit.name ?? e.unitId,
     topics: e.topicsFull,
+    ...(digest?.title ? { title: digest.title } : {}),
     hasTranscript: e.hasTranscript,
-    digest: digestFor(loadDigests(paths.lessonDigests), lessonNumber),
+    digest,
     history: entry ? parseHistoryFields(entry.body) : null,
     ratings: readRatings(paths.feedbackLedger, lessonNumber),
     usage: ledger?.usage ? usageHeadline(ledger.usage) : null,

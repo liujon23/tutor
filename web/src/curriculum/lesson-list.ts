@@ -25,6 +25,8 @@ export interface DateRow {
   topicsLabel: string;
   topicsFull: string;
   hasTranscript: boolean;
+  /** The lesson's name; shown in place of the topic names when present. */
+  title?: string;
   /** The lesson's first key point, when it has one. */
   keyPoint?: string;
 }
@@ -47,6 +49,7 @@ export function lessonRows(view: CurriculumView): DateRow[] {
           topicsLabel: l.topicsLabel,
           topicsFull: l.topicsFull,
           hasTranscript: l.hasTranscript,
+          ...(l.title ? { title: l.title } : {}),
           ...(l.keyPoint ? { keyPoint: l.keyPoint } : {}),
         });
       }
@@ -82,7 +85,9 @@ function rowHead(r: DateRow): HTMLElement[] {
 }
 
 function dateRow(r: DateRow, open: (n: number) => void): HTMLElement {
-  const topics = h("span", { class: "date-row-topics", ...(r.topicsFull ? { title: r.topicsFull } : {}) }, r.topicsLabel || "—");
+  const topics = r.title
+    ? h("span", { class: "date-row-topics" }, r.title)
+    : h("span", { class: "date-row-topics", ...(r.topicsFull ? { title: r.topicsFull } : {}) }, r.topicsLabel || "—");
   if (!r.hasTranscript) {
     return h(
       "div",
@@ -166,11 +171,12 @@ export function renderLessonList(
       return;
     }
     const turns = hits.reduce((n, hit) => n + hit.turnsMatched, 0);
+    const lessons = `${hits.length} lesson${hits.length === 1 ? "" : "s"}`;
     listHost.append(
       h(
         "div",
         { class: "detail-label" },
-        `${turns} matching turn${turns === 1 ? "" : "s"} in ${hits.length} lesson${hits.length === 1 ? "" : "s"}${res.truncated ? " (first 100 lessons)" : ""}`
+        `${turns > 0 ? `${turns} matching turn${turns === 1 ? "" : "s"} in ${lessons}` : lessons}${res.truncated ? " (first 100 lessons)" : ""}`
       )
     );
     for (const hit of hits) {
@@ -185,6 +191,7 @@ export function renderLessonList(
             { class: "date-row-head hit-head", type: "button", onclick: () => open(r.lessonNumber) },
             ...rowHead(r)
           ),
+          h("button", { class: "hit-name", type: "button", onclick: () => open(r.lessonNumber) }, marked(r.title ?? r.topicsLabel, res.terms)),
           ...hit.snippets.map((s) =>
             h(
               "button",

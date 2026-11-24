@@ -135,8 +135,8 @@ captured, Asked about. **Archival:** only the last few entries are loaded per se
 
 ## lesson-digests.json
 
-The reading-back record of each lesson, keyed by lesson number: `keyPoints` and
-`sources` from the patch. Written at commit, never loaded into a lesson's packet; the
+The reading-back record of each lesson, keyed by lesson number: `title`, `keyPoints`
+and `sources` from the patch. Written at commit, never loaded into a lesson's packet; the
 transcript reader and the By date list show it. Lessons committed before it existed
 are filled in by `npm run lesson-digests`.
 
@@ -169,8 +169,10 @@ truth: `core/types.ts` (`SessionPatch`); worked example:
 
 ```
 {
-  lesson:      { date, laneId, unitId, topicIds[], topicsFreeform?, whatHappened,
-                 performanceSketch, sourcesUsed, feedbackCaptured, askedAbout,
+  lesson:      { date, laneId, unitId, topicIds[], topicsFreeform?,
+                 title        — the lesson's name, the main subject in about 8 words,
+                 whatHappened, performanceSketch, sourcesUsed, feedbackCaptured,
+                 askedAbout,
                  keyPoints[]  — 3–6 conclusions the lesson reached, one claim each,
                  sources[]    — {title, url?, usedFor?, checked}; url only when the
                                 lesson gave the link; checked = looked up
