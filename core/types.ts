@@ -114,6 +114,8 @@ export interface LessonRecord {
   sourcesUsed: string;
   feedbackCaptured: string;
   askedAbout: string;
+  /** The lesson's name in the list of lessons: its main subject, about 8 words. */
+  title: string;
   /** 3–6 conclusions the lesson reached, each stated as the claim itself. */
   keyPoints: string[];
   /** Every work the lesson drew on; [] when none were named. */

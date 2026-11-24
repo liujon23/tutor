@@ -98,11 +98,13 @@ export function unitBody(
           { class: "lesson-list" },
           h("div", { class: "detail-label" }, `Lessons (${u.lessons.length})`),
           ...u.lessons.map((l) => {
-            const label = h(
-              "span",
-              { class: "lesson-topics", ...(l.topicsFull ? { title: l.topicsFull } : {}) },
-              l.topicsLabel || "—"
-            );
+            const label = l.title
+              ? h("span", { class: "lesson-topics" }, l.title)
+              : h(
+                  "span",
+                  { class: "lesson-topics", ...(l.topicsFull ? { title: l.topicsFull } : {}) },
+                  l.topicsLabel || "—"
+                );
             const head = h("span", { class: "lesson-num" }, `L${l.lessonNumber}`);
             const date = h("span", { class: "lesson-date" }, l.date);
             return l.hasTranscript

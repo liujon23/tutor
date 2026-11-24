@@ -2,7 +2,8 @@
 // By date view. Zero AI tokens: the transcripts are a few MB of markdown, read
 // once and cached by modification time.
 //
-// A hit is a turn that contains every word of the query, each matched at the
+// A lesson matches when its title, or one of its turns, contains every word
+// of the query. A matching turn is one that contains every word of the query, each matched at the
 // start of a word ("gate" finds "gatekeeper", not "delegate"), ignoring case.
 // Turn indexes come from the same parser the reader uses, so the reader can
 // open a hit at its turn.
@@ -10,6 +11,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parseTranscript } from "../web/src/curriculum/transcript-parse.js";
 import { PATHS } from "../scripts/lib.js";
+import { loadDigests } from "../core/lesson-digests.js";
 
 export interface SearchSnippet {
   turn: number;
@@ -19,6 +21,8 @@ export interface SearchSnippet {
 
 export interface SearchHit {
   lessonNumber: number;
+  /** Every word of the query is in the lesson's title. */
+  titleMatched: boolean;
   /** How many turns of this lesson match. */
   turnsMatched: number;
   /** The first few, in order. */
@@ -37,6 +41,8 @@ export interface SearchResult {
 /** One searchable document: a lesson's turns as plain text. */
 export interface SearchDoc {
   lessonNumber: number;
+  /** The lesson's title, when it has one. */
+  title?: string;
   turns: { role: "tutor" | "learner"; plain: string }[];
 }
 
@@ -105,7 +111,8 @@ export function searchDocs(docs: SearchDoc[], query: string): SearchResult {
         snippets.push({ turn: i, role: t.role, text: snippetAround(t.plain, patterns) });
       }
     });
-    if (turnsMatched > 0) hits.push({ lessonNumber: doc.lessonNumber, turnsMatched, snippets });
+    const titleMatched = !!doc.title && patterns.every((re) => re.test(doc.title!));
+    if (turnsMatched > 0 || titleMatched) hits.push({ lessonNumber: doc.lessonNumber, titleMatched, turnsMatched, snippets });
   }
   return { query, terms, hits: hits.slice(0, MAX_HITS), truncated: hits.length > MAX_HITS };
 }
@@ -139,6 +146,15 @@ export function loadSearchDocs(dir: string = PATHS.transcriptsDir): SearchDoc[] 
   return docs;
 }
 
-export function searchTranscripts(query: string, dir: string = PATHS.transcriptsDir): SearchResult {
-  return searchDocs(loadSearchDocs(dir), query);
+export function searchTranscripts(
+  query: string,
+  dir: string = PATHS.transcriptsDir,
+  digestsPath: string = PATHS.lessonDigests
+): SearchResult {
+  const digests = loadDigests(digestsPath);
+  const docs = loadSearchDocs(dir).map((d) => {
+    const title = digests.lessons[String(d.lessonNumber)]?.title;
+    return title ? { ...d, title } : d;
+  });
+  return searchDocs(docs, query);
 }

@@ -49,18 +49,21 @@ labels, since a DAG at phone width is unreadable.
 
 Tapping a block expands it in place: core topics with their state and when each
 was last touched, optional topics in a dimmer group, cross-lane connections, and
-every lesson taught in that unit. Tapping a lesson opens its **transcript**. A
+every lesson taught in that unit, by its title (the topic names, for a lesson
+not yet given one). Tapping a lesson opens its **transcript**. A
 topic's last-touched lesson is a link too, which matters when a topic was last
 exercised as a recall warm-up inside *another* lane's lesson.
 
 **By date** (the switch at the top) lists every lesson, newest first, across all
-lanes, with a lane filter and a search box; a lesson with key points shows the
-first one under its topics. Search matches every word you type
-in the same message, each at the start of a word, and shows up to three matching
-messages per lesson; tapping one opens the transcript at that message with the
+lanes, by title, with a lane filter and a search box; a lesson with key points
+shows the first one under its title. Search matches every word you type in a
+lesson's title or in a single message, each at the start of a word, and shows up
+to three matching messages per lesson; tapping one opens the transcript at that message with the
 words marked. Back returns to the list as you left it.
 
-The transcript reader opens with the lesson's lane, unit and topics, then its
+The transcript reader opens with the lesson's date, its **title** (a short name
+for what the lesson was mainly about, written by the tutor at commit; the warm-up
+recall is left out), lane and unit, then its
 **key points**: the 3–6 conclusions the tutor recorded at commit. A lesson
 without them shows the history's "What happened" there instead. Three sections
 you can open follow: **Sources** (the sources the tutor listed at commit, each

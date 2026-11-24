@@ -15,7 +15,7 @@ import { validateCurriculum } from "./validator.js";
 import { nextLessonNumber, prependEntry, renderEntry } from "./history.js";
 import { applyProfilePatchToLines, checkProfilePatch } from "./profile.js";
 import { writeProjectDoc } from "./project.js";
-import { checkDigestFields, digestFromRecord, loadDigests, saveDigests } from "./lesson-digests.js";
+import { checkDigestFields, checkTitle, digestFromRecord, loadDigests, saveDigests } from "./lesson-digests.js";
 
 export interface ApplyResult {
   lessonNumber: number;
@@ -41,6 +41,7 @@ export function checkPatch(paths: DataPaths, patch: SessionPatch): string[] {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(L.date ?? "")) errors.push(`lesson.date '${L.date}' is not YYYY-MM-DD`);
   if (!laneById(c, L.laneId)) errors.push(`lesson.laneId '${L.laneId}' does not exist`);
   if (!unitById(c, L.unitId)) errors.push(`lesson.unitId '${L.unitId}' does not exist`);
+  errors.push(...checkTitle(L.title));
   errors.push(...checkDigestFields(L));
 
   // Apply curriculum changes to a deep copy, then run the graph validator.
@@ -127,7 +128,7 @@ export function applySessionPatch(paths: DataPaths, patch: SessionPatch): ApplyR
   summary.push(`lesson-history.md: added Lesson ${lessonNumber}`);
 
   saveDigests(paths.lessonDigests, digests);
-  summary.push(`lesson-digests.json: ${patch.lesson.keyPoints.length} key points, ${patch.lesson.sources.length} source(s)`);
+  summary.push(`lesson-digests.json: title, ${patch.lesson.keyPoints.length} key points, ${patch.lesson.sources.length} source(s)`);
 
   if (profileResult && profileResult.changed) {
     writeFileSync(paths.profile, profileResult.lines.join("\n"), "utf8");

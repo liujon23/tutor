@@ -1754,6 +1754,19 @@ input.hidden[type="file"] {
   cursor: pointer;
 }
 
+.hit-name {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+}
+
 .hit-snippet {
   display: block;
   width: 100%;
@@ -1819,6 +1832,13 @@ input.hidden[type="file"] {
 .reader-date {
   font-size: 13px;
   color: var(--muted);
+}
+
+.reader-name {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.3;
 }
 
 .reader-where {

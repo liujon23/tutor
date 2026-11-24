@@ -203,6 +203,8 @@ export interface CurriculumUnitLesson {
   topicsLabel: string;
   topicsFull: string;
   hasTranscript: boolean;
+  /** The lesson's name; shown in place of the topic names when present. */
+  title?: string;
   /** The lesson's first key point, when it has a digest. */
   keyPoint?: string;
   /** Learner turns spoken in drive mode; absent for lessons before it. */
@@ -254,9 +256,12 @@ export interface LessonDetail {
   unitId: string;
   unitName: string;
   topics: string;
+  /** The lesson's name; the reader shows it in place of the topics when present. */
+  title?: string;
   hasTranscript: boolean;
   /** Key points and sources; null for a lesson committed before them and not yet backfilled. */
   digest: {
+    title?: string;
     keyPoints: string[];
     sources: { title: string; url?: string; usedFor?: string; checked: boolean }[];
     origin: "commit" | "backfill";
@@ -279,6 +284,7 @@ export interface LessonSearchResult {
   terms: string[];
   hits: {
     lessonNumber: number;
+    titleMatched: boolean;
     turnsMatched: number;
     snippets: { turn: number; role: "tutor" | "learner"; text: string }[];
   }[];

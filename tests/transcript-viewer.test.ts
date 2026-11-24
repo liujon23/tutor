@@ -12,7 +12,16 @@ import { docFromMarkdown, plainText, searchDocs, searchTranscripts, snippetAroun
 import { buildLessonDetail, parseHistoryFields, type LessonDetailPaths } from "../server/lesson-detail.js";
 import { buildLessonIndex } from "../server/lesson-index.js";
 import { saveDigests } from "../core/lesson-digests.js";
-import { conversationText, missingDigests, parseKeyPoints, readKeyPointsRule } from "../scripts/lesson-digests-prompt.js";
+import {
+  conversationText,
+  missingDigests,
+  missingTitles,
+  parseKeyPoints,
+  parseTitle,
+  readKeyPointsRule,
+  readTitleRule,
+  titlePrompt,
+} from "../scripts/lesson-digests-prompt.js";
 
 // ---------------------------------------------------------------------------
 // A transcript in the shape renderTranscript writes
@@ -243,6 +252,7 @@ function detailFixture(): LessonDetailPaths {
     version: 1,
     lessons: {
       "9": {
+        title: "Teachers as gatekeepers",
         keyPoints: ["The teacher becomes a gatekeeper.", "Second.", "Third."],
         sources: [{ title: "A primer", url: "https://example.org/primer", checked: true }],
         origin: "commit",
@@ -282,6 +292,8 @@ test("lesson detail: carries the digest when there is one, null otherwise", () =
   const paths = detailFixture();
   const d = buildLessonDetail(9, paths)!;
   assert.equal(d.digest?.keyPoints[0], "The teacher becomes a gatekeeper.");
+  assert.equal(d.title, "Teachers as gatekeepers");
+  assert.equal(buildLessonDetail(3, paths)!.title, undefined);
   assert.deepEqual(d.digest?.sources, [{ title: "A primer", url: "https://example.org/primer", checked: true }]);
   assert.equal(buildLessonDetail(3, paths)!.digest, null);
 });
@@ -328,4 +340,54 @@ test("backfill: the model's lines are read and held to the commit limits", () =>
   assert.deepEqual(ok.keyPoints, ["One.", "Two.", "Three."]);
   assert.deepEqual(ok.errors, []);
   assert.ok(parseKeyPoints("Here are the points:\n- Only one.").errors.length > 0);
+});
+
+// ---------------------------------------------------------------------------
+// Titles
+// ---------------------------------------------------------------------------
+
+test("search: a lesson whose title has every word is a hit, even with no matching turn", () => {
+  const docs = [{ ...docFromMarkdown(9, TRANSCRIPT), title: "Teachers as gatekeepers" }, docFromMarkdown(12, "### Tutor\n\nNothing here.\n")];
+  const r = searchDocs(docs, "teachers gatekeepers");
+  assert.deepEqual(r.hits.map((h) => [h.lessonNumber, h.titleMatched, h.turnsMatched]), [[9, true, 0]]);
+  assert.equal(searchDocs(docs, "nothing").hits[0].titleMatched, false);
+});
+
+test("search over files: titles come from the digests file", () => {
+  const { transcriptsDir, lessonDigests } = detailFixture();
+  const r = searchTranscripts("teachers", transcriptsDir, lessonDigests);
+  assert.deepEqual(r.hits.map((h) => [h.lessonNumber, h.titleMatched]), [[9, true]]);
+});
+
+test("backfill: titles are owed by every lesson on record without one; key points only by transcripts", () => {
+  const file = {
+    version: 1 as const,
+    lessons: {
+      "1": { title: "Has one", keyPoints: [], sources: [], origin: "backfill" as const },
+      "9": { keyPoints: ["a", "b", "c"], sources: [], origin: "commit" as const },
+    },
+  };
+  assert.deepEqual(missingTitles([9, 1, 2], file), [2, 9]);
+  // An entry holding a title alone still owes key points when there's a transcript.
+  assert.deepEqual(missingDigests([1, 9], file), [1]);
+});
+
+test("backfill: the title rule is read from the teaching contract itself", () => {
+  const rule = readTitleRule(join(import.meta.dirname, ".."));
+  assert.ok(rule.startsWith("- **title**"));
+  assert.match(rule, /about 8\s+words/);
+  assert.ok(!rule.includes("**keyPoints**"), "stops before the next bullet");
+});
+
+test("backfill: the title prompt carries the key points when there are some", () => {
+  assert.match(titlePrompt("RULE", 53, "Summary.", ["One.", "Two."]), /--- Key points ---\n- One\.\n- Two\./);
+  assert.ok(!titlePrompt("RULE", 2, "Summary.", []).includes("Key points"));
+});
+
+test("backfill: the model's title is cleaned and held to the commit limits", () => {
+  assert.deepEqual(parseTitle('"Outer, inner and deceptive alignment"\n'), { title: "Outer, inner and deceptive alignment", errors: [] });
+  assert.equal(parseTitle("Title: Users, problems and fit.").title, "Users, problems and fit");
+  assert.ok(parseTitle("A title\nand an explanation").errors.length > 0);
+  assert.ok(parseTitle("x".repeat(81)).errors.length > 0);
+  assert.ok(parseTitle("").errors.length > 0);
 });
